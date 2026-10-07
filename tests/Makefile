@@ -1,17 +1,18 @@
 CFLAGS = -std=c17 -Wall -Wextra -Wformat-security -Wno-format-zero-length -pedantic -g -O1
 SANITIZERS = -fsanitize=address,undefined -fno-omit-frame-pointer
 GAME_SOURCES = $(filter-out ../src/main.c ../src/croot.c,$(wildcard ../src/*.c))
-GAME_FLAGS = -DMINROG -DROGUE_NO_X11 $(shell pkg-config ncursesw --cflags)
+GAME_FLAGS = -DROGUE_BUGFIX -DMINROG -DROGUE_NO_X11 $(shell pkg-config ncursesw --cflags)
 GAME_LIBS = $(shell pkg-config ncursesw --libs)
 MESSAGE_WRAPPERS = update_player_view regenerate_health screen_move screen_clear_to_eol \
 	read_game_key screen_printf select_inventory_item
+POTION_WRAPPERS = select_inventory_item update_status_line show_message random_below
 
 .PHONY: test clean
 
-test: test_env test_scores test_messages
+test: test_env test_scores test_messages test_potions
 	@run_dir=$$(mktemp -d /tmp/rogue-tests.XXXXXX) || exit 1; \
 	status=0; \
-	(cd "$$run_dir" && $(CURDIR)/test_env && $(CURDIR)/test_scores && $(CURDIR)/test_messages) || status=$$?; \
+	(cd "$$run_dir" && $(CURDIR)/test_env && $(CURDIR)/test_scores && $(CURDIR)/test_messages && $(CURDIR)/test_potions) || status=$$?; \
 	rm -rf -- "$$run_dir"; \
 	exit $$status
 
@@ -28,5 +29,9 @@ test_messages: test_messages.c test_game_main.o $(GAME_SOURCES) $(wildcard ../sr
 	$(CC) $(CFLAGS) $(SANITIZERS) $(GAME_FLAGS) test_messages.c test_game_main.o $(GAME_SOURCES) \
 		$(foreach symbol,$(MESSAGE_WRAPPERS),-Xlinker --wrap=$(symbol)) $(GAME_LIBS) -o $@
 
+test_potions: test_potions.c test_game_main.o $(GAME_SOURCES) $(wildcard ../src/*.h)
+	$(CC) $(CFLAGS) $(SANITIZERS) $(GAME_FLAGS) test_potions.c test_game_main.o $(GAME_SOURCES) \
+		$(foreach symbol,$(POTION_WRAPPERS),-Xlinker --wrap=$(symbol)) $(GAME_LIBS) -o $@
+
 clean:
-	rm -f test_env test_scores test_messages test_game_main.o
+	rm -f test_env test_scores test_messages test_potions test_game_main.o
