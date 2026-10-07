@@ -29,7 +29,8 @@ profile='RoguePC'
 
 rogueargs=()
 gamecmd=
-for cmd in "$(dirname "$(readlink -f "$0")")"/src/rogue{-sdl,-ascii,}; do
+here=$(dirname "$(readlink -f "$0")")
+for cmd in "$here"/src/rogue{-sdl,-ascii,}; do
 	if [[ -x "$cmd" ]]; then gamecmd=$cmd; break; fi
 done
 
@@ -39,11 +40,11 @@ usage() {
 	exit
 }
 
-# Pre-parse for `help`
-for arg in "$@"; do [[ "$arg" == "-h" || "$arg" == "--help" ]] && usage ; done
+fatal() { echo "$*" >&2; exit 1; }
 
 while (( $# )); do
 	case "$1" in
+	-h|--help) usage;;
 	-f|--full-screen|--fullscreen) fullscreen=1;;
 	-r|--rogue      ) shift; gamecmd=$1;;
 	   --rogue=*    )        gamecmd=${1#*=};;
@@ -54,9 +55,14 @@ while (( $# )); do
 	shift
 done
 if [[ -z "$gamecmd" ]]; then
-	echo "No game found, use ${0##.*/} --rogue to set the executable" >&2
+	echo "No game found, use ${0##*/} --rogue to set the executable" >&2
 	exit 1
 fi
+
+if [[ "$gamecmd" != */* ]]; then
+	gamecmd=$(type -P -- "$gamecmd") || fatal "Game executable not found"
+fi
+gamecmd=$(readlink -f -- "$gamecmd")
 
 gtargs=(
 	--profile "$profile"
@@ -70,5 +76,7 @@ if ((fullscreen)); then
 	gtargs+=(--full-screen)
 fi
 
-cd -- "$(dirname "$(readlink -f "$gamecmd")")" &&
-gnome-terminal "${gtargs[@]}" -- ./"$(basename "$gamecmd")" "${rogueargs[@]}"
+if [[ "${gamecmd%/*}" == "$here/src" ]]; then
+	cd -- "$here/src" || exit 1
+fi
+exec gnome-terminal "${gtargs[@]}" --working-directory "$PWD" -- "$gamecmd" "${rogueargs[@]}"
