@@ -274,11 +274,8 @@ trigger_trap(Position *trap_position)
 		mvaddch(trap_position->y, trap_position->x, TRAP); /* since the hero's leaving, look()
 						won't put it on for us */
 		/*@
-		 * I guess this increment is used solely to signal look() at move.c
-		 * about the teleport trap. However, since this increment violates
-		 * boolean logic conventions, `was_trapped++` had to be reverted the
-		 * real type that bool was typdef'd to in original code: unsigned char.
-		 * Either this or refactor the original detection for teleport traps.
+		 * trigger_trap initialized trap_display_state to 1. Incrementing it marks a teleport
+		 * trap with state 2, which update_player_view tests with > TRUE before clearing it.
 		 */
 		trap_display_state++;
 	when TRAP_DART:

@@ -54,9 +54,9 @@ add_to_inventory(Entity *item, bool silent)
 
 	/*@
 	 *  bug in original Rogue: it didn't check proom != NULL, as is the case
-	 *  when add_pack() is called from init_player(), which happens before
+	 *  when add_to_inventory() is called from init_player(), which happens before
 	 *  any room even exist. proom is set in enter_room(), which is first
-	 *  called in new_level()
+	 *  called in generate_level()
 	 */
 	floor_symbol = (player_room != NULL && (player_room->flags & ROOM_ABSENT)) ? PASSAGE : FLOOR;
 	if (item->item_stack_group)

@@ -17,7 +17,7 @@ Display *x11_display = NULL;
 #endif
 
 #ifdef ROGUE_DOS_CLOCK
-#define TIMER_VECTOR_OFFSET 0x70  //@ RTC Interrupt handler. See clock_on()
+#define TIMER_VECTOR_OFFSET 0x70  //@ IVT byte offset for INT 1Ch (4 * 0x1C).
 static DosOffset saved_timer_vector[2];
 /*@
  * Global tick counter
@@ -47,8 +47,8 @@ bool print_int_calls = TRUE;
 
 #ifndef ROGUE_DOS_DRIVE
 /*@
- * These were created for fakedos() to replace DOS INT 19h and 0Eh calls, and
- * are independent from env file s_drive[], just like the original. Created as
+ * These were created for show_fake_dos() to replace DOS INT 19h and 0Eh calls, and
+ * are independent from env file copy_protection_drive[], just like the original. Created as
  * externs to allow future integration with env file and run-time selection.
  */
 int current_drive = ROGUE_CURRENT_DRIVE;  //@ current fake drive (A=0, B=1, ...)
@@ -102,7 +102,17 @@ int keyboard_lock_flags(void)
  * Checksum of the game executable
  *
  * Originally in dos.asm
-
+ *
+ * The original dos.asm csum_ adds 16-bit words from the code segment, starting at
+ * _Corg_ + 0x200. new_level compares its result with the expected checksum after
+ * level one. The expected value is stored in the data segment, not in the code being
+ * read, so changing that data initializer need not change the code bytes.
+ *
+ * The archived loop uses signed `cmp bx, si; jl csmore`. It repeats when the end
+ * address is less than the current address; the source alone does not establish that
+ * this traverses the intended code range. A linked DOS image is needed to resolve
+ * its actual bounds.
+ *
  * Return a dummy value matching the expected CSUM value defined in rogue.h
  * to avoid triggering self-integrity checks.
  *
@@ -116,9 +126,9 @@ int keyboard_lock_flags(void)
  *
  * - The developer changed the #define CSUM value to match the one printed.
  *
- * - Code was compiled again, and only extern.c required rebuilding. It's not
- *   clear why the new value does not affect the computed checksum. Maybe it
- *   was based only on code segment.
+ * - Code was compiled again, and only extern.c required rebuilding. The new
+ *   value does not affect the computed checksum, as it is stored in the data
+ *   segment and csum_ reads only the code segment (see above).
  *
  * - On every new level except the first, checksum was computed again and
  *   checked against CSUM. If they didn't match, the PC was immediately halted.
@@ -221,7 +231,7 @@ dos_read_port(port)
  *
  * Length of data is measured in words (16-bit), the size of int in DOS
  *
- * Dummy no-op, see pokeb().
+ * Dummy no-op, see dos_write_byte().
  *
  * Originally in dos.asm.
  *
@@ -262,7 +272,7 @@ dos_write_memory(data, wordlength, segment, offset)
  *
  * Dummy no-op, leave buffer unchanged.
  *
- * Originally in dos.asm. See notes on dmaout()
+ * Originally in dos.asm. See notes on dos_write_memory()
  */
 void
 dos_read_memory(buffer, wordlength, segment, offset)
@@ -304,7 +314,7 @@ halt_game()
  *
  * Actually it did not hook quit() directly, instead it hooked an asm wrapper
  * that called quit(). For simplicity, it now "hooks" quit(), as this is bogus
- * code anyway. See notes on clock().
+ * code anyway. See notes on update_protection_state().
  */
 void
 install_dos_break_handler()
@@ -312,7 +322,7 @@ install_dos_break_handler()
 	struct dos_registers reg;
 	reg.ax = 0x2523;  //@ hooking to INT 23h
 	reg.ds = 0x33;  //@ dummy value for dos.asm's CS register
-	reg.dx = (DosOffset)(PointerBits)quit;  //@ see clock_on() for note on casting
+	reg.dx = (DosOffset)(PointerBits)quit;  //@ see install_dos_timer_hook() for note on casting
 	call_dos_interrupt(SW_DOS, &reg);
 }
 
@@ -345,7 +355,8 @@ setup_game_io()
 
 #ifdef ROGUE_DOS_CLOCK
 /*@
- * No-op function, probably a stub for cls_ until it gets set to no_clock()
+ * Default timer-cleanup callback. install_dos_timer_hook replaces this function with
+ * restore_dos_timer_hook after saving the original vector; exit_game invokes it.
  * moved from croot.c
  */
 void
@@ -358,25 +369,19 @@ void (*restore_timer_hook)() = no_timer_cleanup;
 
 
 /*@
- * Hook clock() as the Interrupt Service Routine (ISR) for INT 70h,
- * saving the current handler in clk_vec.
+ * Hook clock() as the timer Interrupt Service Routine (ISR), saving the current
+ * handler in clk_vec.
  *
- * I honestly don't understand what is going on here: INT 70h is triggered by
- * RTC via IRQ8 only on IBM-AT/XT-286 onwards. The original IBM-PC and IBM-XT
- * had no RTC, so INT 70h was not regularly triggered. And clock(), originally
- * in dos.asm, incremented tick C var on every call, which was used all over.
- * Does this mean Rogue does not work on IBM-XT?
+ * The original routine replaces interrupt vector 1Ch, the BIOS user timer callback.
+ * TIMER_VECTOR_OFFSET (0x70) is a byte offset in the interrupt vector table, not an
+ * interrupt number: each vector occupies four bytes, so 0x70 / 4 = 0x1C.
  *
- * But epyx_yuck() and SIG2() strongly suggests tick is incremented ~18 times
- * per, consistent with XT's original timer. The IBM-AT BIOS by default sets
- * the RTC rate to 1024 times per second, not 18.2.
+ * IBM's BIOS Interface Technical Reference, "Interrupt 08H - System Timer", states
+ * that INT 08h calls INT 1Ch approximately 18.2 times per second. This explains the
+ * original tick rate without an RTC interrupt or timer reprogramming.
  *
- * I could not find any clock rate reprogramming in Rogue, so I'm quite puzzled
- * on how tick works, and what its actual and expected rates are.
- *
- * In any case, if clock() was still being used for timing, this function
- * should provide a portable way of hooking it to a timer that does not rely on
- * ancient real mode ISR/IVT model.
+ * The native DOS-memory helpers are stubs; the maintained build uses epoch_seconds
+ * for timing and does not install this hook.
  */
 void
 install_dos_timer_hook()
@@ -388,21 +393,22 @@ install_dos_timer_hook()
 	DosOffset _csval = 0x33;
 
 	/*@
-	 * Craft the 4-byte CS:offset function pointer for clock()
+	 * Craft the 4-byte CS:offset function pointer for update_protection_state()
 	 * Array indexes are swapped (CS=1, offset=0) as it writes directly to IVT
 	 *
-	 * Using the actual clock() protected mode address and "casting" it to a
+	 * Using the actual update_protection_state() protected mode address and "casting" it to a
 	 * DOS real mode 16-bit offset makes the compiler happy and produce a legit
-	 * dmaout() call. But obviously the values in new_vec are completely bogus.
+	 * dos_write_memory() call. But obviously the values in new_vec are completely bogus.
 	 */
-	DosOffset new_vec[2];  //@ type must match clk_vec
+	DosOffset new_vec[2];  //@ type must match saved_timer_vector
 
 	new_vec[0] = (DosOffset)(PointerBits)update_protection_state;
 	new_vec[1] = _csval;
 
 	/*@
-	 * I wonder why using IVT directly instead of the safer DOS INT 21h/25h,35h
-	 * calls like the well behaved COFF() does?
+	 * The original implementation writes the interrupt vector table directly. The saved
+	 * four-byte segment:offset pointer is restored by restore_dos_timer_hook; the source
+	 * does not establish why the authors chose direct access over DOS vector services.
 	 */
 	dos_read_memory(saved_timer_vector, 2, 0, TIMER_VECTOR_OFFSET);
 	dos_write_memory(new_vec, 2, 0, TIMER_VECTOR_OFFSET);
@@ -411,8 +417,8 @@ install_dos_timer_hook()
 
 
 /*@
- * Restore INT 70h ISR to its original value, as saved by clock_on()
- * clock() would no longer be called, and thus tick will not be updated.
+ * Restore the INT 1Ch vector to its original value, as saved by install_dos_timer_hook()
+ * update_protection_state() would no longer be called, and thus tick will not be updated.
  */
 void
 restore_dos_timer_hook()
@@ -423,24 +429,12 @@ restore_dos_timer_hook()
 
 
 /*@
- * Increment the global tick
- *
- * This was supposed to be called 18.2 times per second, to maintain the tick
- * rate found in DOS system timer expected by Rogue. The game originally relied
- * on clock() being periodically (and automatically) called via some triggering
- * mechanism such as an IRQ timer or signal, as made by clock_on(). If tick was
- * not incremented some Bad Things would happen: Rogue could _halt() on first
- * one_tick() call, or enter infinite loop on tick_pause() and epyx_yuck().
+ * Update the copy-protection watchdog and authenticated-game state. The archived
+ * DOS clock_ interrupt also checks the single-step vector and increments tick_.
+ * The native build calls this routine explicitly through protection_tick; it does
+ * not run an interrupt-driven watchdog or reproduce the single-step-vector check.
  *
  * Originally in dos.asm, renamed from clock() to avoid conflict in <time.h>
- *
- * It also performed some anti-debugger checks and copy protection measures.
- * The copy-protection is fully reproduced to the extent of my knowledge.
- * The anti-debugger tests, if failed, lead to _halt(), and are only partially
- * reproduced here. See protect.c for details.
- *
- * With md_time(), tick is no longer used and this function now only serves to
- * unlock the copy protection on one_tick().
  */
 void
 update_protection_state()
@@ -450,7 +444,7 @@ update_protection_state()
 	tick++;
 #endif
 
-	//@ anti debugging: halt after 20 ticks if no_step is set
+	//@ anti debugging: halt after 20 ticks if protection_watchdog_ticks is set
 	if (protection_watchdog_ticks && ++protection_watchdog_ticks > 20)
 		halt_game();
 
@@ -458,7 +452,7 @@ update_protection_state()
 	 * Unlock copy protection if floppy check succeeded: set tombstone strings
 	 * (name, killed by) to actual player name and death reason, and restore
 	 * hit multiplier. Only a single tick is required to unlock.
-	 * See death()
+	 * See show_death_screen()
 	 */
 	if (incoming_damage_multiplier != 1 && disk_authentication_marker == 0xD0D)
 	{
@@ -562,8 +556,7 @@ clear_macro_input()
 }
 
 /*@
- * I wonder why this is here instead of main.c (or *anywhere* else)
- * Granted, the staff and companies to credit vary by platform, but still...
+ * Display the credits and read the player's name before generating the first level.
  */
 void
 show_credits()
@@ -653,14 +646,14 @@ show_credits()
  *
  * Originally in dos.asm, calling a BIOS INT, which is reproduced here.
  *
- * But as sysint() is just a stub that returns ax = 0, this function will
+ * But as simulate_dos_interrupt() is just a stub that returns ax = 0, this function will
  * always return FALSE, indicating a key was pressed.
  *
- * No longer used, as readchar() now uses non-blocking input internally.
+ * No longer used, as read_game_key() now uses non-blocking input internally.
  *
  * BIOS INT 16h/AH=1, Get Keyboard Status
  * Return:
- * ZF = 0 if a key pressed (even Ctrl-Break). Not tested, COFF() handles that.
+ * ZF = 0 if a key pressed (even Ctrl-Break). Not tested, install_dos_break_handler() handles that.
  * AH = scan code. 0 if no key was pressed
  * AL = ASCII character. 0 if special function key or no key pressed
  * So AX = 0 for no key pressed
@@ -836,7 +829,11 @@ set_dos_break_check(state)
 	call_dos_interrupt(SW_DOS,&registers);
 	previous_state = registers.dx &0xFF;
 
-	registers.ax = 0x3300;  //@ shouldn't this be 0x3301? As it is it just reads again
+	/*@
+	 * Both calls select the query subfunction (AX=3300h), so this does not set
+	 * the supplied state. Shouldn't this be 0x3301? As it is it just reads again
+	 */
+	registers.ax = 0x3300;
 	registers.dx = state;
 	call_dos_interrupt(SW_DOS,&registers);
 

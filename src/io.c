@@ -31,7 +31,7 @@ message_by_verbosity(const char *tfmt, const char *format, ...)
 	va_end(arguments);
 }
 
-//@ va_list variant of msg()
+//@ va_list variant of show_message()
 void
 show_message_v(const char *format, va_list arguments)
 {
@@ -52,7 +52,7 @@ show_message_v(const char *format, va_list arguments)
 	finish_message();
 }
 
-//@ varargs variant, now a wrapper for vmsg()
+//@ varargs variant, now a wrapper for show_message_v()
 void
 show_message(const char *format, ...)
 {
@@ -478,6 +478,9 @@ show_overlay_message(message)
  *     Eventually this routine will contain colors and character intensity
  *     attributes.  And I'm not sure how I'm going to interface this with
  *     printf certainly '%' isn't a good choice of characters.  jll.
+ *
+ * @ In the normal build, '%' highlights the next character. The %i/%I, %u/%U
+ *   and %$ formats above are only interpreted by the retained LUXURY branch.
  */
 void
 print_highlighted_text(text)
@@ -572,7 +575,7 @@ update_keyboard_and_clock(void)
 #endif
 
 	/*@
-	 * Do not update between wdump()/wrestor() operations
+	 * Do not update between save_screen()/restore_screen() operations
 	 * (when the user is in a non-game screen like inventory or discoveries)
 	 * Or if the screen is not yet initialized.
 	 */

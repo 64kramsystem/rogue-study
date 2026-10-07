@@ -90,7 +90,7 @@ allocate_entity()
  * talloc: simple allocation of a THING
  */
 static
-void *  //@ maybe should be THING*, as this is a specialized malloc()
+void *  //@ maybe should be Entity*, as this is a specialized malloc()
 find_free_entity_slot()
 {
 	register int i;

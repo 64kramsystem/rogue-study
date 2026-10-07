@@ -103,7 +103,7 @@
  */
 #include "swint.h"
 
-//@ created for fakedos(), but could also be used in save.c and load.c
+//@ created for show_fake_dos(), but could also be used in save.c and load.c
 #ifndef ROGUE_DOS_DRIVE
 #ifndef ROGUE_CURRENT_DRIVE
 #define ROGUE_CURRENT_DRIVE	('C' - 'A')
