@@ -1,5 +1,6 @@
 TODO
 ===============================================================================
-- In launchers, only change to sources directory if `$gamecmd` in `./src`
-- Create a `Makefile` outside `/src`, to allow `make` in project root
+- Replace the DOS memory-dump save/restore implementation with explicit game-state serialization.
+- Replace the native-struct score format with a portable format.
+- Fix fake DOS scrolling and non-ASCII exit handling (see `src/fakedos.c`).
 - Consider embedding `rogue.pic` data as a `.c` source file: `xxd rogue.pic > rogue_pic.c`
