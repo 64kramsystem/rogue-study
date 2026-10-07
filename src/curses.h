@@ -20,42 +20,42 @@
 
 #define stdscr	NULL
 #define hw	stdscr
-#define eatme	stdscr
+#define ignored_window	stdscr
 
 //@ Original macros
 #define	wclear	clear
 #define mvwaddch(w,a,b,c)	mvaddch(a,b,c)
 #define getyx(a,b,c)	getxy(&b,&c)
-#define getxy	getrc
+#define getxy	get_cursor_position
 
 //@ Modified macros
-#define inch	cur_inch
+#define inch	screen_read_character
 #define standend	cur_standend
 #define standout	cur_standout
-#define endwin	cur_endwin
+#define endwin	shutdown_screen
 
 //@ Function mappings
-#define beep	cur_beep
-#define move	cur_move
-#define clear	cur_clear
-#define clrtoeol	cur_clrtoeol
-#define mvaddstr	cur_mvaddstr
-#define mvaddch	cur_mvaddch
-#define mvinch	cur_mvinch
-#define addch	cur_addch
-#define addstr	cur_addstr
-#define box	cur_box
-#define printw	cur_printw
+#define beep	screen_beep
+#define move	screen_move
+#define clear	screen_clear
+#define clrtoeol	screen_clear_to_eol
+#define mvaddstr	screen_write_text_at
+#define mvaddch	screen_write_character_at
+#define mvinch	screen_read_character_at
+#define addch	screen_write_character
+#define addstr	screen_write_text
+#define box	screen_draw_box
+#define printw	screen_printf
 #define getch	cur_getch  //@ no longer used
-#define getch_timeout	cur_getch_timeout
+#define getch_timeout	screen_read_key
 
 
 /*@
  * Global variables declarations. All defined in curses.c
  */
 extern int LINES, COLS;
-extern int is_saved;
-extern int scr_type;
+extern int screen_updates_suspended;
+extern int dos_screen_mode;
 #ifdef ROGUE_DOS_CURSES
 extern bool iscuron;
 extern int old_page_no;
@@ -67,4 +67,4 @@ extern int svwin_ds;
  * we need to know location of screen being saved
  * @ used in save.c
  */
-extern char savewin[];
+extern char saved_screen[];

@@ -2,7 +2,7 @@
  * Structure and defines for the swint call
  */
 
-struct sw_regs {
+struct dos_registers {
 	int	ax;
 	int	bx;
 	int	cx;

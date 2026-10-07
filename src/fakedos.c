@@ -13,39 +13,39 @@
 #include	"rogue.h"
 #include	"curses.h"
 
-static bool	dodos(char *com);
+static bool	execute_fake_dos_command(char *com);
 static int	select_drive(int drv);
 
 void
-fakedos(void)
+show_fake_dos(void)
 {
 	char comline[132];
 	char savedir[] = "a:", *comhead;
 
-	wdump();
+	save_screen();
 	clear();
 	move (0,0);
-	cursor(TRUE);
+	set_cursor_visible(TRUE);
 #ifdef ROGUE_DOS_DRIVE
-	*savedir = bdos(0x19,0) + 'A';
+	*savedir = dos_service(0x19,0) + 'A';
 #else
 	*savedir = current_drive + 'A';  //@ save current drive
 #endif
 	do {
-		setmem(comline, sizeof(comline), 0);
+		fill_bytes(comline, sizeof(comline), 0);
 #ifdef ROGUE_DOS_DRIVE
-		printw("\n%c>",bdos(0x19,0)+'A');
+		printw("\n%c>",dos_service(0x19,0)+'A');
 #else
 		printw("\n%c>",current_drive+'A');
 #endif
-		getinfo(comline,130);
-		comhead = stpblk(comline);
-		endblk(comhead);
-	} while (dodos(comhead));
-	dodos(savedir);  //@ restore current drive
-	cursor(FALSE);
+		read_line(comline,130);
+		comhead = skip_whitespace(comline);
+		trim_trailing_whitespace(comhead);
+	} while (execute_fake_dos_command(comhead));
+	execute_fake_dos_command(savedir);  //@ restore current drive
+	set_cursor_visible(FALSE);
 	clear();
-	wrestor();
+	restore_screen();
 }
 
 /*
@@ -53,7 +53,7 @@ fakedos(void)
  */
 static
 bool
-dodos(com)
+execute_fake_dos_command(com)
 	char *com;
 {
 	int drv;
@@ -89,7 +89,7 @@ int
 select_drive(int drv)
 {
 #ifdef ROGUE_DOS_DRIVE
-	return bdos(0x0e, drv);
+	return dos_service(0x0e, drv);
 #else
 	if (drv >= 0 && drv <= last_drive)
 	{

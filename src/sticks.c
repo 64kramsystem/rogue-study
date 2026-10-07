@@ -13,24 +13,24 @@
  *	Set up a new stick
  */
 void
-fix_stick(cur)
-	register THING *cur;
+initialize_wand(wand)
+	register Entity *wand;
 {
-	if (strcmp(ws_type[cur->o_which], "staff") == 0)
-		cur->o_damage = "2d3";
+	if (strcmp(wand_kinds[wand->item_subtype], "staff") == 0)
+		wand->item_melee_damage = "2d3";
 	else
-		cur->o_damage = "1d1";
-	cur->o_hurldmg = "1d1";
+		wand->item_melee_damage = "1d1";
+	wand->item_thrown_damage = "1d1";
 
-	cur->o_charges = 3 + rnd(5);
-	switch (cur->o_which)
+	wand->item_charges = 3 + random_below(5);
+	switch (wand->item_subtype)
 	{
-	when WS_HIT:
-		cur->o_hplus = 100;
-		cur->o_dplus = 3;
-		cur->o_damage = "1d8";
-	when WS_LIGHT:
-		cur->o_charges = 10 + rnd(10);
+	when WAND_STRIKING:
+		wand->item_hit_bonus = 100;
+		wand->item_damage_bonus = 3;
+		wand->item_melee_damage = "1d8";
+	when WAND_LIGHT:
+		wand->item_charges = 10 + random_below(10);
 		break;
 	}
 }
@@ -40,250 +40,250 @@ fix_stick(cur)
  *	Perform a zap with a wand
  */
 void
-do_zap()
+zap_wand()
 {
-	THING *obj;
-	THING *tp;
+	Entity *item;
+	Entity *monster;
 	register int y, x;
 	register char *name;
-	int which_one;
+	int effect_index;
 
-	if ((obj = get_item("zap with", STICK)) == NULL)
+	if ((item = select_inventory_item("zap with", STICK)) == NULL)
 		return;
-	which_one = obj->o_which;
-	if (obj->o_type != STICK)
+	effect_index = item->item_subtype;
+	if (item->item_category != STICK)
 	{
-		if (obj->o_enemy && obj->o_charges)
-			which_one = MAXSTICKS;
+		if (item->item_slays_species && item->item_charges)
+			effect_index = MAXSTICKS;
 		else
 		{
-			msg("you can't zap with that!");
-			after = FALSE;
+			show_message("you can't zap with that!");
+			turn_consumed = FALSE;
 			return;
 		}
 	}
-	if (obj->o_charges == 0)
+	if (item->item_charges == 0)
 	{
-		msg("nothing happens");
+		show_message("nothing happens");
 		return;
 	}
-	switch (which_one)
+	switch (effect_index)
 	{
-	when WS_LIGHT:
+	when WAND_LIGHT:
 		/*
 		 * Reddy Kilowat wand.  Light up the room
 		 */
-		if (on(player,ISBLIND))
-			msg("you feel a warm glow around you");
+		if (has_actor_flag(player,ACTOR_BLIND))
+			show_message("you feel a warm glow around you");
 		else
 		{
-			ws_know[WS_LIGHT] = TRUE;
-			if (proom->r_flags & ISGONE)
-				msg("the corridor glows and then fades");
+			wand_identified[WAND_LIGHT] = TRUE;
+			if (player_room->flags & ROOM_ABSENT)
+				show_message("the corridor glows and then fades");
 			else
-				msg("the room is lit by a shimmering blue light");
+				show_message("the room is lit by a shimmering blue light");
 		}
-		if (!(proom->r_flags & ISGONE))
+		if (!(player_room->flags & ROOM_ABSENT))
 		{
-			proom->r_flags &= ~ISDARK;
+			player_room->flags &= ~ROOM_DARK;
 			/*
 			 * Light the room and put the player back up
 			 */
-			enter_room(&hero);
+			enter_room(&player_position);
 		}
-	when WS_DRAIN:
+	when WAND_DRAIN_LIFE:
 		/*
 		 * Take away 1/2 of hero's hit points, then take it away
 		 * evenly from the monsters in the room (or next to hero
 		 * if he is in a passage)
 		 */
-		if (pstats.s_hpt < 2)
+		if (player_stats.hit_points < 2)
 		{
-			msg("you are too weak to use it");
+			show_message("you are too weak to use it");
 			return;
 		}
 		else
-			drain();
-	when WS_POLYMORPH:
-	case WS_TELAWAY:
-	case WS_TELTO:
-	case WS_CANCEL:
+			drain_monsters();
+	when WAND_POLYMORPH:
+	case WAND_TELEPORT_AWAY:
+	case WAND_TELEPORT_TO:
+	case WAND_CANCELLATION:
 	case MAXSTICKS:			/* Special case for vorpal weapon */
 	{
-		register byte monster, oldch;
+		register byte monster_definition, oldch;
 		register int rm;
-		coord new_yx;
+		Position new_yx;
 
-		y = hero.y;
-		x = hero.x;
-		while (step_ok(winat(y, x)))
+		y = player_position.y;
+		x = player_position.x;
+		while (is_walkable_symbol(visible_entity_at(y, x)))
 		{
-			y += delta.y;
-			x += delta.x;
+			y += action_direction.y;
+			x += action_direction.x;
 		}
-		if ((tp = moat(y, x)) != NULL)
+		if ((monster = monster_at(y, x)) != NULL)
 		{
 			register byte omonst;
 
-			omonst = monster = tp->t_type;
-			if (monster == 'F')
-				player.t_flags &= ~ISHELD;
-			if (which_one == MAXSTICKS)
+			omonst = monster_definition = monster->actor_species;
+			if (monster_definition == 'F')
+				player.actor_flags &= ~ACTOR_HELD;
+			if (effect_index == MAXSTICKS)
 			{
-				if (monster == obj->o_enemy)
+				if (monster_definition == item->item_slays_species)
 				{
-					msg("the %s vanishes in a puff of smoke",
-						monsters[monster-'A'].m_name);
-					killed(tp, FALSE);
+					show_message("the %s vanishes in a puff of smoke",
+						monster_definitions[monster_definition-'A'].name);
+					kill_monster(monster, FALSE);
 				}
 				else
-					msg("you hear a maniacal chuckle in the distance.");
+					show_message("you hear a maniacal chuckle in the distance.");
 			}
-			else if (which_one == WS_POLYMORPH)
+			else if (effect_index == WAND_POLYMORPH)
 			{
-				register THING *pp;
+				register Entity *pp;
 
-				pp = tp->t_pack;
-				detach(mlist, tp);
-				if (see_monst(tp))
-					mvaddch(y, x, chat(y, x));
-				oldch = tp->t_oldch;
-				delta.y = y;
-				delta.x = x;
-				new_monster(tp, monster = rnd(26) + 'A', &delta);
-				if (see_monst(tp))
-					mvaddch(y, x, monster);
-				tp->t_oldch = oldch;
-				tp->t_pack = pp;
-				ws_know[WS_POLYMORPH] |= (monster != omonst);
+				pp = monster->actor_inventory;
+				detach(level_monsters, monster);
+				if (player_can_see_monster(monster))
+					mvaddch(y, x, terrain_at(y, x));
+				oldch = monster->actor_previous_tile;
+				action_direction.y = y;
+				action_direction.x = x;
+				new_monster(monster, monster_definition = random_below(26) + 'A', &action_direction);
+				if (player_can_see_monster(monster))
+					mvaddch(y, x, monster_definition);
+				monster->actor_previous_tile = oldch;
+				monster->actor_inventory = pp;
+				wand_identified[WAND_POLYMORPH] |= (monster_definition != omonst);
 			}
-			else if (which_one == WS_CANCEL)
+			else if (effect_index == WAND_CANCELLATION)
 			{
-				tp->t_flags |= ISCANC;
-				tp->t_flags &= ~(ISINVIS|CANHUH);
-				tp->t_disguise = tp->t_type;
+				monster->actor_flags |= ACTOR_CANCELLED;
+				monster->actor_flags &= ~(ACTOR_INVISIBLE|ACTOR_CAN_CONFUSE);
+				monster->actor_disguise = monster->actor_species;
 			}
 			else
 			{
-				if (see_monst(tp))
-					mvaddch(y, x, tp->t_oldch);
-				if (which_one == WS_TELAWAY)
+				if (player_can_see_monster(monster))
+					mvaddch(y, x, monster->actor_previous_tile);
+				if (effect_index == WAND_TELEPORT_AWAY)
 				{
-					tp->t_oldch = '@';
+					monster->actor_previous_tile = '@';
 					do
 					{
-						rm = rnd_room();
-						new_yx = tp->t_pos;
-						rnd_pos(&rooms[rm], &new_yx);
-					}  while (!(isfloor(winat(new_yx.y, new_yx.x))));
-					tp->t_pos = new_yx;
-					if (see_monst(tp))
-						mvaddch(tp->t_pos.y, tp->t_pos.x, tp->t_disguise);
-					else if (on(player, SEEMONST))
+						rm = random_room_index();
+						new_yx = monster->actor_position;
+						random_room_position(&rooms[rm], &new_yx);
+					}  while (!(is_floor_tile(visible_entity_at(new_yx.y, new_yx.x))));
+					monster->actor_position = new_yx;
+					if (player_can_see_monster(monster))
+						mvaddch(monster->actor_position.y, monster->actor_position.x, monster->actor_disguise);
+					else if (has_actor_flag(player, ACTOR_DETECTS_MONSTERS))
 					{
 						standout();
-						mvaddch(tp->t_pos.y, tp->t_pos.x, tp->t_disguise);
+						mvaddch(monster->actor_position.y, monster->actor_position.x, monster->actor_disguise);
 						standend();
 					}
 				}
 				else /* it MUST BE at WS_TELTO */
 				{
-					tp->t_pos.y = hero.y + delta.y;
-					tp->t_pos.x = hero.x + delta.x;
+					monster->actor_position.y = player_position.y + action_direction.y;
+					monster->actor_position.x = player_position.x + action_direction.x;
 				}
-				if (tp->t_type == 'F')
-					player.t_flags &= ~ISHELD;
-				if (tp->t_pos.y != y || tp->t_pos.x != x)
-					tp->t_oldch = mvinch(tp->t_pos.y, tp->t_pos.x);
+				if (monster->actor_species == 'F')
+					player.actor_flags &= ~ACTOR_HELD;
+				if (monster->actor_position.y != y || monster->actor_position.x != x)
+					monster->actor_previous_tile = mvinch(monster->actor_position.y, monster->actor_position.x);
 			}
-			tp->t_dest = &hero;
-			tp->t_flags |= ISRUN;
+			monster->actor_destination = &player_position;
+			monster->actor_flags |= ACTOR_CHASING;
 		}
 	}
-	when WS_MISSILE:
+	when WAND_MAGIC_MISSILE:
 	{
-		THING bolt;
+		Entity bolt;
 
-		ws_know[WS_MISSILE] = TRUE;
-		bolt.o_type = '*';
-		bolt.o_hurldmg = "1d8";
-		bolt.o_hplus = 1000;
-		bolt.o_dplus = 1;
-		bolt.o_flags = ISMISL;
-		if (cur_weapon != NULL)
-			bolt.o_launch = cur_weapon->o_which;
-		do_motion(&bolt, delta.y, delta.x);
-		if ((tp = moat(bolt.o_pos.y, bolt.o_pos.x)) != NULL && !save_throw(VS_MAGIC, tp))
-			hit_monster(unc(bolt.o_pos), &bolt);
+		wand_identified[WAND_MAGIC_MISSILE] = TRUE;
+		bolt.item_category = '*';
+		bolt.item_thrown_damage = "1d8";
+		bolt.item_hit_bonus = 1000;
+		bolt.item_damage_bonus = 1;
+		bolt.item_flags = ITEM_THROWABLE;
+		if (equipped_weapon != NULL)
+			bolt.item_launcher = equipped_weapon->item_subtype;
+		animate_projectile(&bolt, action_direction.y, action_direction.x);
+		if ((monster = monster_at(bolt.item_position.y, bolt.item_position.x)) != NULL && !actor_saving_throw(VS_MAGIC, monster))
+			hit_monster(position_yx(bolt.item_position), &bolt);
 		else
-		msg("the missle vanishes with a puff of smoke");
+		show_message("the missle vanishes with a puff of smoke");
 	}
-	when WS_HIT:
-		delta.y += hero.y;
-		delta.x += hero.x;
-		if ((tp = moat(delta.y, delta.x)) != NULL)
+	when WAND_STRIKING:
+		action_direction.y += player_position.y;
+		action_direction.x += player_position.x;
+		if ((monster = monster_at(action_direction.y, action_direction.x)) != NULL)
 		{
-			if (rnd(20) == 0)
+			if (random_below(20) == 0)
 			{
-				obj->o_damage = "3d8";
-				obj->o_dplus = 9;
+				item->item_melee_damage = "3d8";
+				item->item_damage_bonus = 9;
 			}
 			else
 			{
-				obj->o_damage = "2d8";
-				obj->o_dplus = 4;
+				item->item_melee_damage = "2d8";
+				item->item_damage_bonus = 4;
 			}
-			fight(&delta, tp->t_type, obj, FALSE);
+			player_attack(&action_direction, monster->actor_species, item, FALSE);
 		}
-	when WS_HASTE_M:
-	case WS_SLOW_M:
-		y = hero.y;
-		x = hero.x;
-		while (step_ok(winat(y, x)))
+	when WAND_HASTE_MONSTER:
+	case WAND_SLOW_MONSTER:
+		y = player_position.y;
+		x = player_position.x;
+		while (is_walkable_symbol(visible_entity_at(y, x)))
 		{
-			y += delta.y;
-			x += delta.x;
+			y += action_direction.y;
+			x += action_direction.x;
 		}
-		if ((tp = moat(y, x)) != NULL)
+		if ((monster = monster_at(y, x)) != NULL)
 		{
-			if (which_one == WS_HASTE_M)
+			if (effect_index == WAND_HASTE_MONSTER)
 			{
-				if (on(*tp, ISSLOW))
-					tp->t_flags &= ~ISSLOW;
+				if (has_actor_flag(*monster, ACTOR_SLOWED))
+					monster->actor_flags &= ~ACTOR_SLOWED;
 				else
-					tp->t_flags |= ISHASTE;
+					monster->actor_flags |= ACTOR_HASTED;
 			}
 			else
 			{
-				if (on(*tp, ISHASTE))
-					tp->t_flags &= ~ISHASTE;
+				if (has_actor_flag(*monster, ACTOR_HASTED))
+					monster->actor_flags &= ~ACTOR_HASTED;
 				else
-					tp->t_flags |= ISSLOW;
-				tp->t_turn = TRUE;
+					monster->actor_flags |= ACTOR_SLOWED;
+				monster->actor_move_this_turn = TRUE;
 			}
-			delta.y = y;
-			delta.x = x;
-			start_run(&delta);
+			action_direction.y = y;
+			action_direction.x = x;
+			start_monster_chase(&action_direction);
 		}
-	when WS_ELECT:
-	case WS_FIRE:
-	case WS_COLD:
-		if (which_one == WS_ELECT)
+	when WAND_LIGHTNING:
+	case WAND_FIRE:
+	case WAND_COLD:
+		if (effect_index == WAND_LIGHTNING)
 			name = "bolt";
-		else if (which_one == WS_FIRE)
+		else if (effect_index == WAND_FIRE)
 			name = "flame";
 		else
 			name = "ice";
-		fire_bolt(&hero, &delta, name);
-		ws_know[which_one] = TRUE;
+		fire_bolt(&player_position, &action_direction, name);
+		wand_identified[effect_index] = TRUE;
 #ifdef DEBUG
 	otherwise:
-		msg("what a bizarre schtick!");
+		show_message("what a bizarre schtick!");
 #endif
 		break;
 	}
-	if (--obj->o_charges < 0)
-		obj->o_charges = 0;
+	if (--item->item_charges < 0)
+		item->item_charges = 0;
 }
 
 /*
@@ -291,48 +291,48 @@ do_zap()
  *	Do drain hit points from player schtick
  */
 void
-drain()
+drain_monsters()
 {
-	THING *mp;
-	register int cnt;
-	register struct room *corp;
-	register THING **dp;
-	register bool inpass;
-	THING *drainee[40];
+	Entity *monster;
+	register int target_count;
+	register struct room *player_region;
+	register Entity **target_cursor;
+	register bool in_passage;
+	Entity *targets[40];
 
 	/*
 	 * First cnt how many things we need to spread the hit points among
 	 */
-	cnt = 0;
-	if (chat(hero.y, hero.x) == DOOR)
-		corp = &passages[flat(hero.y, hero.x) & F_PNUM];
+	target_count = 0;
+	if (terrain_at(player_position.y, player_position.x) == DOOR)
+		player_region = &passages[cell_flags_at(player_position.y, player_position.x) & PASSAGE_NUMBER_MASK];
 	else
-		corp = NULL;
-	inpass = (proom->r_flags & ISGONE);
-	dp = drainee;
-	for (mp = mlist; mp != NULL; mp = next(mp))
-		if (mp->t_room == proom || mp->t_room == corp ||
-			(inpass && chat(mp->t_pos.y, mp->t_pos.x) == DOOR &&
-			&passages[flat(mp->t_pos.y, mp->t_pos.x) & F_PNUM] == proom))
-			*dp++ = mp;
-	if ((cnt = dp - drainee) == 0)
+		player_region = NULL;
+	in_passage = (player_room->flags & ROOM_ABSENT);
+	target_cursor = targets;
+	for (monster = level_monsters; monster != NULL; monster = next(monster))
+		if (monster->actor_room == player_room || monster->actor_room == player_region ||
+			(in_passage && terrain_at(monster->actor_position.y, monster->actor_position.x) == DOOR &&
+			&passages[cell_flags_at(monster->actor_position.y, monster->actor_position.x) & PASSAGE_NUMBER_MASK] == player_room))
+			*target_cursor++ = monster;
+	if ((target_count = target_cursor - targets) == 0)
 	{
-		msg("you have a tingling feeling");
+		show_message("you have a tingling feeling");
 		return;
 	}
-	*dp = NULL;
-	pstats.s_hpt /= 2;
-	cnt = pstats.s_hpt / cnt + 1;
+	*target_cursor = NULL;
+	player_stats.hit_points /= 2;
+	target_count = player_stats.hit_points / target_count + 1;
 	/*
 	 * Now zot all of the monsters
 	 */
-	for (dp = drainee; *dp; dp++)
+	for (target_cursor = targets; *target_cursor; target_cursor++)
 	{
-		mp = *dp;
-		if ((mp->t_stats.s_hpt -= cnt) <= 0)
-			killed(mp, see_monst(mp));
+		monster = *target_cursor;
+		if ((monster->actor_stats.hit_points -= target_count) <= 0)
+			kill_monster(monster, player_can_see_monster(monster));
 		else
-			start_run(&mp->t_pos);
+			start_monster_chase(&monster->actor_position);
 	}
 }
 
@@ -341,47 +341,47 @@ drain()
  *	Fire a bolt in a given direction from a specific starting place
  */
 void
-fire_bolt(start, dir, name)
-	coord *start, *dir;
+fire_bolt(start, direction, name)
+	Position *start, *direction;
 	char *name;
 {
-	register byte dirch = 0, ch;
-	register THING *tp;
+	register byte bolt_symbol = 0, character;
+	register Entity *monster;
 	register bool hit_hero, used, changed;
 	register int i, j;
-	coord pos;
+	Position position;
 	struct {
-		coord s_pos;
+		Position s_pos;
 		byte s_under;
-	} spotpos[BOLT_LENGTH*2];
-	THING bolt;
+	} trail[BOLT_LENGTH*2];
+	Entity bolt;
 	bool is_frost;
 
 	is_frost = (strcmp(name, "frost") == 0);
-	bolt.o_type = WEAPON;
-	bolt.o_which = FLAME;
-	bolt.o_damage = bolt.o_hurldmg = "6d6";
-	bolt.o_hplus = 30;
-	bolt.o_dplus = 0;
-	w_names[FLAME] = name;
-	switch (dir->y + dir->x) {
-		when 0: dirch = '/';
-		when 1: case -1: dirch = (dir->y == 0 ? '-' : '|');
-		when 2: case -2: dirch = '\\';
+	bolt.item_category = WEAPON;
+	bolt.item_subtype = FLAME;
+	bolt.item_melee_damage = bolt.item_thrown_damage = "6d6";
+	bolt.item_hit_bonus = 30;
+	bolt.item_damage_bonus = 0;
+	weapon_names[FLAME] = name;
+	switch (direction->y + direction->x) {
+		when 0: bolt_symbol = '/';
+		when 1: case -1: bolt_symbol = (direction->y == 0 ? '-' : '|');
+		when 2: case -2: bolt_symbol = '\\';
 		break;
 	}
-	pos = *start;
-	hit_hero = (start != &hero);
+	position = *start;
+	hit_hero = (start != &player_position);
 	used = FALSE;
 	changed = FALSE;
 	for (i = 0; i < BOLT_LENGTH && !used; i++) {
-		pos.y += dir->y;
-		pos.x += dir->x;
-		ch = winat(pos.y, pos.x);
-		spotpos[i].s_pos = pos;
-		if ((spotpos[i].s_under = mvinch(pos.y, pos.x)) == dirch)
-			spotpos[i].s_under = 0;
-		switch (ch) {
+		position.y += direction->y;
+		position.x += direction->x;
+		character = visible_entity_at(position.y, position.x);
+		trail[i].s_pos = position;
+		if ((trail[i].s_under = mvinch(position.y, position.x)) == bolt_symbol)
+			trail[i].s_under = 0;
+		switch (character) {
 		case DOOR:
 		case HWALL:
 		case VWALL:
@@ -393,68 +393,68 @@ fire_bolt(start, dir, name)
 			if (!changed)
 				hit_hero = !hit_hero;
 			changed = FALSE;
-			dir->y = -dir->y;
-			dir->x = -dir->x;
+			direction->y = -direction->y;
+			direction->x = -direction->x;
 			i--;
-			msg("the %s bounces", name);
+			show_message("the %s bounces", name);
 			break;
 		default:
-			if (!hit_hero && (tp = moat(pos.y, pos.x)) != NULL) {
+			if (!hit_hero && (monster = monster_at(position.y, position.x)) != NULL) {
 				hit_hero = TRUE;
 				changed = !changed;
-				if (tp->t_oldch != '@')
-					tp->t_oldch = chat(pos.y, pos.x);
-				if (!save_throw(VS_MAGIC, tp) || is_frost) {
-					bolt.o_pos = pos;
+				if (monster->actor_previous_tile != '@')
+					monster->actor_previous_tile = terrain_at(position.y, position.x);
+				if (!actor_saving_throw(VS_MAGIC, monster) || is_frost) {
+					bolt.item_position = position;
 					used = TRUE;
-					if (tp->t_type == 'D' && strcmp(name, "flame") == 0)
-						msg("the flame bounces off the dragon");
+					if (monster->actor_species == 'D' && strcmp(name, "flame") == 0)
+						show_message("the flame bounces off the dragon");
 					else {
-						hit_monster(unc(pos), &bolt);
-						if (mvinch(unc(pos)) != dirch)
-							spotpos[i].s_under = mvinch(unc(pos));
+						hit_monster(position_yx(position), &bolt);
+						if (mvinch(position_yx(position)) != bolt_symbol)
+							trail[i].s_under = mvinch(position_yx(position));
 					}
-				} else if (ch != 'X' || tp->t_disguise == 'X') {
-					if (start == &hero)
-						start_run(&pos);
-					msg("the %s whizzes past the %s",
-						name, monsters[ch-'A'].m_name);
+				} else if (character != 'X' || monster->actor_disguise == 'X') {
+					if (start == &player_position)
+						start_monster_chase(&position);
+					show_message("the %s whizzes past the %s",
+						name, monster_definitions[character-'A'].name);
 				}
-			} else if (hit_hero && ce(pos, hero)) {
+			} else if (hit_hero && positions_equal(position, player_position)) {
 				hit_hero = FALSE;
 				changed = !changed;
-				if (!save(VS_MAGIC)) {
+				if (!player_saving_throw(VS_MAGIC)) {
 					if (is_frost) {
-						msg("You are frozen by a blast of frost%s.",
-							noterse(" from the Ice Monster"));
-						if (no_command < 20)
-							no_command += spread(7);
-					} else if ((pstats.s_hpt -= roll(6, 6)) <= 0) {
-						if (start == &hero)
-							death('b');
+						show_message("You are frozen by a blast of frost%s.",
+							verbose_text(" from the Ice Monster"));
+						if (incapacitated_turns < 20)
+							incapacitated_turns += randomize_duration(7);
+					} else if ((player_stats.hit_points -= roll_dice(6, 6)) <= 0) {
+						if (start == &player_position)
+							show_death_screen('b');
 						else
-							death(moat(start->y, start->x)->t_type);
+							show_death_screen(monster_at(start->y, start->x)->actor_species);
 					}
 					used = TRUE;
 					if (!is_frost)
-						msg("you are hit by the %s", name);
+						show_message("you are hit by the %s", name);
 				} else
-					msg("the %s whizzes by you", name);
+					show_message("the %s whizzes by you", name);
 			}
 			if (is_frost)
 				blue();
 			else
 				red();
 			tick_pause();
-			mvaddch(pos.y, pos.x, dirch);
+			mvaddch(position.y, position.x, bolt_symbol);
 			standend();
 			break;
 		}
 	}
 	for (j = 0; j < i; j++) {
 		tick_pause();
-		if (spotpos[j].s_under)
-			mvaddch(spotpos[j].s_pos.y, spotpos[j].s_pos.x, spotpos[j].s_under);
+		if (trail[j].s_under)
+			mvaddch(trail[j].s_pos.y, trail[j].s_pos.x, trail[j].s_under);
 	}
 }
 
@@ -463,14 +463,14 @@ fire_bolt(start, dir, name)
  *	Return an appropriate string for a wand charge
  */
 char *
-charge_str(obj)
-	register THING *obj;
+format_wand_charges(item)
+	register Entity *item;
 {
-	static char buf[20];
+	static char buffer[20];
 
-	if (!(obj->o_flags & ISKNOW))
-		buf[0] = '\0';
+	if (!(item->item_flags & ITEM_IDENTIFIED))
+		buffer[0] = '\0';
 	else
-		sprintf(buf, " [%d charges]", obj->o_charges);
-	return buf;
+		sprintf(buffer, " [%d charges]", item->item_charges);
+	return buffer;
 }

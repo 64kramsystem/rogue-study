@@ -12,28 +12,28 @@
  *	The player wants to wear something, so let him/her put it on.
  */
 void
-wear()
+wear_armor()
 {
-	register THING *obj;
-	register char *sp;
+	register Entity *item;
+	register char *text_cursor;
 
-	if (cur_armor != NULL) {
-		msg("you are already wearing some%s.",
-			noterse(".  You'll have to take it off first"));
-		after = FALSE;
+	if (equipped_armor != NULL) {
+		show_message("you are already wearing some%s.",
+			verbose_text(".  You'll have to take it off first"));
+		turn_consumed = FALSE;
 		return;
 	}
-	if ((obj = get_item("wear",ARMOR)) == NULL)
+	if ((item = select_inventory_item("wear",ARMOR)) == NULL)
 		return;
-	if (obj->o_type != ARMOR) {
-		msg("you can't wear that");
+	if (item->item_category != ARMOR) {
+		show_message("you can't wear that");
 		return;
 	}
-	waste_time();
-	obj->o_flags |= ISKNOW ;
-	sp = inv_name(obj, TRUE);
-	cur_armor = obj;
-	msg("you are now wearing %s", sp);
+	advance_turn();
+	item->item_flags |= ITEM_IDENTIFIED ;
+	text_cursor = describe_item(item, TRUE);
+	equipped_armor = item;
+	show_message("you are now wearing %s", text_cursor);
 }
 
 /*
@@ -41,19 +41,19 @@ wear()
  *	Get the armor off of the player's back
  */
 void
-take_off()
+remove_armor()
 {
-	register THING *obj;
+	register Entity *item;
 
-	if ((obj = cur_armor) == NULL) {
-		after = FALSE;
-		msg("you aren't wearing any armor");
+	if ((item = equipped_armor) == NULL) {
+		turn_consumed = FALSE;
+		show_message("you aren't wearing any armor");
 		return;
 	}
-	if (!can_drop(cur_armor))
+	if (!can_drop(equipped_armor))
 		return;
-	cur_armor = NULL;
-	msg("you used to be wearing %c) %s", pack_char(obj), inv_name(obj, TRUE));
+	equipped_armor = NULL;
+	show_message("you used to be wearing %c) %s", inventory_key(item), describe_item(item, TRUE));
 }
 
 /*
@@ -61,8 +61,8 @@ take_off()
  *	Do nothing but let other things happen
  */
 void
-waste_time()
+advance_turn()
 {
-	do_daemons();
-	do_fuses();
+	run_recurring_actions();
+	run_delayed_actions();
 }

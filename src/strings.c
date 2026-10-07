@@ -31,12 +31,12 @@ tolower(chr)
 */
 
 //@ Locale-independent versions, as expected by Rogue
-bool is_alpha(char ch) { return (isascii(ch) && isalpha(ch)); }
-bool is_upper(char ch) { return (isascii(ch) && isupper(ch)); }
-bool is_lower(char ch) { return (isascii(ch) && islower(ch)); }
-bool is_digit(char ch) { return (isascii(ch) && isdigit(ch)); }
-bool is_space(char ch) { return (isascii(ch) && isspace(ch)); }
-bool is_print(char ch) { return (isascii(ch) && isprint(ch)); }
+bool is_alpha(char character) { return (isascii(character) && isalpha(character)); }
+bool is_upper(char character) { return (isascii(character) && isupper(character)); }
+bool is_lower(char character) { return (isascii(character) && islower(character)); }
+bool is_digit(char character) { return (isascii(character) && isdigit(character)); }
+bool is_space(char character) { return (isascii(character) && isspace(character)); }
+bool is_print(char character) { return (isascii(character) && isprint(character)); }
 
 /*@
  * No exact match in signature and behavior from glibc or POSIX
@@ -44,18 +44,18 @@ bool is_print(char ch) { return (isascii(ch) && isprint(ch)); }
  * snprintf() is perhaps a better replacement candidate.
  */
 char *
-stccpy(s1,s2,count)
-	char *s1, *s2;
-	int count;
+copy_string_bounded(destination,source,max_characters)
+	char *destination, *source;
+	int max_characters;
 {
-	while (count-->0 && *s2)
-		*s1++ = *s2++;
-	*s1 = 0;
+	while (max_characters-->0 && *source)
+		*destination++ = *source++;
+	*destination = 0;
 	/*
 	 * lets return the address of the end of the string so
 	 * we can use that info if we are going to cat on something else!!
 	 */
-	return (s1);
+	return (destination);
 }
 
 
@@ -65,36 +65,36 @@ stccpy(s1,s2,count)
 
 //@ strip leading blanks
 char *
-stpblk(str)
-	char *str;
+skip_whitespace(text)
+	char *text;
 {
-	while (is_space(*str))
-		str++;
-	return(str);
+	while (is_space(*text))
+		text++;
+	return(text);
 }
 
 /*
  * remove trailing whitespace from the end of a line
  */
 char *
-endblk(str)
-	char *str;
+trim_trailing_whitespace(text)
+	char *text;
 {
 	register char *backup;
 
-	backup = str + strlen(str);
-	while (backup != str && is_space(*(--backup)))
+	backup = text + strlen(text);
+	while (backup != text && is_space(*(--backup)))
 		*backup = 0;
-	return(str);
+	return(text);
 }
 
 /*
  * lcase: convert a string to lower case
  */
 void
-lcase(str)
-	char *str;
+lowercase_string(text)
+	char *text;
 {
-	while ( (*str = tolower((unsigned char)*str)) )
-		str++;
+	while ( (*text = tolower((unsigned char)*text)) )
+		text++;
 }
