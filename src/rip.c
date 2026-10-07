@@ -59,7 +59,8 @@ reread:
 		{
 		case 'c':
 		case 'C':
-			fclose(fopen(s_score, "w"));
+			if ((file = fopen(s_score, "w")) != NULL)
+				fclose(file);
 			break;
 		case 'r':
 		case 'R':
