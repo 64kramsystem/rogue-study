@@ -15,7 +15,7 @@ static int	choose_item_subtype(struct item_definition *magic, int item_count);
 static char	*undiscovered_message(byte type);
 
 /*
- * inv_name:
+ * describe_item:
  *	Return the name of something as it would appear in an
  *	inventory.
  */
@@ -164,7 +164,7 @@ format_item_by_verbosity(char *output, char *terse_format, char *verbose_format,
 }
 
 /*
- * drop:
+ * drop_item:
  *	Put something down
  */
 void
@@ -261,7 +261,7 @@ can_drop(Entity *item)
 }
 
 /*
- * new_thing:
+ * generate_item:
  *	Return a new thing
  */
 Entity *
@@ -364,7 +364,7 @@ generate_item(void)
 }
 
 /*
- * pick_one:
+ * choose_item_subtype:
  *	Pick an item out of a list of nitems possible magic items
  */
 static
@@ -395,7 +395,7 @@ choose_item_subtype(struct item_definition *magic, int item_count)
 }
 
 /*
- * discovered:
+ * show_discoveries:
  *	list what the player has discovered in this game of a certain type
  */
 static int inventory_line_count = 0;
@@ -418,7 +418,7 @@ show_discoveries(void)
 }
 
 /*
- * print_disc:
+ * show_category_discoveries:
  *	Print what we've discovered of type 'type'
  */
 
@@ -474,7 +474,7 @@ show_category_discoveries(byte type)
 }
 
 /*
- * set_order:
+ * shuffle_discovery_order:
  *	Set up order for list
  */
 static
@@ -559,7 +559,7 @@ end_line(char *use)
 }
 
 /*
- * nothing:
+ * undiscovered_message:
  *	Set up prbuf so that message for "nothing found" is there
  */
 static

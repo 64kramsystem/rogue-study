@@ -22,7 +22,7 @@ inventory_item_for_key(byte inventory_key, byte *final_key)
 }
 
 /*
- * add_pack:
+ * add_to_inventory:
  *	Pick up an object and add it to the pack.  If the argument is
  *	non-null use it as the linked_list pointer instead of gettting
  *	it off the ground.
@@ -54,9 +54,9 @@ add_to_inventory(Entity *item, bool silent)
 
 	/*@
 	 *  bug in original Rogue: it didn't check proom != NULL, as is the case
-	 *  when add_pack() is called from init_player(), which happens before
+	 *  when add_to_inventory() is called from init_player(), which happens before
 	 *  any room even exist. proom is set in enter_room(), which is first
-	 *  called in new_level()
+	 *  called in generate_level()
 	 */
 	floor_symbol = (player_room != NULL && (player_room->flags & ROOM_ABSENT)) ? PASSAGE : FLOOR;
 	if (item->item_stack_group)
@@ -200,12 +200,12 @@ picked_up:
 		 *		this may be true since there is no structure assignments,
 		 *		but still it should let you have the address??!!
 		 *
-		if (&obj->_o._o_pos == op->t_dest)
+		if (&obj->item_data.position == op->actor_destination)
 		 *
 		 *  the following should do the same
 		 */
 		/*@
-		 * Another bug in Rogue: missed NULL check for t_dest. Monsters could
+		 * Another bug in Rogue: missed NULL check for actor_destination. Monsters could
 		 * be not chasing (sleeping, another room, Ice Monster, etc), so a
 		 * destination could possibly have never been assigned.
 		 */
@@ -228,7 +228,7 @@ picked_up:
 }
 
 /*
- * inventory:
+ * show_inventory:
  *	List what is in the pack
  */
 byte
@@ -267,7 +267,7 @@ show_inventory(Entity *items, int type, char *line_prefix)
 }
 
 /*
- * pick_up:
+ * pick_up_item:
  *	Add something to characters pack.
  */
 void
@@ -300,7 +300,7 @@ pick_up_item(byte character)
 }
 
 /*
- * get_item:
+ * select_inventory_item:
  *	Pick something out of a pack for a purpose
  */
 Entity *
@@ -385,7 +385,7 @@ select_inventory_item(char *purpose, int type)
 }
 
 /*
- * pack_char:
+ * inventory_key:
  *	Return which character would address a pack object
  */
 byte
@@ -404,7 +404,7 @@ inventory_key(Entity *target_item)
 }
 
 /*
- * money:
+ * collect_gold:
  *	Add or subtract gold from the pack
  */
 void

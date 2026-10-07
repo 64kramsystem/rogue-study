@@ -9,7 +9,7 @@
 
 
 /*
- * doctor:
+ * regenerate_health:
  *	A healing daemon that restores hit points after rest
  */
 void
@@ -51,7 +51,7 @@ start_wander_checks(void)
 }
 
 /*
- * rollwand:
+ * check_wandering_spawn:
  *	Called to roll to see if a wandering monster starts up
  */
 void
@@ -72,7 +72,7 @@ check_wandering_spawn(void)
 }
 
 /*
- * unconfuse:
+ * end_confusion:
  *	Release the poor player from his confusion
  */
 void
@@ -83,7 +83,7 @@ end_confusion(void)
 }
 
 /*
- * unsee:
+ * end_monster_detection:
  *	Turn off the ability to see invisible
  */
 void
@@ -98,7 +98,7 @@ end_monster_detection(void)
 }
 
 /*
- * sight:
+ * end_blindness:
  *	He gets his sight back
  */
 void
@@ -115,7 +115,7 @@ end_blindness(void)
 }
 
 /*
- * nohaste:
+ * end_haste:
  *	End the hasting
  */
 void
@@ -126,7 +126,7 @@ end_haste(void)
 }
 
 /*
- * stomach:
+ * consume_food:
  *	Digest the hero's food
  */
 void

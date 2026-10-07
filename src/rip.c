@@ -28,7 +28,7 @@ static void	display_scores(int new_rank, struct score_entry *scores);
 static int	insert_score(struct score_entry *new_score, struct score_entry *scores);
 
 /*
- * score:
+ * update_high_scores:
  *	Figure score and post it.
  */
 /* VARARGS2 */
@@ -254,9 +254,9 @@ insert_score(struct score_entry *new_score, struct score_entry *scores)
 #endif //DEMO
 
 /*
- * death:
- *	Do something really fun when he dies
- */
+	 * show_death_screen:
+	 *	Do something really fun when he dies
+	 */
 void
 show_death_screen(char death_cause)
 {
@@ -292,10 +292,11 @@ show_death_screen(char death_cause)
 
 	/*@
 	 * This looks like a no-op, but it's not: it makes sure prbuf, used
-	 * internally in killname(), contains the actual death reason.
-	 * kild_by, the string used here, is re-assigned by clock() to point to
+	 * internally in death_cause_name(), contains the actual death reason.
+	 * tombstone_death_cause, the string used here, is re-assigned by update_protection_state()
+	 * to point to
 	 * prbuf if copy protection checks are successful. Otherwise, it contains
-	 * the default "pirated" message. The same method is used with your_na
+	 * the default "pirated" message. The same method is used with tombstone_player_name
 	 * above.
 	 */
 	death_cause_name(death_cause, TRUE);
@@ -342,7 +343,7 @@ show_death_screen(char death_cause)
 }
 
 /*
- * total_winner:
+ * show_victory_screen:
  *	Code for a winner
  */
 void
@@ -478,7 +479,7 @@ show_victory_screen(void)
 }
 
 /*
- * killname:
+ * death_cause_name:
  *	Convert a code to a monster name
  */
 char *

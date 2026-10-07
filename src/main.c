@@ -45,11 +45,10 @@ main(argc, argv)
 
 #ifdef ROGUE_DOS_CLOCK
 	long junk = 0L;
-	/*@
-	 * I suspect this seemingly innocent dmaout(&junk) is neither innocent
-	 * nor junk, but part of the self-integrity, anti-debugger measures.
-	 * clock() had some checks on zeroed values on low DS offsets, which I
-	 * guess were set by this call.
+	/*
+	 * Clear the four-byte single-step interrupt vector at 0000:0004 (INT 01h).
+	 * The original dos.asm clock_ handler reads both words and calls _halt_ if either
+	 * is nonzero. This write establishes the value that the anti-debugger check expects.
 	 */
 	dos_write_memory(&junk,2,0,4);
 	install_dos_timer_hook();
@@ -67,7 +66,7 @@ main(argc, argv)
 	 * Parse the screen environment variable.  if the string starts with
 	 * "bw", then we force black and white mode.  If it ends with "fast"
 	 * then we disable retrace checking
-	 * @ do_force is deprecated, so "fast" is useless now
+	 * @ skip_retrace_check is deprecated, so "fast" is useless now
 	 */
 	if (strncmp(screen_option, "bw", 2) == 0)
 		monochrome_requested = TRUE;
@@ -146,7 +145,7 @@ main(argc, argv)
 }
 
 /*
- * endit:
+ * exit_game_message:
  *	Exit the program abnormally.
  */
 void
@@ -173,7 +172,7 @@ next_random_value()
 }
 
 /*
- * rnd:
+ * random_below:
  *	Pick a very random number.
  */
 int
@@ -188,7 +187,7 @@ random_below(range)
 }
 
 /*
- * roll:
+ * roll_dice:
  *	Roll a number of dice
  */
 int
@@ -203,7 +202,7 @@ roll_dice(number, sides)
 }
 
 /*
- * playit:
+ * run_game:
  *	The main loop of the program.  Loop until the game is over,
  *	refreshing things and looking at the proper times.
  */
@@ -215,7 +214,7 @@ run_game(saved_game_path)
 		restore_game(saved_game_path);
 		setup_game_io();
 #ifdef ROGUE_DOS_CURSES
-		iscuron = TRUE;  //@ force the following cursor() call to turn it off
+		iscuron = TRUE;  //@ force the following set_cursor_visible() call to turn it off
 #endif
 		set_cursor_visible(FALSE);
 	} else {

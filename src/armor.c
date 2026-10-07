@@ -8,7 +8,7 @@
 #include "curses.h"
 
 /*
- * wear:
+ * wear_armor:
  *	The player wants to wear something, so let him/her put it on.
  */
 void
@@ -37,7 +37,7 @@ wear_armor()
 }
 
 /*
- * take_off:
+ * remove_armor:
  *	Get the armor off of the player's back
  */
 void
@@ -57,7 +57,7 @@ remove_armor()
 }
 
 /*
- * waste_time:
+ * advance_turn:
  *	Do nothing but let other things happen
  */
 void

@@ -10,7 +10,7 @@
 static int	choose_ring_hand(void);
 
 /*
- * ring_on:
+ * put_on_ring:
  *	Put a ring on a hand
  */
 void
@@ -73,7 +73,7 @@ no_ring:
 }
 
 /*
- * ring_off:
+ * remove_ring:
  *	Take off a ring
  */
 void
@@ -107,7 +107,7 @@ remove_ring(void)
 }
 
 /*
- * gethand:
+ * choose_ring_hand:
  *	Which hand is the hero interested in?
  */
 static
@@ -133,7 +133,7 @@ choose_ring_hand(void)
 }
 
 /*
- * ring_eat:
+ * ring_food_cost:
  *	How much food does this ring use up?
  */
 int
@@ -165,7 +165,7 @@ ring_food_cost(int hand)
 }
 
 /*
- * ring_num:
+ * format_ring_bonus:
  *	Print ring bonuses
  */
 char *

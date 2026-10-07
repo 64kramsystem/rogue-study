@@ -15,13 +15,13 @@
 
 /*@
  * struct delayed_action, as well as functions using it as return type such
- * as d_slot() and find_slot() are now marked static as the struct is not
+ * as find_free_action_slot() and find_action_slot() are now marked static as the struct is not
  * declared in rogue.h, and they are only used in this file
  */
 
 /*@
  * `int d_arg` member was removed as all fuses and daemons have no arguments,
- * and for the only one that did, turn_see(), the argument type is bool. It's
+ * and for the only one that did, set_monster_detection(), the argument type is bool. It's
  * also now wrapped and no longer directly used as fuse, as its return type is
  * not void, making the argument member of this struct unneeded.
  *
@@ -36,7 +36,7 @@ struct delayed_action {
 } scheduled_actions[MAX_SCHEDULED_ACTIONS];
 
 /*
- * d_slot:
+ * find_free_action_slot:
  *	Find an empty slot in the daemon/fuse list
  */
 static
@@ -55,7 +55,7 @@ find_free_action_slot(void)
 }
 
 /*
- * find_slot:
+ * find_action_slot:
  *	Find a particular slot in the table
  */
 static
@@ -85,7 +85,7 @@ schedule_recurring_action(void (*func)())
 }
 
 /*
- * do_daemons:
+ * run_recurring_actions:
  *	Run all the daemons, passing the argument to the function.
  */
 void
@@ -110,7 +110,7 @@ run_recurring_actions(void)
 }
 
 /*
- * fuse:
+ * schedule_delayed_action:
  *	Start a fuse to go off in a certain number of turns
  */
 void
@@ -124,7 +124,7 @@ schedule_delayed_action(void (*func)(), int time)
 }
 
 /*
- * lengthen:
+ * extend_delayed_action:
  *	Increase the time until a fuse goes off
  */
 void
@@ -138,7 +138,7 @@ extend_delayed_action(void (*func)(), int xtime)
 }
 
 /*
- * extinguish:
+ * cancel_delayed_action:
  *	Put out a fuse
  */
 void
@@ -152,7 +152,7 @@ cancel_delayed_action(void (*func)())
 }
 
 /*
- * do_fuses:
+ * run_delayed_actions:
  *	Decrement counters and start needed fuses
  */
 void

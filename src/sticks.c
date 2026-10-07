@@ -9,7 +9,7 @@
 #include "curses.h"
 
 /*
- * fix_stick:
+ * initialize_wand:
  *	Set up a new stick
  */
 void
@@ -36,7 +36,7 @@ initialize_wand(wand)
 }
 
 /*
- * do_zap:
+ * zap_wand:
  *	Perform a zap with a wand
  */
 void
@@ -186,7 +186,7 @@ zap_wand()
 						standend();
 					}
 				}
-				else /* it MUST BE at WS_TELTO */
+				else /* it MUST BE at WAND_TELEPORT_TO */
 				{
 					monster->actor_position.y = player_position.y + action_direction.y;
 					monster->actor_position.x = player_position.x + action_direction.x;
@@ -287,7 +287,7 @@ zap_wand()
 }
 
 /*
- * drain:
+ * drain_monsters:
  *	Do drain hit points from player schtick
  */
 void
@@ -459,7 +459,7 @@ fire_bolt(start, direction, name)
 }
 
 /*
- * charge_str:
+ * format_wand_charges:
  *	Return an appropriate string for a wand charge
  */
 char *

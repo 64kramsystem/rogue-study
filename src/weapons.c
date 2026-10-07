@@ -31,7 +31,7 @@ static int	find_projectile_landing(Entity *item, Position *landing_position);
 static char	*short_name(Entity *item);
 
 /*
- * missile:
+ * throw_item:
  *	Fire a missile in a given direction
  */
 void
@@ -82,7 +82,7 @@ throw_item(int ydelta, int xdelta)
 }
 
 /*
- * do_motion:
+ * animate_projectile:
  *	Do the actual motion on the screen done by an object traveling
  *	across the room
  */
@@ -146,7 +146,7 @@ short_name(Entity *item)
 }
 
 /*
- * fall:
+ * drop_projectile:
  *	Drop an item someplace around here.
  */
 void
@@ -225,7 +225,7 @@ hit_monster(int y, int x, Entity *item)
 }
 
 /*
- * num:
+ * format_item_bonus:
  *	Figure out the plus number for armor/weapons
  */
 char *
@@ -278,7 +278,7 @@ bad:
 }
 
 /*
- * fallpos:
+ * find_projectile_landing:
  *	Pick a random position around the given (y, x) coordinates
  */
 static
@@ -332,9 +332,9 @@ tick_pause(void)
 #ifdef ROGUE_DOS_CLOCK
 		;
 #else
-		md_clock();
+		update_protection_state();
 #endif
-*/
+ */
 	screen_refresh();
 	msleep(55);
 }

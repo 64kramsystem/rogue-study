@@ -15,7 +15,7 @@ static int	get_num(int *place);
 
 
 /*
- * whatis:
+ * identify_item:
  *	What a certin object is
  */
 void
@@ -155,9 +155,9 @@ create_obj(void)
 #endif
 
 /*
- * telport:
- *	Bamf the hero someplace else
- */
+			 * telport:
+			 *	Bamf the hero someplace else
+			 */
 int
 teleport(void)
 {
@@ -183,7 +183,7 @@ teleport(void)
 	}
 	mvaddch(player_position.y, player_position.x, PLAYER);
 	/*
-	 * turn off ISHELD in case teleportation was done while fighting
+	 * turn off ACTOR_HELD in case teleportation was done while fighting
 	 * a Fungi
 	 */
 	if (has_actor_flag(player, ACTOR_HELD)) {

@@ -8,7 +8,7 @@
 #include "curses.h"
 
 /*
- * fight:
+ * player_attack:
  *	The player attacks the monster.
  */
 bool
@@ -82,7 +82,7 @@ player_attack(Position *monster_position, char monster_symbol, Entity *weapon, b
 }
 
 /*
- * attack:
+ * monster_attack:
  *	The monster attacks the player
  */
 void
@@ -150,7 +150,7 @@ monster_attack(Entity *monster)
 		case 'V':
 			/*
 			 * Wraiths might drain energy levels, and Vampires
-			 * can steal max_hp
+			 * can steal player_max_hit_points
 			 */
 			if (random_below(100) < (monster->actor_species == 'W' ? 15 : 30))
 			{
@@ -259,7 +259,7 @@ monster_attack(Entity *monster)
 }
 
 /*
- * swing:
+ * attack_hits:
  *	Returns true if the swing hits
  */
 bool
@@ -272,7 +272,7 @@ attack_hits(int attacker_level, int defender_armor, int hit_bonus)
 }
 
 /*
- * check_level:
+ * check_experience_level:
  *	Check to see if the guy has gone up a level.
  */
 void
@@ -297,7 +297,7 @@ check_experience_level(void)
 }
 
 /*
- * roll_em:
+ * resolve_attack_damage:
  *	Roll several attacks
  */
 bool
@@ -420,7 +420,7 @@ resolve_attack_damage(Entity *attacker, Entity *defender, Entity *weapon, bool t
 
 //@ No need to declare in rogue.h
 /*
- * prname:
+ * format_combat_name:
  *	The print name of a combatant
  */
 char *
@@ -442,7 +442,7 @@ format_combat_name(char *combatant_name, bool capitalize)
 }
 
 /*
- * hit:
+ * report_hit:
  *	Print a message to indicate a succesful hit
  */
 void
@@ -463,7 +463,7 @@ report_hit(char *attacker_name, char *defender_name)
 }
 
 /*
- * miss:
+ * report_miss:
  *	Print a message to indicate a poor swing
  */
 void
@@ -485,7 +485,7 @@ report_miss(char *attacker_name, char *defender_name)
 }
 
 /*
- * save_throw:
+ * actor_saving_throw:
  *	See if a creature save against something
  */
 bool
@@ -498,7 +498,7 @@ actor_saving_throw(int which, Entity *entity)
 }
 
 /*
- * save:
+ * player_saving_throw:
  *	See if he saves against various nasty things
  */
 bool
@@ -514,7 +514,7 @@ player_saving_throw(int which)
 }
 
 /*
- * str_plus:
+ * strength_hit_bonus:
  *	Compute bonus/penalties for strength on the "to hit" roll
  */
 int
@@ -536,7 +536,7 @@ strength_hit_bonus(Strength strength)
 }
 
 /*
- * add_dam:
+ * strength_damage_bonus:
  *	Compute additional damage done for exceptionally high or low strength
  */
 int
@@ -562,7 +562,7 @@ strength_damage_bonus(Strength strength)
 }
 
 /*
- * raise_level:
+ * gain_experience_level:
  *	The guy just magically went up a level.
  */
 void
@@ -573,7 +573,7 @@ gain_experience_level(void)
 }
 
 /*
- * thunk:
+ * report_projectile_hit:
  *	A missile hit or missed a monster
  */
 void
@@ -647,7 +647,7 @@ is_magic(Entity *item)
 }
 
 /*
- * killed:
+ * kill_monster:
  *	Called to put a monster to death
  */
 void

@@ -28,7 +28,7 @@
  *  Globals for curses
  *  (extern'ed in curses.h)
  */
-int screen_updates_suspended = FALSE;  //@ in practice, TRUE disables status updates in SIG2()
+int screen_updates_suspended = FALSE;  //@ in practice, TRUE disables status updates in update_keyboard_and_clock()
 int dos_screen_mode = -1;
 #ifdef ROGUE_DOS_CURSES
 int LINES=25, COLS=80;
@@ -71,7 +71,7 @@ int	character_set = ROGUE_CHARSET;
  *
  * Values can be:
  * -  0 for monochrome
- * -  8 for 8 basic colors (light versions will use BOLD text attribute)
+ * -  8 for 8 basic screen_color_count (light versions will use BOLD text attribute)
  * - 16 if all DOS colors are directly indexable
  *
  * If extern'ed, should obviously be read-only
@@ -108,10 +108,9 @@ static CharacterMapping	fallback_character_mapping = {'\0', fallback_unicode, '\
 static bool	colors_changed = FALSE;  // if colors palette was redefined
 #endif  // ROGUE_DOS_CURSES
 
-/*@
- * "it's complicated" - extern'ed but should probably be static and have an API
- * savewin is used in game save/restore, and I'm still not sure if exposing it
- * is the best long term solution.
+/*
+ * Screen snapshots are used by overlays and the disabled legacy save implementation.
+ * The native representation contains curses cells; it is not a portable save format.
  */
 #if   defined (ROGUE_DOS_CURSES)
 char saved_screen[2048 * sizeof(chtype)];  //@ originally 4096 bytes
@@ -146,13 +145,11 @@ static byte color_attributes[] = {
 	0                              /* no more           */
 } ;
 
-/*@
- * Reverse and Bold (standout(), bold()) are set differently than their color
- * table counterparts, using dark gray ("light black") as foreground. Visually
- * the difference is minor, but perhaps it was also meant to circumvent the
- * cur_addch() processing of A_DOS_STANDOUT used for passages/mazes.
- *
- * And surprisingly high()/set_attr(15) is set to normal white (ie, light gray)
+/*
+ * The monochrome table uses bright reverse video for reverse/bold and normal white
+ * for high intensity. screen_write_character performs its terrain-color remapping
+ * only when active_attributes == color_attributes, so monochrome output bypasses that
+ * remapping regardless of the exact reverse-video byte.
  */
 static byte monochrome_attributes[] = {
 	A_DOS_NORMAL,      /*  0 normal         */
@@ -190,7 +187,7 @@ static byte *active_attributes;
 static CharacterMapping game_character_mappings[] = {
 		/*
 		 * Dungeon chars. If a char in this block is not unique, such as
-		 * the ASCII for room corners, cur_inch() reverse search will map
+		 * the ASCII for room corners, screen_read_character() reverse search will map
 		 * them back to a different DOS char. So choose them carefully.
 		 */
 		{'@', L"\x263A", PLAYER},     // ☺
@@ -314,7 +311,7 @@ static byte single_box_characters[BX_SIZE] = {
 static byte fat_box[BX_SIZE] = {
 	0xdb, 0xdb, 0xdb, 0xdb, 0xdb, 0xdf, 0xdc
 };
-*/
+ */
 static byte blank_box_characters[BX_SIZE] = {
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20
 };
@@ -430,7 +427,7 @@ screen_beep(void)
  * msdelay has same meaning as delay in timeout(): If no key was pressed after
  * msdelay milliseconds, return ERR. Negative values will block until a key
  * is pressed. Both blocking and timeout mode require a properly initialized
- * curses with initscr() (in winit()), otherwise it will be non-blocking.
+ * curses with initscr() (in initialize_screen()), otherwise it will be non-blocking.
  * This requirement did not exist in original
  *
  * After the wgetch() call, input will always restore to blocking mode using
@@ -492,7 +489,7 @@ screen_read_key(int timeout_ms)
  * Map a (possibly multi-byte or control) character to an 8-bit character using
  * the game translation table.
  *
- * Moved from mach_dep.c as part of readchar()
+ * Moved from mach_dep.c as part of read_game_key()
  */
 byte
 translate_key(int character)
@@ -519,11 +516,11 @@ translate_key(int character)
  * Originally in zoom.asm
  *
  * As per original code, also updates C global variables c_col_ and c_row,
- * used as "cache" by curses. See getrc(). Actual cursor movement is only
- * performed if iscuron is set. See cursor().
+ * used as "cache" by curses. See get_cursor_position(). Actual cursor movement is only
+ * performed if iscuron is set. See set_cursor_visible().
  *
  * Used BIOS INT 10h/AH=02h to set the cursor on C variable page_no.
- * The BIOS call is now performed via swint()
+ * The BIOS call is now performed via call_dos_interrupt()
  *
  * INT 10h/AH=02h - Set Cursor Position
  * BH = page number
@@ -557,10 +554,10 @@ screen_move(row, col)
  * Put the given character on the screen
  *
  * Character is put at current (c_row, c_col) cursor position, and set with
- * current ch_attr attributes.
+ * current current_dos_attribute attributes.
  *
  * Works as a stripped-down <curses.h> addch(), or as an improved <stdio.h>
- * putchar(): it uses attributes but always operate on current ch_attr instead
+ * putchar(): it uses attributes but always operate on current current_dos_attribute instead
  * of extracting attributes from ch, and put at cursor position but does not
  * update its location, nor has any special CR/LF/scroll up handling for '\n'.
  *
@@ -570,13 +567,13 @@ screen_move(row, col)
  *
  * Originally in zoom.asm
  *
- * By my understanding, asm function works as follows: if cursor is on (via
+ * By my understanding, asm function works as follows: if cursor is has_actor_flag (via
  * iscuron C var), it invokes BIOS INT 10h/AH=09h to put char with attributes.
  * If not, it waits for video retrace (unless no_check C var was TRUE) and
  * then write directly in Video Memory, using C vars scr_row and scr_ds to
  * calculate position address.
  *
- * This function replicates this behavior using dmaout() and swint().
+ * This function replicates this behavior using dos_write_memory() and call_dos_interrupt().
  *
  * BIOS INT 10h/AH=09h - Write character with attribute at cursor position
  * AL = character
@@ -603,7 +600,7 @@ putchr(byte ch)
 		 * Write to video memory
 		 * Each char uses 2 bytes in video memory, hence doubling c_col.
 		 * scr_row[] array takes that into account, so we can use c_row
-		 * directly. See winit().
+		 * directly. See initialize_screen().
 		 */
 		dos_write_memory(HILO(current_dos_attribute, ch), 1,
 			scr_ds, scr_row[c_row] + 2 * c_col);
@@ -615,34 +612,12 @@ putchr(byte ch)
 #endif
 
 
-/*@
- * Return character (without any attributes) at current cursor position
- *
- * Wrapper to inch() that strips attributes
- *
- * Asm function returned character with attributes, but all callers stripped
- * out attributes via 0xFF-anding, considering only the character. With inch()
- * the proper stripping would require exporting A_CHARTEXT macro, and perhaps
- * chtype, to the public API, so to simplify both usage and implementation
- * stripping is now performed here, and it returns a character of type byte,
- * the type consistently used by Rogue to indicate a CP850 character.
- *
- * Originally in zoom.asm by the name curch()
- *
- * By my understanding, asm function works very similar to putchr():
- * If iscuron, invokes BIOS INT 10h/AH=02h to set cursor position from cache
- * and 10h/AH=08h to read character, else wait retrace (unless no_check) and
- * read directly from Video Memory. The set cursor BIOS call seems quite
- * redundant, as virtually all calls to this, from both the inch() macro and
- * the mvinch() wrapper, are preceded by a move().
- *
- * This function replicates this behavior, except the redundant move.
- *
- * BIOS INT 10h/AH=08h - Read character and attribute at cursor position
- * BH = page number
- * Return:
- * AH = attribute
- * AL = character
+/*
+ * Read the character at the current cursor position, without display attributes.
+ * The archived zoom.asm curch_ returns a full character/attribute word. Its BIOS
+ * branch first positions the cursor from cached coordinates, then reads it; its
+ * other branch reads video memory, optionally waiting for retrace. The native wrapper
+ * uses the curses cursor and extracts only the character.
  */
 byte
 screen_read_character(void)
@@ -710,21 +685,10 @@ screen_read_character(void)
 
 
 #ifdef ROGUE_DOS_CURSES
-/*@
- * Fills a buffer with "extended" chars (char + attribute)
- *
- * This is the n-bytes version of setmem(). There is no POSIX or ncurses
- * direct replacement other than a loop writing multiple bytes at a time.
- *
- * For DOS compatibility, chtype (and by proxy wsetmem()) is currently set to
- * operate on 16-bit words. But chtype size in <curses.h> may be set up to
- * a whooping 64-byte unsigned long, so make *really* sure buffer size and
- * count argument are consistent with chtype size!
- *
- * This function could be generic enough to be in mach_dep.c, but it was only
- * by curses.c to write a character + attribute to window buffer.
- *
- * Originally in dos.asm
+/*
+ * Fill a buffer with count character/attribute cells. The count is in cells, not
+ * bytes. The retained DOS backend defines a cell as uint16_t; native curses storage
+ * must be sized using sizeof(chtype) or sizeof(cchar_t). Original routine: dos.asm.
  */
 void
 wsetmem(buffer, command_repeat_count, attrchar)
@@ -964,7 +928,7 @@ screen_write_character(byte character)
 				break;
 			}
 		}
-		//@ I suspect STAIRS used with high() is a case that never happen...
+		// Preserve stair colors if the caller selected the bright-normal attribute.
 		else if (current_dos_attribute == (A_DOS_BRIGHT | A_DOS_NORMAL) && character == STAIRS)
 			current_dos_attribute = A_DOS_BLACK | A_DOS_BG(A_DOS_GREEN) | A_DOS_BLINK;
 	}
@@ -1109,11 +1073,11 @@ charcode_from_dos(byte dos_character, CharacterMapping *mapping)
 }
 
 /*
- * Return a color index, based on DOS char attribute.
- * For now index is in range 0-7, and the interpretation of A_DOS_BRIGHT bit to
- * either `fg index += 8` or `color | [W]A_BOLD` is the caller's responsibility.
- * This could be changed in the future.
- */
+		 * Return a color index, based on DOS char attribute.
+		 * For now index is in range 0-7, and the interpretation of A_DOS_BRIGHT bit to
+		 * either `fg index += 8` or `color | [W]A_BOLD` is the caller's responsibility.
+		 * This could be changed in the future.
+		 */
 short
 color_from_dos(byte dos_attr, bool foreground)
 {
@@ -1145,7 +1109,7 @@ color_from_dos(byte dos_attr, bool foreground)
  *
  * The only functions that deal exclusively with the attr_t model and have no
  * counterpart using the old model are the ones working with cchar_t wide chars
- * ("complex renditions" in ncurses docs). For those there is attrw_from_dos()
+ * ("complex renditions" in ncurses docs). For those there is wide_attributes_from_dos()
  */
 chtype
 curses_attributes_from_dos(byte dos_attr)
@@ -1177,7 +1141,7 @@ curses_attributes_from_dos(byte dos_attr)
 	 *
 	 * CGA does not have a "reverse" mode, Rogue achieves it by manually
 	 * setting a white background with black foreground (black by default,
-	 * but foreground could also be set to other colors, see cur_addch()).
+	 * but foreground could also be set to other colors, see screen_write_character()).
 	 * Thus, A_DOS_STANDOUT require no special handling and could be treated
 	 * like any other color pair, and this block is entirely optional.
 	 *
@@ -1205,7 +1169,7 @@ curses_attributes_from_dos(byte dos_attr)
 
 	/*
 	 * BIG problem here: if colors == 0, we should not use color pairs at
-	 * all, but map the entries in monoc_attr from original intentions to
+	 * all, but map the entries in monochrome_attributes from original intentions to
 	 * current curses A_* attributes like underline, bold, standout, etc.
 	 */
 	if (screen_color_count > 0)
@@ -1224,7 +1188,7 @@ wide_attributes_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
 	 * chtype and all WA_* == A_*, which is true for current ncurses,
 	 * and this function would be simplified to:
 	 *
-	 * attr_t bute = attr_from_dos(dos_attr);
+	 * attr_t bute = curses_attributes_from_dos(dos_attr);
 	 * *attrs = bute & A_ATTRIBUTES & ~A_COLOR,
 	 * *color_pair = PAIR_NUMBER(bute);
 	 *
@@ -1282,13 +1246,9 @@ init_curses_colors(void)
 	int cmap[16];
 
 	/*
-	 * Not sure if this test should include bwflag, as set via env file.
-	 * Original winit() doesn't, as it only cares about actual *hardware*
-	 * capabilities. But on modern machines bwflag is the only way for
-	 * players to simulate a bw hardware monitor like TTL or IBM's MDA,
-	 * which is very different from simply "using no colors": it had bright,
-	 * underline, blink, etc. We may consider a way to set this "hardware
-	 * bw monitor" mode even if terminal supports colors.
+	 * Terminal capabilities determine the available color pairs. monochrome_requested
+	 * selects monochrome_attributes later in initialize_screen; it does not change the
+	 * reported terminal capabilities or emulate a different DOS video adapter.
 	 */
 	if (!has_colors() || COLORS < 8)
 	{
@@ -1522,15 +1482,15 @@ set_cursor(void)
 {
 /*
 	regs->ax = 15 << 8;
-	swint(SW_SCR, regs);
+	call_dos_interrupt(SW_SCR, regs);
 	real_rc(regs->bx >> 8, &c_row, &c_col);
-*/
+ */
 }
 
 /*@
  * Return TRUE if the system is identified as an IBM PCJr ("PC Junior")
  *
- * Moved from mach_dep.c, only used for setting no_check in winit().
+ * Moved from mach_dep.c, only used for setting no_check in initialize_screen().
  *
  * 0xF000:0xFFFE 1  IBM computer-type code; see also BIOS INT 15h/C0h
  *  0xFF = Original PC
@@ -1560,7 +1520,7 @@ isjr()
 #endif
 
 /*
- *  winit(win_name):
+ *  initialize_screen(win_name):
  *		initialize window -- open disk window
  *						  -- determine type of moniter
  *						  -- determine screen memory location for dma
@@ -1575,7 +1535,7 @@ initialize_screen(void)
 	 * Get monitor type
 	 */
 #ifdef ROGUE_DOS_SCREEN
-	//@ if get_mode() also returned BH, it could be used here
+	//@ if get_dos_video_mode() also returned BH, it could be used here
 	dos_regs->ax = 15 << 8;
 	call_dos_interrupt(SW_SCR, dos_regs);
 	old_page_no = dos_regs->bx >> 8;
@@ -1620,8 +1580,8 @@ initialize_screen(void)
 			break;
 
 		/*
-		 * Its a high resolution monitor
-		 */
+			 * Its a high resolution monitor
+			 */
 		case 3:
 			active_attributes = color_attributes;
 			/* fallthrough */
@@ -1632,14 +1592,14 @@ initialize_screen(void)
 			no_check = TRUE;
 			break;
 		/*
-		 * Just to save text space lets eliminate these
-		 *
+			 * Just to save text space lets eliminate these
+			 *
 		case 4:
 		case 5:
 		case 6:
 			move(24,0);
 			fatal("Program can't be run in graphics mode");
-		 */
+			 */
 		default:
 			screen_move(24,0);
 			fatal("Unknown screen type (%d)",dos_regs->ax);
@@ -1655,18 +1615,18 @@ initialize_screen(void)
 	 *
 	if ((savewin = sbrk(4096)) == (void *)-1) {
 		svwin_ds = -1;
-		savewin = (char *) _flags;
-		if (scr_type == 7)
-			fatal(no_mem);
+		savewin = (char *) cell_flags;
+		if (dos_screen_mode == 7)
+			fatal(out_of_memory_message);
 	} else {
 		savewin = (char *) (((intptr) savewin + 0xf) & 0xfff0);
 		svwin_ds = (((intptr) savewin >> 4) & 0xfff) + _dsval;
 	}
-	*/
+	 */
 
 	for (i = 0, cnt = 0; i < 25; cnt += 2*COLS, i++)
 		scr_row[i] = cnt;
-	//@ newmem(2);  // no longer need memory alignment
+	//@ allocate_memory(2);  // no longer need memory alignment
 	switch_page(3);
 	if (old_page_no != page_no)
 		screen_clear();
@@ -1674,7 +1634,7 @@ initialize_screen(void)
 	if (isjr())
 		no_check = TRUE;
 
-	//@ this was right after all calls to winit(), so moved here
+	//@ this was right after all calls to initialize_screen(), so moved here
 	if (!no_check)
 		no_check = skip_retrace_check;
 #else
@@ -1682,21 +1642,21 @@ initialize_screen(void)
 		return;
 
 	/*@
-	 * ROGUE_SCR_TYPE should affect both columns and colors, and scr_type
+	 * ROGUE_SCR_TYPE should affect both columns and colors, and dos_screen_mode
 	 * is also used by game in various contexts with ambiguous meanings.
 	 *
 	 * My current implementation is "messy", to say the least:
 	 * ROGUE_SCR_TYPE is ignored, it does not affect neither columns
-	 * (controlled by ROGUE_COLUMNS) nor colors, and scr_type will be
+	 * (controlled by ROGUE_COLUMNS) nor colors, and dos_screen_mode will be
 	 * inconsistent with it if anything but 80-column color mode is used.
 	 *
 	 * I see 2 elegant approaches to solve this mess:
-	 * - scr_type is "crafted" based on colors and columns, reversing the
-	 *   logic in original winit() switch.
-	 * - scr_type is completely removed, and all tests based on that are
+	 * - dos_screen_mode is "crafted" based on colors and columns, reversing the
+	 *   logic in original initialize_screen() switch.
+	 * - dos_screen_mode is completely removed, and all tests based on that are
 	 *   changed to match original *intention*, if one can figure that out.
 	 *
-	 * Not to mention cur_COLS itself should not be defined only at
+	 * Not to mention game_screen_columns itself should not be defined only at
 	 * compile-time, but perhaps also subject to initial terminal size
 	 * and/or env file setting.
 	 */
@@ -1731,25 +1691,25 @@ initialize_screen(void)
 #endif
 #endif  // ROGUE_DOS_CURSES
 	/*@
-	 * The only common code in winit() for both old and new curses.
-	 * it was scattered after all winit() calls, so moved here.
+	 * The only common code in initialize_screen() for both old and new curses.
+	 * it was scattered after all initialize_screen() calls, so moved here.
 	 * This replaces disabled forcebw()
 	 */
 	if (monochrome_requested)
 		active_attributes = monochrome_attributes;
 }
 
-/*@ no longer needed, integrated in winit()
+/*@ no longer needed, integrated in initialize_screen()
 void
 forcebw()
 {
-	at_table = monoc_attr;
+	active_attributes = monochrome_attributes;
 }
-*/
+ */
 
 #ifdef ROGUE_DOS_CURSES
 /*
- *  wdump(windex)
+ *  save_screen(windex)
  *		dump the screen off to disk, the window is save so that
  *		it can be retieved using windex
  */
@@ -1765,9 +1725,9 @@ char *
 get_saved_screen()
 {
 	/*@ savewin is now a fixed size array
-	if (savewin == (char *)_flags)
-		dmaout(savewin,LINES*COLS,0xb800,8192);
-	*/
+	if (savewin == (char *)cell_flags)
+		dos_write_memory(savewin,LINES*COLS,0xb800,8192);
+	 */
 	return(saved_screen);
 }
 
@@ -1775,13 +1735,13 @@ void
 release_saved_screen()
 {
 	/*@ savewin is now a fixed size array
-	if (savewin == (char *)_flags)
-		dmain(savewin,LINES*COLS,0xb800,8192);
-	*/
+	if (savewin == (char *)cell_flags)
+		dos_read_memory(savewin,LINES*COLS,0xb800,8192);
+	 */
 }
 
 /*
- *	wrestor(windex):
+ *	restore_screen(windex):
  *		restor the window saved on disk
  */
 void
@@ -1841,7 +1801,7 @@ shutdown_screen()
 {
 #ifdef ROGUE_DOS_CURSES
 	/*
-	 * Restor cursor (really you want to restor video state, but be carefull)
+	 * Restor set_cursor_visible (really you want to restor video state, but be carefull)
 	 */
 	if (dos_screen_mode >= 0)
 		set_cursor_visible(TRUE);
@@ -1860,7 +1820,7 @@ shutdown_screen()
 		 * might have themed the terminal in .bashrc, .Xresources, etc.
 		 *
 		 * So we have 2 choices: we can redefine colors back to ANSI's
-		 * default RGB, which is also useless on (2), or we can try
+		 * default RGB, which is also useless has_actor_flag (2), or we can try
 		 * `system("type reset 2>/dev/null && reset");`, which reset
 		 * colors on some terminals (xterm, but not gnome-terminal)
 		 *
@@ -1932,9 +1892,9 @@ screen_draw_box(int top, int left, int bottom, int right)
 }
 
 /*
- *  box:  draw a box using given the
- *        upper left coordinate and the lower right
- */
+		 *  box:  draw a box using given the
+		 *        upper left coordinate and the lower right
+		 */
 void
 draw_custom_box(border_characters, top,left,bottom,right)
 	byte border_characters[BX_SIZE];
@@ -1975,7 +1935,7 @@ draw_custom_box(border_characters, top,left,bottom,right)
 	i = (bottom - top - 1); screen_draw_vertical_line_at(top+1, left, border_characters[BX_VW], i);
 	                       screen_draw_vertical_line_at(top+1, right, border_characters[BX_VW], i);
 
-	//@ corners - do not go through cur_addch(), different mapping
+	//@ corners - do not go through screen_write_character(), different mapping
 	screen_draw_horizontal_line_at(top,left,border_characters[BX_UL], 1);
 	screen_draw_horizontal_line_at(top,right,border_characters[BX_UR], 1);
 	screen_draw_horizontal_line_at(bottom,left,border_characters[BX_LL], 1);
@@ -1997,18 +1957,9 @@ center(row,string)
 }
 
 
-/*@
- * Originally had this signature:
- * printw(msg,a1,a2,a3,a4,a5,a6,a7,a8)
- *   char *msg;
- *   int a1, a2, a3, a4, a5, a6, a7, a8;
- *
- * Guess there was no varargs in 1985...
- *
- * Also changed sprintf() to the more secure vsnprintf()
- * No buffer overflows in 85 either?
- *
- * Ieeeee indeed :)
+/*
+ * The original printw takes eight explicit formatting arguments. This wrapper uses
+ * standard C variadic arguments and vsnprintf to bound the temporary text buffer.
  */
 /*
  * printw(Ieeeee)
@@ -2089,7 +2040,7 @@ fixup(void)
 
 /*@
  * Repeat a character cnt times, advancing the cursor
- * Use current attribute, and do not go through cur_addch() processing
+ * Use current attribute, and do not go through screen_write_character() processing
  */
 void
 repeat_character(byte character, int count)
@@ -2166,7 +2117,7 @@ drop_curtain(void)
 	set_cursor_visible(FALSE);
 	/*@
 	 * The different delay for mono and color adapters implies the BIOS call
-	 * used by repchr()->putchr() is significantly faster under mono video mode,
+	 * used by repeat_character()->putchr() is significantly faster under mono video mode,
 	 */
 	delay = (dos_screen_mode == 7 ? 3000 : 2000);
 	green();
@@ -2202,7 +2153,7 @@ raise_curtain(void)
 /*@
  * I am breaking a tradition here by replacing the whole function with a new
  * one instead of changing just the necessary bits of the original.
- * But with <curses.h> and md_nanosleep() the original would be severely
+ * But with <curses.h> and sleep_nanoseconds() the original would be severely
  * mutilated with at least 4 additional #ifdefs blocks, destroying readability,
  * for very little gain. So new it is.
  *
@@ -2358,7 +2309,7 @@ set_dos_video_mode(type)
  * - '\n' finishes input and null-terminate str. '\n' is not included in str.
  *   Return '\n'
  * - A non-ascii char (>127) also finishes input, but it *does* get included
- *   in str, probably unintentionally. srt is properly null-terminated.
+ *   in the buffer. The source does not establish whether including it was intended.
  *   Return the non-ascii char.
  * - All other chars are accepted as normal input, including symbols (< 32).
  *
@@ -2381,16 +2332,10 @@ read_line(text,size)
 	int input_length = 0;
 	int previous_cursor_visibility, result = 1;
 #ifdef ROGUE_DOS_CURSES
-	/*@
-	 * Save the line state before typing begins, and restore it after user ends
-	 * typing, effectively deleting from the screen only the user input. Seems
-	 * a nice polishing touch, but it has some drawbacks: Cursor position was
-	 * not restored; it is hard coded to line 0, so not useful for fakedos()
-	 * and credits(); If fixed, it would disrupt fakedos() where user input
-	 * should persist on screen. fakedos() starts on line 1, perhaps also
-	 * because of this; And all other callers clear the whole line right after
-	 * the call, defeating the whole purpose of this save/restore. All things
-	 * considered, this should not be performed in the non-DOS curses version.
+	/*
+	 * The retained DOS branch snapshots 80 screen cells at the start of input, then
+	 * restores them at row zero. That hard-coded row does not follow the input cursor.
+	 * The native branch leaves input visible; callers manage their own screen contents.
 	 */
 	char buf[160];
 
@@ -2407,7 +2352,7 @@ read_line(text,size)
 			character = '\n';
 		}
 #else
-		//@ Blocking getch() is fine, as SIG2() is not called anyway
+		//@ Blocking getch() is fine, as update_keyboard_and_clock() is not called anyway
 		while ((character = wgetch(stdscr)) == ERR);
 		if (character > KEY_MIN)
 		{
@@ -2471,7 +2416,7 @@ read_line(text,size)
 
 /*@
  * No need of #ifdef ROGUE_DOS_CURSES here as the non-curses input of getch()
- * used by getinfo() is performed by <stdio.h> getchar(), which is line
+ * used by read_line() is performed by <stdio.h> getchar(), which is line
  * buffered anyway, so a backspace char will never be seen and this will never
  * be called.
  */

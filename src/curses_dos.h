@@ -1,15 +1,10 @@
-/*@
- * Headers used only by the DOS curses implementation curses.c
- *
- * It is hereby considered private implementation details and as such it
- * should NOT be included curses.h or any game files.
- *
- * And despite the header name, it also contains new defines and functions
- * meant for <curses.h>. Perhaps this should be called curses_private.h instead
+/*
+ * Private declarations for the screen implementation, including the retained DOS
+ * backend and the native ncurses character/attribute conversions.
  */
 
 #ifndef ROGUE_SCR_TYPE
-#define ROGUE_SCR_TYPE 3  //@ 80x25 Color. See winit() for other values
+#define ROGUE_SCR_TYPE 3  //@ 80x25 Color. See initialize_screen() for other values
 #endif
 
 #define BX_UL	0
@@ -78,7 +73,7 @@ void	wsetmem(void *buffer, int command_repeat_count, chtype attrchar);
 #define A_DOS_BG(fg)	(((fg) & A_DOS_COLOR_MASK) << A_DOS_BG_COLOR)
 
 /*@
- * The DOS attribute set on standend(), also the initial value of ch_attr
+ * The DOS attribute set on standend(), also the initial value of current_dos_attribute
  * Light Gray ("non-bright White") on Black
  */
 #define A_DOS_NORMAL	A_DOS_WHITE
@@ -88,7 +83,8 @@ void	wsetmem(void *buffer, int command_repeat_count, chtype attrchar);
 
 /*
  * Actually, for underline just setting foreground to 1 would be enough,
- * but the game uses 17 (0x11) in uline()/set_attr(12) for monoc_attr, setting
+ * but the game uses 17 (0x11) in uline()/set_display_attribute(12) for monochrome_attributes,
+ * setting
  * also the background. Not needed, but harmless
  */
 #define A_DOS_BW_ULINE    1 | A_DOS_BG(1)

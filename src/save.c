@@ -14,30 +14,22 @@
 #include "rogue.h"
 #include "curses.h"
 
-/*@
- * Addresses used to save and restore statically sized global vars.
- * Changed from char to actual pointers, so we can set to a dummy address
- * Originally externs set by begin.asm
+/*
+ * Placeholders for the original linker-provided static-data boundaries. They do not
+ * contain the native game's globals. The legacy memory-dump implementation below is
+ * unreachable because save_game returns and restore_game exits before using it.
  */
-char legacy_static_placeholder[1234];  //@ look how tiny Rogue data space is! :)
+char legacy_static_placeholder[1234];  // Not the original data-segment size.
 char * legacy_static_start = legacy_static_placeholder;  /* Adresss of first save-able memory */
 char * legacy_static_end = legacy_static_placeholder + sizeof(legacy_static_placeholder);  /* Address of end of user data space */
 
-/*@
- * Addresses used to save and restore dynamically allocated vars in heap,
- * the ones allocated via newmem(), which used sbrk().
- * Originally externs set by init.c on init_ds()
- *
- * end_sb was the first newmem() call, so its address actually marked the begin
- * the heap. startmem was the first call newmem() to the temporary printing
- * buffers, so its address marked the end heap data that was worth saving, as
- * printing buffers were discarded and not saved or restored in save files.
- *
- * If you think names are reversed, ask someone that truly understands x86
- * 16-bit real mode segmented memory, DS, heap and stack. Cos I surely don't ;)
- * See notes on restore()
+/*
+ * The original init_ds assigns end_sb to the first allocation (_flags) and startmem
+ * to the first temporary printing buffer (tbuf). Their difference covers the map,
+ * entity pool, and allocation flags, excluding the temporary buffers. These placeholder
+ * arrays only keep the unreachable DOS implementation linkable in the native port.
  */
-char legacy_heap_placeholder[4321];  //@ Also tiny :)
+char legacy_heap_placeholder[4321];  // Not the original heap size.
 char *legacy_heap_start = legacy_heap_placeholder;  /* Pointer to the end of static base */
 char *legacy_heap_end = legacy_heap_placeholder + sizeof(legacy_heap_placeholder);  /* Pointer to the start of static memory */
 
@@ -46,7 +38,7 @@ char *legacy_heap_end = legacy_heap_placeholder + sizeof(legacy_heap_placeholder
 static char *save_signature = "AI Design";
 
 /*
- * BLKSZ: size of block read/written on each io operation
+ * SAVE_BLOCK_SIZE: size of block read/written on each io operation
  *        Has to be less than 4096 and a factor of 4096
  *        so the screen can be read in exactly.
  */
@@ -99,7 +91,7 @@ save_game()
 			if (remove(filename) == 0)
 				message_by_verbosity1("out of space?","out of space, can not write %s",filename);
 			show_message("Sorry, you can't save the game just now");
-			//@ is_saved = FALSE;  //@ wrestor() did that already
+			//@ screen_updates_suspended = FALSE;  //@ restore_screen() did that already
 		}
 		else if (result > 0)
 			fatal("\nGame saved as %s.", filename);
@@ -138,7 +130,7 @@ write_legacy_memory_dump(filename)
 		show_message("Could not create %s",filename);
 		return (-2);
 	}
-	//@ is_saved = TRUE;  //@ wdump() will do that
+	//@ screen_updates_suspended = TRUE;  //@ save_screen() will do that
 	message_column = 0;
 
 	errno = 1;
@@ -186,11 +178,10 @@ restore_game(char *savefile)
 {
 	fatal("Sorry, restoring games is disabled. Patches are welcome!\n");
 
-/*@
- *  I wonder how the original Demo handled a restore attempt. Function is
- *  stubbed, but it's still called by playit(), which always assume a restore
- *  was successful and simply move on! In this case, many key initializations
- *  will be missing. This can't be good...
+/*
+ * In the archived DEMO build, restore has no body, but playit still calls it and
+ * then setup. The main restore branch skips init_player and the normal new-game
+ * initialization. The source therefore contains no successful demo restore path.
  */
 #ifndef DEMO
 	int saved_major_version, saved_minor_version; //@, old_check;
@@ -204,7 +195,7 @@ restore_game(char *savefile)
 
 	saved_registers = dos_regs;
 	initialize_screen();
-	//@ old_check = no_check;  //@ no_check is now inside winit()
+	//@ old_check = no_check;  //@ no_check is now inside initialize_screen()
 	strcpy(error_text,read_error);
 	/*
 	 * save things that will be bombed on when the
@@ -250,18 +241,18 @@ rok:
 
 	saved_columns = COLS;
 	//@ no longer needed, memory is now managed via malloc()
-	//@ brk(end_sb);					/* Restore heap to empty state */
+	//@ brk(legacy_heap_start);					/* Restore heap to empty state */
 	allocate_game_state();
-	/*@
-	 * There is a very clever trick going on here: by resetting the heap with
-	 * brk(end_sb) and immediately calling init_ds() it guarantees that
-	 * init_ds() will "re-allocate" the same memory area that was just written
-	 * by the game restore, as long as end_sb was the first call to newmem().
+	/*
+	 * In the original DOS code, brk(end_sb) resets the allocator break; init_ds then
+	 * repeats the same allocation order. sbrk.asm returns the previous break and advances
+	 * it without clearing the allocated bytes, preserving the restored state at those
+	 * addresses. begin.asm establishes the DOS data/stack segment before game startup.
 	 *
-	 * I just wonder how Rogue made sure it was safe to "blindly" write many
-	 * KBs of data starting at end_sb address before that area was "properly"
-	 * allocated via newmem()/sbrk(). Perhaps it didn't, but it just worked.
-	 * Ah, the wonders of real mode :)
+	 * These allocator calls do not map or protect pages. That explains how the original
+	 * could write within its segment before advancing the break, but does not prove that
+	 * an arbitrary saved image fits safely below the stack. Separate malloc allocations
+	 * in the native port cannot reproduce this layout.
 	 */
 	endwin();
 	initialize_screen();

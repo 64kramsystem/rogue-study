@@ -4,13 +4,11 @@
 
 #include	"rogue.h"
 
-/*@
- * no_step seems to be a flag designed to inhibit the use of debuggers during
- * protect() execution. When set, it triggers a timer in clock() that halts
- * the PC in 20 clock ticks (~1 second), unless no_step is unset again before
- * the timer expires.
- * The flag is set all over protect(), and unset only during drive reads. It
- * was also unset whenever exiting the function, successfully or not.
+/*
+ * The original dos.asm clock_ handler increments protection_watchdog_ticks while it
+ * is nonzero and halts after it exceeds 20. This routine disables the watchdog around
+ * BIOS disk reads and clears it on every return. At the BIOS timer rate, the limit is
+ * roughly one second; it does not measure disk-read time.
  */
 int protection_watchdog_ticks;
 

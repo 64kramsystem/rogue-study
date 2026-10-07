@@ -228,7 +228,7 @@ static char *metal_wand_materials[] = {
 #define NMETAL (sizeof metal_wand_materials / sizeof (char *))
 
 /*
- * init_things
+ * initialize_item_probabilities
  *	Initialize the probabilities for types of things
  */
 void
@@ -241,7 +241,7 @@ initialize_item_probabilities()
 }
 
 /*
- * init_colors:
+ * initialize_potion_colors:
  *	Initialize the potion color scheme for this time
  */
 void
@@ -267,7 +267,7 @@ initialize_potion_colors()
 }
 
 /*
- * init_names:
+ * initialize_scroll_titles:
  *	Generate the names of the various scrolls
  */
 void
@@ -311,7 +311,7 @@ initialize_scroll_titles()
 }
 
 /*
- * getsyl()
+ * random_syllable()
  *   -- generate a random sylable
  */
 char*
@@ -327,7 +327,7 @@ random_syllable()
 }
 
 /*
- * rchr()
+ * random_character()
  *    return random character in given string
  */
 char
@@ -338,7 +338,7 @@ random_character(string)
 }
 
 /*
- * init_stones:
+ * initialize_ring_gemstones:
  *	Initialize the ring stone setting scheme for this time
  */
 void
@@ -365,7 +365,7 @@ initialize_ring_gemstones()
 }
 
 /*
- * init_materials:
+ * initialize_wand_materials:
  *	Initialize the construction materials for wands and staffs
  */
 void
@@ -417,7 +417,7 @@ initialize_wand_materials()
  */
 long *experience_thresholds;		/* Pointer to array of experience level */
 char *combat_name_buffer;			/* Temp buffer used in fighting */
-char *message_buffer;		/* Message buffer for msg() */
+char *message_buffer;		/* Message buffer for show_message() */
 char *description_buffer;		/* Printing buffer used everywhere */
 char *ring_bonus_buffer;		/* Buffer used by ring code */
 //@ Deprecated:
@@ -431,7 +431,7 @@ byte *terrain_map;
 byte *cell_flags;
 
 /*
- * init_ds()
+ * allocate_game_state()
  *   Allocate things data space
  */
 void

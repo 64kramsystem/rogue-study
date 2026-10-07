@@ -36,7 +36,7 @@
  * Bit 1 - Background/Default color, Green component
  * Bit 2 - Background/Default color, Red   component
  * Bit 3 - Intensified background color
- * Bit 4 - Alternate, intensified set of colors (the "i" palette variation)
+ * Bit 4 - Alternate, intensified set of screen_color_count (the "i" palette variation)
  * Bit 5 - Active color set (Palette 0 or 1)
  *         Palette 0: 0-Background/Default, 1-Red,  2-Green,   3-Yellow
  *         Palette 1: 0-Background/Default, 1-Cyan, 2-Magenta, 3-White
@@ -62,7 +62,7 @@ static FILE *picture_file;
 
 /*@
  * Display the Rogue Enyx title image
- * - Set video mode to 320x200, 4 colors (CGA),
+ * - Set video mode to 320x200, 4 screen_color_count (CGA),
  * - Load 'rogue.pic' and display it for about 5 minutes
  *   or until a key is pressed,
  * - Return to previous video mode
@@ -92,7 +92,7 @@ show_dos_splash(void)
 	 *  Blocking timeout mode does not work with standard ncurses, as the
 	 *  underlying functions wtimeout() / wget_wch() only work properly after
 	 *  curses initialization with initscr(), done later in main() by calling
-	 *  winit(). As it is, it's non-blocking and returns immediately.
+	 *  initialize_screen(). As it is, it's non-blocking and returns immediately.
 	 *  Not an issue considering the whole image display is dummy as there is no
 	 *  (portable) way to switch to CGA graphics mode in standard C in 2020.
 	 *
@@ -121,7 +121,7 @@ show_dos_splash(void)
  *   -  192 bytes of padding
  * - (it does *not* contain the trailer byte 1Ah (CPM EOF)
  *
- *    7 bytes BSAVE header, ignored by bload():
+ *    7 bytes BSAVE header, ignored by read_cga_memory():
  *  BYTE Marker         Data type                  FDh = unpacked data
  *  WORD ScreenSegment  PC screen memory segment B800h = CGA video address
  *  WORD ScreenOffset   PC screen memory offset  0000h = no offset
@@ -136,7 +136,7 @@ show_dos_splash(void)
  *
  * 192 bytes of padding, but PC Paint also stores metadata in this first block
  *    12B Signature     Editor used to create    'PCPaint V1.0'
- *   BYTE PaletteID     Current Palette number    05h = Palette 1i (Why?)
+ *   BYTE PaletteID     Current Palette number    05h in the bundled image; see the switch below
  *   BYTE BackColor     Color of Default(index 0) 00h = Black
  *   178B Padding       Padding                   55h x 178
  *
@@ -145,7 +145,7 @@ show_dos_splash(void)
  *
  * 192 bytes of padding
  *   192B Padding       Padding                   55h x 192
-*/
+ */
 static
 void
 load_cga_picture(void)
@@ -164,17 +164,15 @@ load_cga_picture(void)
 	palette = dos_read_byte(8012,0xB800);     //@ 5 = CGA palette 1i, see below
 	background = dos_read_byte(8013,0xB800);  //@ 0 = Color index 0 (BG) is Black
 
-	//@ Intensified palette, enable bit 4 for the COLREG write
+	//@ Intensified palette, enable bit 4 for the CGA_COLOR_PORT write
 	if (palette >= 3)
 		background |= CGA_INTENSITY_FLAG;
 
-	/*@
-	 * Not sure why all this switch cases and palette remapping
-	 * if in the end the palette just sets the burst bit and is
-	 * not used anymore. mode is read from BIOS Data Area and re-applied
-	 * with bust enabled. In any case, modifications to the corresponding
-	 * bytes in ROGUE.PIC does not seem to have any effect on display
-	 * in Epyx v1.49 (using DOSBox), so this code might have changed there.
+	/*
+	 * Only the burst flag computed here is used after the switch. Assignments back to
+	 * palette are dead stores in this source. The native dos_read_byte/dos_write_port
+	 * helpers are stubs, so this path cannot establish how retail DOS versions displayed
+	 * the picture; the SDL loader provides the working native splash.
 	 */
 	burst   = 0;
 	switch(palette)
@@ -205,8 +203,8 @@ load_cga_picture(void)
 }
 
 /*@
- * Load the file bytes into a memory segment
- */
+		 * Load the file bytes into a memory segment
+		 */
 static
 void
 read_cga_memory(unsigned int segment)
@@ -254,15 +252,16 @@ find_copy_protection_drive(void)
 		else
 			drive = configured_drive - 'a';
 	}
-	/*@
-	 * The following nonsense strongly indicates this is either a partial,
-	 * work in progress function, or a leftover, or an already cracked version.
-	 * access() is a useless call as its return code is not being checked.
-	 * It is now disabled.
-	char filename[30];
-	strcpy(filename,"a:jatgnas.8ys");
-	filename[0] += (char)drive;
-	access(filename);
+	/*
+	 * The removed access(filename) probe discarded its result. No branch or return value
+	 * in the original find_drive depends on the file's presence. Its historical purpose
+	 * cannot be recovered from this function alone.
+	 *
+	 * Original filename construction and ignored probe:
+	 * char filename[30];
+	 * strcpy(filename,"a:jatgnas.8ys");
+	 * filename[0] += (char)drive;
+	 * access(filename);
 	 */
 
 	return drive;

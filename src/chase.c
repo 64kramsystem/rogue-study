@@ -12,7 +12,7 @@
 Position chase_next_position;			/* Where chasing takes	you */
 
 /*
- * runners:
+ * move_monsters:
  *	Make all the running monsters move.
  */
 void
@@ -37,7 +37,7 @@ move_monsters()
 }
 
 /*
- * do_chase:
+ * move_chasing_monster:
  *	Make one thing chase another.
  */
 void
@@ -178,7 +178,7 @@ over:
 }
 
 /*
- * see_monst:
+ * player_can_see_monster:
  *	Return TRUE if the hero can see the monster
  */
 bool
@@ -207,7 +207,7 @@ register Entity *monster;
 }
 
 /*
- * start_run:
+ * start_monster_chase:
  *	Set a monster running after something or stop it from running
  *	(for	when it	dies)
  */
@@ -236,7 +236,7 @@ register Position *runner;
 }
 
 /*
- * chase:
+ * choose_chase_step:
  *	Find	the spot for the chaser(er) to move closer to the
  *	chasee(ee).	Returns	TRUE if	we want	to keep	on chasing later
  *	FALSE if we reach the goal.
@@ -341,7 +341,7 @@ Position *destination;
 }
 
 /*
- * roomin:
+ * room_at:
  *	Find	what room some coordinates are in. NULL	means they aren't
  *	in any room.
  */
@@ -367,7 +367,7 @@ register Position *position;
 }
 
 /*
- * diag_ok:
+ * diagonal_move_allowed:
  *	Check to see	if the move is legal if	it is diagonal
  */
 bool
@@ -380,7 +380,7 @@ register Position *start_position, *end_position;
 }
 
 /*
- * cansee:
+ * player_can_see_position:
  *	Returns true	if the hero can	see a certain coordinate.
  */
 bool
@@ -405,7 +405,7 @@ register int y,	x;
 }
 
 /*
- * find_dest:
+ * choose_monster_destination:
  *	find	the proper destination for the monster
  */
 Position *

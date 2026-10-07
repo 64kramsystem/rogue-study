@@ -15,7 +15,7 @@ static Position next_player_position;
 static byte	trigger_trap(Position *trap_position);
 
 /*
- * do_run:
+ * start_player_run:
  *	Start the hero running
  */
 void
@@ -27,7 +27,7 @@ start_player_run(byte character)
 }
 
 /*
- * do_move:
+ * move_player:
  *	Check to see that a move is legal.  If it is handle the
  * consequences (fighting, picking up, etc.)
  */
@@ -189,10 +189,10 @@ move_stuff:
 }
 
 /*
- * door_open:
- *	Called to illuminate a room.  If it is dark, remove anything
- *	that might move.
- */
+		 * wake_room_monsters:
+		 *	Called to illuminate a room.  If it is dark, remove anything
+		 *	that might move.
+		 */
 void
 wake_room_monsters(room)
 	struct room *room;
@@ -205,7 +205,6 @@ wake_room_monsters(room)
 		for (y = room->origin.y; y < room->origin.y + room->size.y; y++)
 			for (x = room->origin.x; x < room->origin.x + room->size.x; x++) {
 				character = visible_entity_at(y, x);
-				/* move(j, k); Why do this,?????? */
 				if (is_monster_symbol(character)) {
 					monster = wake_monster(y, x);
 					//@ this sanity check was not in original
@@ -221,7 +220,7 @@ wake_room_monsters(room)
 }
 
 /*
- * be_trapped:
+ * trigger_trap:
  *	The guy stepped on a trap.... Make him pay.
  */
 static
@@ -271,14 +270,11 @@ trigger_trap(Position *trap_position)
 		}
 	when TRAP_TELEPORT:
 		teleport();
-		mvaddch(trap_position->y, trap_position->x, TRAP); /* since the hero's leaving, look()
+		mvaddch(trap_position->y, trap_position->x, TRAP); /* since the hero's leaving, update_player_view()
 						won't put it on for us */
-		/*@
-		 * I guess this increment is used solely to signal look() at move.c
-		 * about the teleport trap. However, since this increment violates
-		 * boolean logic conventions, `was_trapped++` had to be reverted the
-		 * real type that bool was typdef'd to in original code: unsigned char.
-		 * Either this or refactor the original detection for teleport traps.
+		/*
+		 * trigger_trap initialized trap_display_state to 1. Incrementing it marks a teleport
+		 * trap with state 2, which update_player_view tests with > TRUE before clearing it.
 		 */
 		trap_display_state++;
 	when TRAP_DART:
@@ -317,7 +313,7 @@ fall_to_next_level(message_text)
 }
 
 /*
- * rndmove:
+ * random_move:
  *	Move in a random direction if the monster/person is confused
  */
 void

@@ -8,7 +8,7 @@
 #include "curses.h"
 
 /*
- * tr_name:
+ * trap_name:
  *	Print the name of a trap
  */
 char *
@@ -34,7 +34,7 @@ trap_name(byte type)
 }
 
 /*
- * look:
+ * update_player_view:
  *	A quick glance all around the player
  */
 void
@@ -105,7 +105,7 @@ update_player_view(bool wakeup)
 
 			index = map_index(y, x);
 			/*
-			 * THIS REPLICATES THE moat() MACRO.  IF MOAT IS CHANGED,
+			 * THIS REPLICATES THE monster_at() MACRO.  IF MOAT IS CHANGED,
 			 * THIS MUST BE CHANGED ALSO ?? What does this really mean ??
 			 */
 			cell_flag_ptr = &cell_flags[index];
@@ -214,15 +214,12 @@ update_player_view(bool wakeup)
 	if (door_stop && !first_run_step && adjacent_passages > 1)
 		running = FALSE;
 	move(player_position.y, player_position.x);
-	/*@
-	 * The expression (was_trapped > TRUE) would never evaluate to true if
-	 * `was_trapped` was a real boolean. I guess this is specifically testing
-	 * for the `was_trapped++` case in be_trapped() at move.c, triggered by
-	 * a teletransporting trap.
-	 * Not an issue in the original code, as bool was typedef'd to unsigned char.
-	 * This test helped reverting `was_trapped` to an unsigned char. However,
-	 * I guess int would be a better type, or perhape another logic to detect
-	 * teleport traps.
+	/*
+	 * trigger_trap sets trap_display_state to 1; its teleport case increments it to 2.
+	 * The > TRUE test therefore selects teleport traps. update_player_view uses that state
+	 * to select the player attribute, sounds a beep for either trap state, then clears it.
+	 * The original bool typedef was unsigned char, so converting this field to C bool
+	 * would lose the teleport state.
 	 */
 	if ((cell_flags_at(player_position.y,player_position.x) & CELL_PASSAGE) || (trap_display_state > TRUE)
 					|| (cell_flags_at(player_position.y,player_position.x) & CELL_MAZE))
@@ -236,7 +233,7 @@ update_player_view(bool wakeup)
 }
 
 /*
- * find_obj:
+ * item_at:
  *	Find the unclaimed object at y, x
  */
 Entity *
@@ -258,9 +255,9 @@ item_at(y, x)
 }
 
 /*
- * eat:
- *	She wants to eat something, so let her try
- */
+	 * eat_food:
+	 *	She wants to eat something, so let her try
+	 */
 void
 eat_food()
 {
@@ -304,7 +301,7 @@ eat_food()
 }
 
 /*
- * chg_str:
+ * change_player_strength:
  *	Used to modify the player's strength.  It keeps track of the
  *	highest it has been, just in case
  */
@@ -327,7 +324,7 @@ change_player_strength(adjustment)
 }
 
 /*
- * add_str:
+ * adjust_strength:
  *	Perform the actual add, checking upper and lower bound
  */
 void
@@ -367,7 +364,7 @@ add_haste(bool potion)
 }
 
 /*
- * aggravate:
+ * aggravate_monsters:
  *	Aggravate all the monsters on this level
  */
 void
@@ -380,7 +377,7 @@ aggravate_monsters()
 }
 
 /*
- * vowelstr:
+ * article_suffix:
  *      For printfs: if string starts with a vowel, return "n" for an
  *	"an".
  */
@@ -402,7 +399,7 @@ article_suffix(text)
 }
 
 /*
- * is_current:
+ * is_equipped:
  *	See if the object is one of the currently used items
  */
 bool
@@ -420,7 +417,7 @@ is_equipped(item)
 }
 
 /*
- * get_dir:
+ * read_direction:
  *      Set up the direction co_ordinate for use in varios "prefix"
  *	commands
  */
@@ -482,7 +479,7 @@ sign(nm)
 }
 
 /*
- * spread:
+ * randomize_duration:
  *	Give a spread around a given number (+/- 10%)
  */
 int
@@ -493,7 +490,7 @@ randomize_duration(nm)
 }
 
 /*
- * call_it:
+ * prompt_item_label:
  *	Call an object something after use.
  */
 void
@@ -511,7 +508,7 @@ prompt_item_label(bool know, char **guess)
 }
 
 /*
- * step_ok:
+ * is_walkable_symbol:
  *	Returns true if it is ok to step on ch
  */
 bool
@@ -533,7 +530,7 @@ is_walkable_symbol(byte character)
 }
 
 /*
- * goodch:
+ * display_item_symbol:
  *	Decide how good an object is and return the correct character for
  * printing.
  */
@@ -595,7 +592,7 @@ display_item_symbol(item)
 }
 
 /*
- * help: prints out help screens
+ * show_help: prints out help screens
  */
 void
 show_help(entries)
@@ -755,7 +752,7 @@ search()
 
 
 /*
- * d_level:
+ * descend_stairs:
  *	He wants to go down a level
  */
 void
@@ -770,7 +767,7 @@ descend_stairs()
 }
 
 /*
- * u_level:
+ * ascend_stairs:
  *	He wants to go up a level
  */
 void
@@ -791,7 +788,7 @@ ascend_stairs()
 }
 
 /*
- * call:
+ * name_item_type:
  *	Allow a user to call a potion, scroll, or ring something
  */
 void

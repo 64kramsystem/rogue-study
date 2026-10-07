@@ -6,7 +6,7 @@
  *
  * @FIXME: Originally it was possible to leave fakedos with a non-ASCII key
  *         as the first command char (for example, arrow keys or F1-F12). But
- *         getinfo() now ignores all non-ASCII input, so the only way to leave
+ *         read_line() now ignores all non-ASCII input, so the only way to leave
  *         is to type the "command" `rogue`. Fixing this will be tricky...
  */
 
@@ -81,8 +81,8 @@ execute_fake_dos_command(com)
 }
 
 /*
- * Fake DOS INT 0Eh call. Could be in mach_dep.c, but it's only used here.
- * Original called bdos() directly in dodos()
+ * Emulate DOS INT 21h/AH=0Eh drive selection for the fake DOS screen.
+ * Original called dos_service() directly in execute_fake_dos_command()
  */
 static
 int

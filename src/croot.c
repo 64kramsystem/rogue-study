@@ -30,7 +30,7 @@ Croot(cp, first)
 		if (*cp == 0)
 			break;
 		{
-			*cpp++ = cp;
+ *cpp++ = cp;
 			Argc++;
 			if (sbrk(sizeof(char *)) == (char *)-1) {
 				write(2, "Too many args.", 14);
@@ -38,13 +38,13 @@ Croot(cp, first)
 			}
 			while (*++cp)
 				if (*cp == ' ' || *cp == '\t') {
-					*cp++ = 0;
+ *cp++ = 0;
 					break;
 				}
 		}
 	}
-	*cpp = 0;
+ *cpp = 0;
 	main(Argc,Argv);
 	exit(0);
 }
-*/
+ */

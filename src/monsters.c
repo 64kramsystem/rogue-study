@@ -14,13 +14,13 @@ static int	monster_experience_bonus(Entity *monster);
  */
 
 /*@
- * Note:  vorp_mons was not present in the original v1.48 code.  It is used to
+ * Note:  vorpal_monster_choices was not present in the original v1.48 code.  It is used to
  * select a target for the Vorpalize Weapon scroll.
- * Previously, lvl_mons was used, which contains spaces.  When a space
+ * Previously, level_monster_choices was used, which contains spaces.  When a space
  * character was selected, identifying the player's weapon then indexed the
  * monsters array out-of-bounds, causing a segfault.
  *
- * From disassembling earlier Rogue PC versions, we can deduce that lvl_mons
+ * From disassembling earlier Rogue PC versions, we can deduce that level_monster_choices
  * originally had no spaces when the Vorpalize scroll was introduced, so
  * re-introducing this string with no spaces is believed to reproduce the
  * intended behavior.
@@ -31,7 +31,7 @@ static char *level_monster_choices =  "K BHISOR LCA NYTWFP GMXVJD";
 static char *wandering_monster_choices = "KEBHISORZ CAQ YTW PUGM VJ ";
 
 /*
- * randmonster:
+ * random_monster_species:
  *	Pick a monster to show up.  The lower the level,
  *	the meaner the monster.
  */
@@ -105,7 +105,7 @@ new_monster(Entity *monster, byte type, Position *spawn_position)
 }
 
 /*
- *  f_restor(): restor initial damage string for flytraps
+ *  reset_flytrap_damage(): restor initial damage string for flytraps
  */
 void
 reset_flytrap_damage(void)
@@ -138,7 +138,7 @@ monster_experience_bonus(Entity *monster)
 }
 
 /*
- * wanderer:
+ * spawn_wandering_monster:
  *	Create a new wandering monster and aim it at the player
  */
 void
@@ -228,7 +228,7 @@ wake_monster(y, x)
 }
 
 /*
- * give_pack:
+ * give_monster_item:
  *	Give a pack to a monster if it deserves one
  */
 void
@@ -243,11 +243,11 @@ give_monster_item(monster)
 }
 
 /*
- * pick_mons:
+ * random_vorpal_enemy:
  *	Choose a sort of monster for the enemy of a vorpally enchanted weapon
  *
- *	@ Fixed:  lvl_mons renamed to vorp_mons, to prevent this function from
- *	  returning space characters.  See comment for vorp_mons above.
+ *	@ Fixed:  level_monster_choices renamed to vorpal_monster_choices, to prevent this function from
+ *	  returning space characters.  See comment for vorpal_monster_choices above.
  */
 char
 random_vorpal_enemy(void)
@@ -263,7 +263,7 @@ random_vorpal_enemy(void)
 
 
 /*
- * moat(x,y)
+ * monster_at(x,y)
  *    returns pointer to monster at coordinate
  *	  if no monster there return NULL
  */

@@ -49,9 +49,9 @@
 
 /*@
  * This color/bw checks are inconsistent with each other:
- * scr_type 0 and 2 evaluate as TRUE for both (but they are mono),
- * scr_type 7 evaluate as FALSE for both (also mono)
- * See winit()
+ * dos_screen_mode 0 and 2 evaluate as TRUE for both (but they are mono),
+ * dos_screen_mode 7 evaluate as FALSE for both (also mono)
+ * See initialize_screen()
  */
 #define is_color (dos_screen_mode!=7)
 #define is_bw (dos_screen_mode==0 || dos_screen_mode==2)
@@ -123,7 +123,7 @@
 #define LRCORNER	(0xd9)
 
 //@ double-width box glyphs
-#define DHLINE	HWALL  // 205 in credits()
+#define DHLINE	HWALL  // 205 in show_credits()
 #define DVLINE	VWALL
 #define DCORNER	'#'  //@ also unused
 #define DULCORNER	ULWALL
@@ -131,7 +131,7 @@
 #define DLLCORNER	LLWALL
 #define DLRCORNER	LRWALL
 
-//@ only used in credits()
+//@ only used in show_credits()
 #define DVLEFT	(0xb9)  //@ 185
 #define DVRIGHT	(0xcc)  //@ 204
 

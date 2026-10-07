@@ -8,7 +8,7 @@
 #include "curses.h"
 
 /*
- * conn:
+ * connect_rooms:
  *	Draw a corridor from a room in a certain direction.
  */
 void
@@ -151,7 +151,7 @@ connect_rooms(first_room_index, second_room_index)
 }
 
 /*
- * do_passages:
+ * generate_passages:
  *	Draw all the passages on a level.
  */
 void
@@ -261,7 +261,7 @@ generate_passages()
 
 
 /*
- * door:
+ * place_door:
  *	Add a door or possibly a secret door.  Also enters the door in
  *	the exits array of the room.
  */
@@ -304,7 +304,7 @@ add_pass()
 #endif
 
 /*
- * passnum:
+ * number_passages:
  *	Assign a number to each passageway
  */
 static int passage_number;
@@ -328,7 +328,7 @@ number_passages()
 		}
 }
 /*
- * numpass:
+ * mark_connected_passage:
  *	Number a passageway square and its brethren
  */
 void

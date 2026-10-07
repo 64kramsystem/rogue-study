@@ -136,8 +136,8 @@ read_scroll()
 			}
 	when SCROLL_FOOD_DETECTION:
 		/*
-		 * Scroll of food detection
-		 */
+					 * Scroll of food detection
+					 */
 		character = FALSE;
 		for (affected_item = level_items; affected_item != NULL; affected_item = next(affected_item)) {
 			if (affected_item->item_category == FOOD) {
@@ -214,7 +214,7 @@ read_scroll()
 		 * Extra Vorpal Enchant Weapon
 		 *     Give weapon +1,+1
 		 *     Is extremely vorpal against one certain type of monster
-		 *     Against this type (o_enemy) the weapon gets:
+		 *     Against this type (item_slays_species) the weapon gets:
 		 *		+4,+4
 		 *		The ability to zap one such monster into oblivion
 		 *
@@ -246,13 +246,13 @@ read_scroll()
 
 				/*
 				 * Sometimes this is a mixed blessing ...
-					if (rnd(20) == 0) {
-						cur_weapon->o_flags |= ISCURSED;
-						if (!save(VS_MAGIC)) {
-							cur_weapon->o_flags |= ISEGO|ISREVEAL;
-							s_know[S_VORPAL] = TRUE;
-							msg("you feel a sudden desire to kill %ss.",
-							monsters[cur_weapon->o_enemy-'A'].m_name);
+					if (random_below(20) == 0) {
+						equipped_weapon->item_flags |= ITEM_CURSED;
+						if (!player_saving_throw(VS_MAGIC)) {
+							equipped_weapon->item_flags |= ITEM_EGO|ITEM_SLAYER_REVEALED;
+							scroll_identified[SCROLL_VORPALIZE] = TRUE;
+							show_message("you feel a sudden desire to kill %ss.",
+							monsters[equipped_weapon->item_slays_species-'A'].name);
 						}
 					}
 				 */

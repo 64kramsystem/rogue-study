@@ -14,8 +14,8 @@ int captains_log = FALSE;
 int is_com;
 #endif //SDEBUG
 /*
- * revno: current revision level
- * verno: current version of a particular rev
+ * version_major: current revision level
+ * version_minor: current version of a particular rev
  */
 int version_major = REV;
 int version_minor = VER;
@@ -143,15 +143,11 @@ struct item_definition wand_definitions[MAXSTICKS] = {
 };
 
 #ifdef HELP
-/*@
- * Original code used CP437 codes hard coded inside the help strings,
- * instead of the #define'd char constants for FLOOR, PLAYER etc.
- * To support the constants, H_*() macros were created and helpcoms/helpobjs
- * array type has changed from string to struct h_list.
- *
- * Ironically, struct h_list already existed in rogue.h, but it was unused in
- * code, so perhaps original authors either abandoned the idea or were halfway
- * through implementing it.
+/*
+ * The port stores help entries as symbol text plus descriptions so character-set
+ * constants can replace embedded CP437 bytes. The imported source declared h_list but
+ * used string arrays for helpcoms/helpobjs; its reason for retaining that unused type
+ * is not established by the source.
  */
 #define H_STR(str)	{"", str}
 #define H_CHSTR(ch, str)	{{ch, ':', ' ', '\0'}, str}
@@ -316,9 +312,9 @@ bool expert = FALSE;
 int is_me;
 #endif
 /*@
- * `was_trapped` was originally a bool, which in original code was typedef'd as
+ * `trap_display_state` was originally a bool, which in original code was typedef'd as
  * unsigned char. As it is used in ++ increment and > test, I've reverted it
- * to its original (real) type. See be_trapped() in move.c and look() in misc.c
+ * to its original (real) type. See trigger_trap() in move.c and update_player_view() in misc.c
  */
 unsigned char trap_display_state = FALSE;		/* Was a trap sprung */
 #ifdef WIZARD
@@ -372,8 +368,8 @@ char *unused_player_name;
 
 /* WINDOW *hw;				 Used as a scratch window */
 
-Position previous_player_position;				/* Position before last look() call */
-Position action_direction;				/* Change indicated to get_dir() */
+Position previous_player_position;				/* Position before last update_player_view() call */
+Position action_direction;				/* Change indicated to read_direction() */
 
 Entity *equipped_armor;			/* What a well dresssed rogue wears */
 Entity *equipped_rings[2];			/* Which rings are being worn */
@@ -412,11 +408,11 @@ Entity *level_items = NULL;			/* List of objects on this level */
 Entity *level_monsters = NULL;			/* List of monsters on the level */
 
 /*@
- * Original code did not define a value for s_maxhp member of stats struct.
- * s_maxhp from this monster template is unused, just like s_hpt, as its value
+ * Original code did not define a value for max_hit_points member of stats struct.
+ * max_hit_points from this monster template is unused, just like hit_points, as its value
  * was randomly chosen for each new generated monster. To make compilers happy,
  * value is now set to a dummy ___ value, the same convention used in original
- * code for s_hpt.
+ * code for hit_points.
  */
 #define ___ 1
 #define XX 10
@@ -457,12 +453,12 @@ char flytrap_damage_dice[10];
 #undef XX
 
 /*@
- * Not to be confused with _things[], which is an array of THINGS on the level
- * This one serves to choose the type of random items. The actual probability
- * is redefined in init_things(), and the only user is new_thing().
- * To make compilers happy, the unused mi_worth is set using ___, as per
- * original code convention.
- */
+		 * Not to be confused with entity_pool[], which is an array of THINGS on the level
+		 * This one serves to choose the type of random items. The actual probability
+		 * is redefined in initialize_item_probabilities(), and the only user is generate_item().
+		 * To make compilers happy, the unused value is set using ___, as per
+		 * original code convention.
+		 */
 #define ___ 1
 struct item_definition item_category_probabilities[NUMTHINGS] = {
 	{ 0,			27, ___ },	/* potion */

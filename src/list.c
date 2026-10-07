@@ -68,7 +68,7 @@ list_free(list_head)
 }
 
 /*
- * new_item
+ * allocate_entity
  *	Get a new item with a specified size
  */
 Entity *
@@ -87,10 +87,10 @@ allocate_entity()
 }
 
 /*
- * talloc: simple allocation of a THING
+ * find_free_entity_slot: simple allocation of a Entity
  */
 static
-void *  //@ maybe should be THING*, as this is a specialized malloc()
+void *  //@ maybe should be Entity*, as this is a specialized malloc()
 find_free_entity_slot()
 {
 	register int i;
@@ -110,7 +110,7 @@ find_free_entity_slot()
 }
 
 /*
- * discard:
+ * release_entity:
  *	Free up an item
  */
 int

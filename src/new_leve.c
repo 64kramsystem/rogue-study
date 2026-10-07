@@ -1,8 +1,8 @@
 /*
- * new_level:
+ * generate_level:
  *	Dig and draw a new level
  *
- * new_level.c	1.4 (A.I. Design) 12/13/84
+ * generate_level.c	1.4 (A.I. Design) 12/13/84
  */
 
 #include "rogue.h"
@@ -52,7 +52,7 @@ generate_level(void)
 	 */
 	reset_flytrap_damage();
 	/*
-	 * Throw away stuff left on the previous level (if anything)
+	 * Throw away stuff left on the previous dungeon_level (if anything)
 	 */
 	free_list(level_items);
 	generate_rooms();				/* Draw rooms */
@@ -127,7 +127,7 @@ generate_level(void)
 }
 
 /*
- * rnd_room:
+ * random_room_index:
  *	Pick a room that is really there
  */
 int
@@ -142,7 +142,7 @@ random_room_index(void)
 }
 
 /*
- * put_things:
+ * populate_level_items:
  *	Put potions and scrolls on this level
  */
 void
@@ -215,7 +215,7 @@ populate_level_items(void)
 }
 
 /*
- * treas_room:
+ * populate_treasure_room:
  *	Add a treasure room
  */
 #define MAXTRIES 10	/* max number of tries to put down a monster */

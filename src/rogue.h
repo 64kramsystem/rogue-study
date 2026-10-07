@@ -20,7 +20,7 @@
 #define UNAUTHENTICATED_DAMAGE_MULTIPLIER 6
 #else
 #define UNAUTHENTICATED_DAMAGE_MULTIPLIER 1
-#endif //PROTECTED
+#endif //ENABLE_COPY_PROTECTION_CHECKS
 
 /*
  * if DEBUG or WIZARD is changed
@@ -467,7 +467,7 @@ extern int is_me;
 extern int next_item_label;
 extern bool pending_trapdoor_fall;
 
-//@ nullstr should probably be used in misc and wizard instead of (size_t)NULL
+// Shared message fragments.
 extern char empty_string[], *pronoun_it, *pronoun_you, *out_of_memory_message;
 
 extern char *scroll_labels[], *potion_labels[], *ring_labels[], *wand_labels[];
@@ -502,7 +502,7 @@ extern long random_state;
 extern int incoming_damage_multiplier;
 extern char *tombstone_player_name, *tombstone_death_cause;
 extern int disk_authentication_marker;
-extern char *unused_player_name;  //@ defined (no value set) but seems unused
+extern char *unused_player_name;  // Declared and defined, with no callers or readers in this source.
 extern int expected_code_checksum;
 
 extern Entity *equipped_armor, *equipped_rings[], *equipped_weapon,
@@ -526,7 +526,7 @@ extern int captains_log;
 #endif //LOG
 
 /*@
- * Definition commented out:
+ * Definition commented dos_write_port:
  * extern bool askme, fight_flush, jump, passgo, slow_invent;
  * extern char *release;
  *
@@ -541,7 +541,7 @@ extern int captains_log;
 extern char menu_option[], s_fruit[], score_filename[], save_filename[], s_macro[];
 extern char copy_protection_drive[], screen_option[];
 extern char favorite_fruit[], keyboard_macro[], player_name[];
-//@ extern char s_name[];  //@ not found. Perhaps old name for whoami[]?
+// The archived s_name declaration has no matching definition in the imported sources.
 
 
 //@ init.c
@@ -560,7 +560,7 @@ extern char *ring_bonus_buffer;
 
 
 //@ protect.c
-extern int protection_watchdog_ticks;  //@ used in clock(), originally set by dos.asm
+extern int protection_watchdog_ticks;  //@ used in update_protection_state(), originally set by dos.asm
 
 
 /*
@@ -866,6 +866,6 @@ void	create_obj();
 /*@ functions declared but not found
 int	auto_save();
 int	tstp();
-THING	*find_mons();
+Entity	*find_mons();
 char	*balloc();
-*/
+ */

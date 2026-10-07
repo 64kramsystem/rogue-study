@@ -10,7 +10,7 @@
 #define AC(a) (-((a)-11))
 #define PT(i,j) ((COLS==40)?i:j)
 /*
- * msg:
+ * show_message:
  *	Display a message at the top of the screen.
  */
 static int message_length = 0;
@@ -31,7 +31,7 @@ message_by_verbosity(const char *tfmt, const char *format, ...)
 	va_end(arguments);
 }
 
-//@ va_list variant of msg()
+//@ va_list variant of show_message()
 void
 show_message_v(const char *format, va_list arguments)
 {
@@ -52,7 +52,7 @@ show_message_v(const char *format, va_list arguments)
 	finish_message();
 }
 
-//@ varargs variant, now a wrapper for vmsg()
+//@ varargs variant, now a wrapper for show_message_v()
 void
 show_message(const char *format, ...)
 {
@@ -67,7 +67,7 @@ show_message(const char *format, ...)
  * @ now for real
  */
 /*
- * addmsg:
+ * append_message:
  *	Add things to the current message
  */
 void
@@ -82,8 +82,8 @@ append_message(const char *format, ...)
 }
 
 /*
- * endmsg:
- *	Display a new msg (giving him a chance to see the previous one
+ * finish_message:
+ *	Display a new show_message (giving him a chance to see the previous one
  *	if it is up there with the -More-)
  */
 void
@@ -169,12 +169,12 @@ show_more_prompt(message_text)
 
 
 /*@
-* arguments changed from fixed ints to va_list.
-* no need of a varargs version as this is only used internally by io.c
-* varargs-aware functions
-*/
+ * arguments changed from fixed ints to va_list.
+ * no need of a varargs version as this is only used internally by io.c
+ * varargs-aware functions
+ */
 /*
- * doadd:
+ * append_message_v:
  *	Perform an add onto the message buffer
  */
 void
@@ -186,7 +186,7 @@ append_message_v(const char *format, va_list arguments)
 }
 
 /*
- * putmsg:
+ * display_wrapped_message:
  *  put a msg on the line, make sure that it will fit, if it won't
  *  scroll msg sideways until he has read it all
  */
@@ -223,7 +223,7 @@ display_wrapped_message(message_row,message_text)
 }
 
 /*
- * scrlmsg:  scroll a message accross the line
+ * display_message_segment:  scroll a message accross the line
  * @ renamed to avoid conflict with <curses.h>.
  * @ Purpose is completely unrelated to curses
  */
@@ -254,7 +254,7 @@ display_message_segment(message_row,scroll_start,scroll_end)
 		}
 }
 /*
- * io_unctrl:
+ * describe_key:
  *	Print a readable version of a certain character
  *	@ renamed to avoid conflict with <curses.h>
  *	@ same purpose but different behavior, so not using the curses version
@@ -280,7 +280,7 @@ describe_key(byte character)
 }
 
 /*
- * status:
+ * update_status_line:
  *	Display the important stats line.  Keep the cursor where it was.
  */
 void
@@ -333,8 +333,8 @@ update_status_line(void)
 	}
 
 	/*
-	 * Str:
-	 */
+		 * Str:
+		 */
 	if (player_stats.strength != previous_strength)
 	{
 		previous_strength = player_stats.strength;
@@ -401,7 +401,7 @@ update_status_line(void)
 }
 
 /*
- * wait_for
+ * wait_for_key
  *	Sit around until the guy types the right key
  */
 void
@@ -414,7 +414,7 @@ wait_for_key(byte character)
 	register char c;
 
 	if (ch == '\n')
-		while ((c = readchar()) != '\n' && c != '\r')
+		while ((c = read_game_key()) != '\n' && c != '\r')
 			continue;
 	else
 	 */
@@ -446,7 +446,7 @@ wait_for_enter(const char *message_text)
 }
 
 /*
- * show_win:
+ * show_overlay_message:
  *	Function used to display a window and wait before returning
  *	@ a window? looks like a single message to me!
  */
@@ -461,23 +461,9 @@ show_overlay_message(message)
 
 
 /*
- * str_attr:  format a string with attributes.
- *
- *    formats:
- *        %i - the following character is turned inverse vidio
- *        %I - All characters upto %$ or null are turned inverse vidio
- *        %u - the following character is underlined
- *        %U - All characters upto %$ or null are underlined
- *        %$ - Turn off all attributes
- *
- *     Attributes do not nest, therefore turning on an attribute while
- *     a different one is in effect simply changes the attribute.
- *
- *     "No attribute" is the default and is set on leaving this routine
- *
- *     Eventually this routine will contain colors and character intensity
- *     attributes.  And I'm not sure how I'm going to interface this with
- *     printf certainly '%' isn't a good choice of characters.  jll.
+ * Highlight formatting for prompts. In the normal build, '%' highlights the next
+ * character. The retained LUXURY branch also interprets %i/%I, %u/%U, and %$ as
+ * single-character or persistent inverse/underline controls. Attributes do not nest.
  */
 void
 print_highlighted_text(text)
@@ -572,7 +558,7 @@ update_keyboard_and_clock(void)
 #endif
 
 	/*@
-	 * Do not update between wdump()/wrestor() operations
+	 * Do not update between save_screen()/restore_screen() operations
 	 * (when the user is in a non-game screen like inventory or discoveries)
 	 * Or if the screen is not yet initialized.
 	 */

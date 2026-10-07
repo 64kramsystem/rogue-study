@@ -156,16 +156,16 @@ load_options_file(filename)
 }
 
 /*
- *  Peekc -
- *  Return the next char associated with
- *  efd (environment file descripter
- *
- *  This routine has some knowledge of the
- *  file parsing state so that it knows
- *  if there has been a premature eof.  This
- *  way I can avoid checking for premature eof
- *  every time a character is read.
- */
+		 *  Peekc -
+		 *  Return the next char associated with
+		 *  efd (environment file descripter
+		 *
+		 *  This routine has some knowledge of the
+		 *  file parsing state so that it knows
+		 *  if there has been a premature eof.  This
+		 *  way I can avoid checking for premature eof
+		 *  every time a character is read.
+		 */
 static
 byte
 read_option_character(void)
@@ -218,7 +218,7 @@ get_option_value(label)
 
 //@ renamed from putenv() to avoid collision with <stdlib.h>
 /*
- * putenv_struct: Put something into the "fake" environment struct
+ * set_option_value: Put something into the "fake" environment struct
  *
  *	  label  - label of thing in environment
  *	  string - string associated with the label

@@ -13,7 +13,7 @@ static void	draw_vertical_room_wall( struct room *room, int startx);
 static void	draw_horizontal_room_wall(struct room *room, int starty);
 
 /*
- * do_rooms:
+ * generate_rooms:
  *	Create rooms and corridors with a connectivity graph
  */
 void
@@ -171,7 +171,7 @@ draw_room(struct room *room)
 }
 
 /*
- * vert:
+ * draw_vertical_room_wall:
  *	Draw a vertical line
  */
 static
@@ -185,7 +185,7 @@ draw_vertical_room_wall(struct room *room, int startx)
 }
 
 /*
- * horiz:
+ * draw_horizontal_room_wall:
  *	Draw a horizontal line
  */
 static
@@ -199,7 +199,7 @@ draw_horizontal_room_wall(struct room *room, int starty)
 }
 
 /*
- * rnd_pos:
+ * random_room_position:
  *	Pick a random spot in a room
  */
 void

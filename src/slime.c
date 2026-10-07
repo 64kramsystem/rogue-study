@@ -76,7 +76,7 @@ new_slime(slime)
  *
  * Original return value was somewhat an abuse of the bool convention,
  * used both as TRUE/FALSE and as an integer for calculating odds.
- * To avoid that, 'inv_odds' was created for the rnd() call,
+ * To avoid that, 'inv_odds' was created for the random_below() call,
  * and 'appear' is now "strictly" boolean
  */
 bool

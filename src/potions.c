@@ -8,7 +8,7 @@
 #include "curses.h"
 
 
-//@ turn_see() wrapper to use as a fuse
+//@ set_monster_detection() wrapper to use as a fuse
 static
 void
 clear_monster_detection(void)
@@ -17,7 +17,7 @@ clear_monster_detection(void)
 }
 
 /*
- * quaff:
+ * drink_potion:
  *	Quaff a potion from the pack
  */
 void
@@ -221,7 +221,7 @@ drink_potion(void)
 }
 
 /*
- * invis_on:
+ * reveal_invisible_monsters:
  *	Turn on the ability to see invisible
  */
 void
@@ -238,7 +238,7 @@ reveal_invisible_monsters(void)
 }
 
 /*
- * turn_see:
+ * set_monster_detection:
  *	Put on or off seeing monsters on this level
  */
 bool
@@ -274,7 +274,7 @@ set_monster_detection(bool turn_off)
 }
 
 /*
- * th_effect:
+ * apply_thrown_potion:
  *	Compute the effect of this potion hitting a monster.
  */
 void
