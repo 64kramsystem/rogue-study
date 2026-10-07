@@ -65,7 +65,7 @@ save_game()
 	int retcode;
 	char savename[20];
 
-	printw("Sorry, saving games is disabled. Patches are welcome!");
+	msg("Sorry, saving games is disabled. Patches are welcome!");
 	return;
 
 	msg("");
