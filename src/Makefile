@@ -11,6 +11,7 @@
 #	speed.  Don't load in csav.o
 #
 TARGET:=rogue
+.DEFAULT_GOAL := default
 # ISO C17/18 requires GCC8 or greater: CC=gcc-8 make ...
 CFLAGS:=-Wall -Wextra -std=c17 -pedantic
 LDLIBS:=
@@ -69,33 +70,41 @@ ASMS=zoom.o dos.o begin.o fio.o sbrk.o csav.o
 
 default: $(TARGET)
 
-all: clean default sdl
+all: default sdl
 
 sdl: splash $(TARGET)-sdl
 
 splash: splash/splash
 
-splash/splash:
+# Share the loader target so parallel sub-makes never compile it twice.
+splash/splash: splash/load_sdl.o FORCE
 	$(MAKE) -C splash splash
 
-splash/load_sdl.o:
+splash/load_sdl.o: FORCE
 	$(MAKE) -C splash load_sdl.o
 
+FORCE:
+
 main-sdl.o: CFLAGS+=-DROGUE_SPLASH
-main-sdl.o:
-	$(CC) $(CFLAGS) -c -o $@ main.c
+main-sdl.o: main.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+$(OBJS) main.o main-sdl.o: Makefile
+
+%.o: %.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 $(TARGET)-sdl: LDLIBS+=$(shell pkg-config sdl2 --libs)
-$(TARGET)-sdl: OBJS+=main-sdl.o splash/load_sdl.o
 $(TARGET)-sdl: $(OBJS) main-sdl.o splash/load_sdl.o
-	$(CC) $(OBJS) $(LDLIBS) -o $@
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(TARGET): OBJS+=main.o
 $(TARGET): $(OBJS) main.o
-	$(CC) $(OBJS) $(LDLIBS) -o $@
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+-include $(OBJS:.o=.d) main.d main-sdl.d
 
 clean:
-	rm -f $(TARGET) $(TARGET)-sdl *.o
+	rm -f $(TARGET) $(TARGET)-sdl *.o *.d
 	$(MAKE) -C splash $@
 
-.PHONY: default all sdl splash clean
+.PHONY: default all sdl splash clean FORCE
