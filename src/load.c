@@ -92,7 +92,7 @@ show_dos_splash(void)
 	 *  Blocking timeout mode does not work with standard ncurses, as the
 	 *  underlying functions wtimeout() / wget_wch() only work properly after
 	 *  curses initialization with initscr(), done later in main() by calling
-	 *  winit(). As it is, it's non-blocking and returns immediately.
+	 *  initialize_screen(). As it is, it's non-blocking and returns immediately.
 	 *  Not an issue considering the whole image display is dummy as there is no
 	 *  (portable) way to switch to CGA graphics mode in standard C in 2020.
 	 *
@@ -121,7 +121,7 @@ show_dos_splash(void)
  *   -  192 bytes of padding
  * - (it does *not* contain the trailer byte 1Ah (CPM EOF)
  *
- *    7 bytes BSAVE header, ignored by bload():
+ *    7 bytes BSAVE header, ignored by read_cga_memory():
  *  BYTE Marker         Data type                  FDh = unpacked data
  *  WORD ScreenSegment  PC screen memory segment B800h = CGA video address
  *  WORD ScreenOffset   PC screen memory offset  0000h = no offset
@@ -164,7 +164,7 @@ load_cga_picture(void)
 	palette = dos_read_byte(8012,0xB800);     //@ 5 = CGA palette 1i, see below
 	background = dos_read_byte(8013,0xB800);  //@ 0 = Color index 0 (BG) is Black
 
-	//@ Intensified palette, enable bit 4 for the COLREG write
+	//@ Intensified palette, enable bit 4 for the CGA_COLOR_PORT write
 	if (palette >= 3)
 		background |= CGA_INTENSITY_FLAG;
 

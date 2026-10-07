@@ -42,6 +42,7 @@ bool is_print(char character) { return (isascii(character) && isprint(character)
  * No exact match in signature and behavior from glibc or POSIX
  * Similar to <string.h> strncpy(), but not a drop-in equivalent.
  * snprintf() is perhaps a better replacement candidate.
+ * The count is the maximum copied characters; callers must reserve one more byte for NUL.
  */
 char *
 copy_string_bounded(destination,source,max_characters)

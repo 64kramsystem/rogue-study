@@ -144,14 +144,10 @@ struct item_definition wand_definitions[MAXSTICKS] = {
 
 #ifdef HELP
 /*@
- * Original code used CP437 codes hard coded inside the help strings,
- * instead of the #define'd char constants for FLOOR, PLAYER etc.
- * To support the constants, H_*() macros were created and helpcoms/helpobjs
- * array type has changed from string to struct h_list.
- *
- * Ironically, struct h_list already existed in rogue.h, but it was unused in
- * code, so perhaps original authors either abandoned the idea or were halfway
- * through implementing it.
+ * The port stores help entries as symbol text plus descriptions so character-set
+ * constants can replace embedded CP437 bytes. The imported source declared h_list but
+ * used string arrays for helpcoms/helpobjs; its reason for retaining that unused type
+ * is not established by the source.
  */
 #define H_STR(str)	{"", str}
 #define H_CHSTR(ch, str)	{{ch, ':', ' ', '\0'}, str}

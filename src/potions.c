@@ -8,7 +8,7 @@
 #include "curses.h"
 
 
-//@ turn_see() wrapper to use as a fuse
+//@ set_monster_detection() wrapper to use as a fuse
 static
 void
 clear_monster_detection(void)

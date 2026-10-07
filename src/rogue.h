@@ -20,7 +20,7 @@
 #define UNAUTHENTICATED_DAMAGE_MULTIPLIER 6
 #else
 #define UNAUTHENTICATED_DAMAGE_MULTIPLIER 1
-#endif //PROTECTED
+#endif //ENABLE_COPY_PROTECTION_CHECKS
 
 /*
  * if DEBUG or WIZARD is changed
@@ -501,7 +501,7 @@ extern long random_state;
 extern int incoming_damage_multiplier;
 extern char *tombstone_player_name, *tombstone_death_cause;
 extern int disk_authentication_marker;
-extern char *unused_player_name;  //@ defined (no value set) but seems unused
+extern char *unused_player_name;  //@ Declared and defined, with no callers or readers in this source.
 extern int expected_code_checksum;
 
 extern Entity *equipped_armor, *equipped_rings[], *equipped_weapon,
@@ -559,7 +559,7 @@ extern char *ring_bonus_buffer;
 
 
 //@ protect.c
-extern int protection_watchdog_ticks;  //@ used in clock(), originally set by dos.asm
+extern int protection_watchdog_ticks;  //@ used in update_protection_state(), originally set by dos.asm
 
 
 /*
