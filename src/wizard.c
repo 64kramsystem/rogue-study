@@ -63,7 +63,7 @@ identify_item(void)
 	 */
 	if (item->item_slays_species)
 		item->item_flags |= ITEM_SLAYER_REVEALED;
-	show_message(describe_item(item, FALSE));
+	show_message("%s", describe_item(item, FALSE));
 }
 
 #ifdef WIZARD

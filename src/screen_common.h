@@ -170,7 +170,7 @@ void	restore_screen(void);
 void	shutdown_screen(void);
 void	screen_draw_box(int top, int left, int bottom, int right);
 void	center(int row, char *string);
-void	screen_printf(const char *format, ...);
+void	screen_printf(const char *format, ...) PRINTF_FORMAT(1, 2);
 void	repeat_character(byte character, int count);
 void	animate_level_transition(void);
 void	drop_curtain(void);

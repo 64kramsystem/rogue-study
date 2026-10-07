@@ -1592,7 +1592,7 @@ initialize_screen(void)
 		svwin_ds = -1;
 		savewin = (char *) cell_flags;
 		if (dos_screen_mode == 7)
-			fatal(out_of_memory_message);
+			fatal("%s", out_of_memory_message);
 	} else {
 		savewin = (char *) (((intptr) savewin + 0xf) & 0xfff0);
 		svwin_ds = (((intptr) savewin >> 4) & 0xfff) + _dsval;
