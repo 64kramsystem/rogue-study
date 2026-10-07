@@ -40,7 +40,7 @@ done
 
 usage() {
 	echo "Launch Rogue PC in a new, customized Xterm window"
-	echo "Usage: ${0##.*/} [-h]" \
+	echo "Usage: ${0##*/} [-h|--help]" \
 		"[-f|--full[-]screen]" \
 		"[-l|--line-chars]" \
 		"[-b|--border]" \
@@ -50,21 +50,25 @@ usage() {
 	exit
 }
 
-# Pre-parse for `help`
-for arg in "$@"; do [[ "$arg" == "-h" || "$arg" == "--help" ]] && usage ; done
+fatal() { echo "$*" >&2; exit 1; }
 
 while (( $# )); do
 	case "$1" in
+	-h|--help) usage;;
 	-f|--full-screen|--fullscreen) fullscreen=1;;
 	-l|--line-chars ) linechars=1;;
 	-b|--border     ) border=1;;
-	-r|--rogue      ) shift; gamecmd=$1;;
-	   --rogue=*    )        gamecmd=${1#*=};;
+	-r|--rogue      )
+		(( $# >= 2 )) && [[ -n "$2" ]] || fatal "$1 requires an executable"
+		shift; gamecmd=$1;;
+	   --rogue=*    ) gamecmd=${1#*=}; [[ -n "$gamecmd" ]] || fatal "--rogue requires an executable";;
 #	-c |--columns    ) shift ; columns="$1";;
 #	    --columns=*  )         columns="${1#*=}";;
-	-fs|--font-size  ) shift ; fontsize="$1";;
+	-fs|--font-size  )
+		(( $# >= 2 )) || fatal "$1 requires a size"
+		shift; fontsize=$1;;
 	    --font-size=*)         fontsize="${1#*=}";;
-	--) shift; rogueargs+=( "$@" ); break;;
+	--) shift; break;;
 	-*) echo "invalid option: $1" >&2; exit 1;;
 	*) rogueargs+=( "$1" );;
 	esac
@@ -72,9 +76,16 @@ while (( $# )); do
 done
 rogueargs+=("$@")
 if [[ -z "$gamecmd" ]]; then
-	echo "No game found, use ${0##.*/} --rogue to set the executable" >&2
+	echo "No game found, use ${0##*/} --rogue to set the executable" >&2
 	exit 1
 fi
+[[ "$fontsize" =~ ^[1-9][0-9]*$ ]] || fatal "Font size must be a positive integer"
+
+if [[ "$gamecmd" != */* ]]; then
+	gamecmd=$(type -P -- "$gamecmd") || fatal "Game executable not found"
+fi
+gamecmd=$(readlink -f -- "$gamecmd") || fatal "Could not resolve game executable"
+[[ -x "$gamecmd" && ! -d "$gamecmd" ]] || fatal "Game is not executable: $gamecmd"
 
 # XTerm options
 
@@ -161,5 +172,7 @@ if !((border));     then xtargs+=(-b 0); fi
 xtargs+=(-fs "$fontsize")
 xtargs+=(-geometry "$columns"x25)
 
-cd -- "$(dirname "$(readlink -f "$gamecmd")")" &&
-xterm "${xtargs[@]}" -e "$gamecmd" "${rogueargs[@]}"
+if [[ "${gamecmd%/*}" == "$here/src" ]]; then
+	cd -- "$here/src" || exit 1
+fi
+exec xterm "${xtargs[@]}" -e "$gamecmd" "${rogueargs[@]}"

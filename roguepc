@@ -25,14 +25,15 @@ rogueargs=()
 here=$(dirname "$(readlink -f "$0")")
 
 exists()  { type "$@" >/dev/null 2>&1; }
+fatal()   { echo "$*" >&2; exit 1; }
 
 findcmd() {
 	local bin=rogue${1:+-$1}
 	if [[ "$cmd" ]]; then return; fi
 	if [[ -x "$here"/src/"$bin" ]]; then
 		cmd=$here/src/$bin
-	elif exists "$bin"; then
-		cmd=$bin
+	elif cmd=$(type -P -- "$bin"); then
+		return 0
 	else
 		return 1
 	fi
@@ -48,35 +49,32 @@ usage() {
 	exit
 }
 
-# Pre-parse for `help`
-for arg in "$@"; do [[ "$arg" == "-h" || "$arg" == "--help" ]] && usage ; done
 while (( $# )); do
 	case "$1" in
-	-S|--no--splash) sdl=0;;
-	-r|--rogue) shift; cmd=$1;;
-	   --rogue=*) cmd=${1#*=};;
+	-h|--help) usage;;
+	-S|--no-splash) sdl=0;;
+	-r|--rogue)
+		(( $# >= 2 )) && [[ -n "$2" ]] || fatal "$1 requires an executable"
+		shift; cmd=$1;;
+	--rogue=*) cmd=${1#*=}; [[ -n "$cmd" ]] || fatal "--rogue requires an executable";;
 	--) shift; break;;
 	*) rogueargs+=( "$1" );;
 	esac
 	shift
 done
-rogueargs+=("$@")
+gameargs=("$@")
 
 
-if ((sdl)); then
+if [[ -z "$cmd" ]] && ((sdl)); then
 	if findcmd "sdl"; then
-		export ROGUE_PIC=${ROGUE_PIC:-"$here"/src/rogue.pic}
-		if ! exists ldconfig || ! ldconfig -p | grep -q 'SDL2'; then
-			echo "SDL2 library not found, disabling splash screen." \
-				"Install SDL2 to enable it. In Debian/Ubuntu:" \
-				"sudo apt install libsdl2-dev" >&2
+		if exists ldd && ldd "$cmd" 2>/dev/null | grep -q 'not found'; then
+			echo "rogue-sdl has missing shared libraries, disabling splash screen." >&2
+			cmd=
 		fi
 	else
 		echo "rogue-sdl not found, disabling splash screen." \
 			"Run 'make sdl' in ./src to enable" >&2
 	fi
-else
-	findcmd
 fi
 
 
@@ -85,10 +83,20 @@ if [[ -z "$cmd" ]] && ! findcmd; then
 	exit 1
 fi
 
+if [[ "$cmd" != */* ]]; then
+	cmd=$(type -P -- "$cmd") || fatal "Game executable not found"
+fi
+cmd=$(readlink -f -- "$cmd") || fatal "Could not resolve game executable"
+[[ -x "$cmd" && ! -d "$cmd" ]] || fatal "Game is not executable: $cmd"
+
+if [[ "${cmd%/*}" == "$here/src" ]]; then
+	cd -- "$here/src" || exit 1
+fi
+
 if   [[ "$DISPLAY" ]] && exists xterm; then
-	"$here"/roguepc-xterm          --rogue "$cmd" "${rogueargs[@]}"
+	exec "$here"/roguepc-xterm          --rogue "$cmd" "${rogueargs[@]}" -- "${gameargs[@]}"
 elif [[ "$DISPLAY" ]] && exists gnome-terminal; then
-	"$here"/roguepc-gnome-terminal --rogue "$cmd" "${rogueargs[@]}"
+	exec "$here"/roguepc-gnome-terminal --rogue "$cmd" "${rogueargs[@]}" -- "${gameargs[@]}"
 else
-	"$cmd" "${rogueargs[@]}"
+	exec "$cmd" "${rogueargs[@]}" "${gameargs[@]}"
 fi
