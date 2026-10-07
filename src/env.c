@@ -58,7 +58,7 @@ static void	putenv_struct(char *label, char *string);
 static FILE *file;
 static byte ch;
 static int pstate;
-static char blabel[11], bstring[25];
+static char blabel[11], bstring[MACROSZ];
 static char *plabel, *pstring;
 
 //@ renamed from setenv() to avoid collision with <stdlib.h>
@@ -98,10 +98,8 @@ setenv_from_file(envfile)
 		 */
 		while (is_space(peekc()))
 			;
-		if (ch == 0) {
-			fclose(file);
-			return TRUE;
-		}
+		if (ch == 0)
+			break;
 		pstate = 3;
 		/*
 		 * Skip comments.
@@ -116,9 +114,13 @@ setenv_from_file(envfile)
 		 * start of label found
 		 */
 		*plabel = ch;
-		while ((pc = peekc()) != '=' && pc != '-')
-			if (!is_space(*plabel) || !is_space(ch))
+		while ((pc = peekc()) != '=' && pc != '-') {
+			if (pc == '\n')
+				fatal("rogue.opt: incorrect file format\n");
+			if ((!is_space(*plabel) || !is_space(ch))
+			    && plabel < &blabel[sizeof(blabel) - 2])
 				*(++plabel) = ch;
+		}
 		if (!is_space(*plabel))
 			plabel++;
 		*plabel = 0;
@@ -126,28 +128,28 @@ setenv_from_file(envfile)
 		/*
 		 * Looking for corresponding string
 		 */
-		while (is_space(peekc()))
+		pstate = 2;
+		while (is_space(peekc()) && ch != '\n')
 			;
 
 		/*
 		 * Start of string found
 		 */
-		pstate = 2;
-		*pstring = ch;
-		while (peekc() != '\n')
-			if (!is_space(*pstring) || !is_space(ch))
-				*(++pstring) = ch;
-		if (!is_space(*pstring))
-			pstring++;
+		if (ch != '\n') {
+			*pstring = ch;
+			while (peekc() != '\n')
+				if ((!is_space(*pstring) || !is_space(ch))
+				    && pstring < &bstring[sizeof(bstring) - 2])
+					*(++pstring) = ch;
+			if (!is_space(*pstring))
+				pstring++;
+		}
 		*pstring = 0;
 		lcase(blabel);
 		putenv_struct(blabel,bstring);
 		/* printf("env: found (%s) = (%s)\n",blabel,bstring); */
 	}
-	/*
-	 * for all environment strings that have to be in lowercase ....
-	 * @ this will never be reached, there is no `break` in previous `while`
-	 */
+	fclose(file);
 	lcase(s_menu);
 	lcase(s_screen);
 	return TRUE;
@@ -169,23 +171,17 @@ byte
 peekc(void)
 {
 	ch = 0;
-	/*
-	 * we make sure that the strings never get filled past
-	 * the end, this way we only have to check for these
-	 * things once
-	 */
-	if (plabel > &blabel[10])
-		plabel = &blabel[10];
-	if (pstring > &bstring[24])
-		pstring = &bstring[24];
-	if (!fread(&ch, 1, 1, file) && pstate != 0) {
+	if (!fread(&ch, 1, 1, file)) {
+		if (ferror(file))
+			fatal("rogue.opt: could not read file\n");
 		/*
 		 * When looking for the end of the string,
 		 * Let the eof look like newlines
 		 */
 		if (pstate >= 2)
-			return('\n');
-		fatal("rogue.opt: incorrect file format\n");
+			ch = '\n';
+		else if (pstate != 0)
+			fatal("rogue.opt: incorrect file format\n");
 	}
 	if (ch == 26)  //@ EOF char, common in text files back then.
 		ch = '\n';
