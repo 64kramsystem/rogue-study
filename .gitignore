@@ -1,9 +1,12 @@
 .*
 !.gitignore
 *.o
+*.d
 src/rogue
 src/rogue-sdl
 src/splash/splash
+tests/test_env
+tests/test_scores
 refdoc/c094.pdf
 refdoc/susv4-2018.tar.bz2
 *.sav

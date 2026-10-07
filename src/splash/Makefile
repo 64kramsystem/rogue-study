@@ -1,4 +1,5 @@
 TARGET:=splash
+.DEFAULT_GOAL := default
 CFLAGS?=-Wall -Wextra -std=c11 -pedantic -Og -g
 LDLIBS:=
 
@@ -13,9 +14,14 @@ all: default
 default: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(OBJS) $(LDLIBS) -o $@
+	$(CC) $(LDFLAGS) $(OBJS) $(LDLIBS) -o $@
+
+%.o: %.c Makefile
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c -o $@ $<
+
+-include $(OBJS:.o=.d)
 
 clean:
-	rm -f $(TARGET) *.o
+	rm -f $(TARGET) *.o *.d
 
 .PHONY: all default clean
