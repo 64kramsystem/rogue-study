@@ -1,6 +1,6 @@
 #ifndef LOAD_SDL_H
 #define LOAD_SDL_H
 
-int epyx_yeah(const char* path);
+int show_sdl_splash(const char* path);
 
 #endif

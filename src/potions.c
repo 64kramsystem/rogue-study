@@ -11,9 +11,9 @@
 //@ turn_see() wrapper to use as a fuse
 static
 void
-turn_see_off(void)
+clear_monster_detection(void)
 {
-	turn_see(TRUE);
+	set_monster_detection(TRUE);
 }
 
 /*
@@ -21,203 +21,203 @@ turn_see_off(void)
  *	Quaff a potion from the pack
  */
 void
-quaff(void)
+drink_potion(void)
 {
-	register THING *obj, *th;
-	register bool discardit = FALSE;
+	register Entity *item, *monster;
+	register bool consume_potion = FALSE;
 
-	if ((obj = get_item("quaff", POTION)) == NULL)
+	if ((item = select_inventory_item("quaff", POTION)) == NULL)
 		return;
 	/*
 	 * Make certain that it is somethings that we want to drink
 	 */
-	if (obj->o_type != POTION)
+	if (item->item_category != POTION)
 	{
-		msg("yuk! Why would you want to drink that?");
+		show_message("yuk! Why would you want to drink that?");
 		return;
 	}
-	if (obj == cur_weapon)
-		cur_weapon = NULL;
+	if (item == equipped_weapon)
+		equipped_weapon = NULL;
 
 	/*
 	 * Calculate the effect it has on the poor guy.
 	 */
-	switch (obj->o_which)
+	switch (item->item_subtype)
 	{
-	when P_CONFUSE:
-		p_know[P_CONFUSE] = TRUE;
-		if (!on(player, ISHUH))
+	when POTION_CONFUSION:
+		potion_identified[POTION_CONFUSION] = TRUE;
+		if (!has_actor_flag(player, ACTOR_CONFUSED))
 			{
-			if (on(player, ISHUH))
-				lengthen(unconfuse, rnd(8)+HUHDURATION);
+			if (has_actor_flag(player, ACTOR_CONFUSED))
+				extend_delayed_action(end_confusion, random_below(8)+HUHDURATION);
 			else
-				fuse(unconfuse, rnd(8)+HUHDURATION);
-			player.t_flags |= ISHUH;
-			msg("wait, what's going on? Huh? What? Who?");
+				schedule_delayed_action(end_confusion, random_below(8)+HUHDURATION);
+			player.actor_flags |= ACTOR_CONFUSED;
+			show_message("wait, what's going on? Huh? What? Who?");
 		}
-	when P_POISON:
+	when POTION_POISON:
 		{
 		char *sick = "you feel %s sick.";
 
-		p_know[P_POISON] = TRUE;
-		if (!ISWEARING(R_SUSTSTR))
+		potion_identified[POTION_POISON] = TRUE;
+		if (!wearing_ring(RING_SUSTAIN_STRENGTH))
 		{
-			chg_str(-(rnd(3)+1));
-			msg(sick, "very");
+			change_player_strength(-(random_below(3)+1));
+			show_message(sick, "very");
 		}
 		else
-			msg(sick, "momentarily");
+			show_message(sick, "momentarily");
 		}
-	when P_HEALING:
-		p_know[P_HEALING] = TRUE;
-		if ((pstats.s_hpt += roll(pstats.s_lvl, 4)) > max_hp)
-			pstats.s_hpt = ++max_hp;
-		sight();
-		msg("you begin to feel better");
-	when P_STRENGTH:
-		p_know[P_STRENGTH] = TRUE;
-		chg_str(1);
-		msg("you feel stronger. What bulging muscles!");
-	when P_MFIND:
+	when POTION_HEALING:
+		potion_identified[POTION_HEALING] = TRUE;
+		if ((player_stats.hit_points += roll_dice(player_stats.experience_level, 4)) > player_max_hit_points)
+			player_stats.hit_points = ++player_max_hit_points;
+		end_blindness();
+		show_message("you begin to feel better");
+	when POTION_GAIN_STRENGTH:
+		potion_identified[POTION_GAIN_STRENGTH] = TRUE;
+		change_player_strength(1);
+		show_message("you feel stronger. What bulging muscles!");
+	when POTION_MONSTER_DETECTION:
 #ifndef DEMO
-		fuse(turn_see_off, HUHDURATION);
-		if (mlist == NULL)
-			msg("you have a strange feeling%s.",
-				noterse(" for a moment"));
+		schedule_delayed_action(clear_monster_detection, HUHDURATION);
+		if (level_monsters == NULL)
+			show_message("you have a strange feeling%s.",
+				verbose_text(" for a moment"));
 		else
 		{
-			if (turn_see(FALSE))
+			if (set_monster_detection(FALSE))
 			{
-				p_know[P_MFIND] = TRUE;
+				potion_identified[POTION_MONSTER_DETECTION] = TRUE;
 			}
-			msg("");
+			show_message("");
 		}
 #else
-		msg("you can't move");
-		msg(" and are forced to watch this advertisement");
-		msg("rogue: The ULTIMATE Adventure Game");
-		msg("the most popular game on UNIX ever!");
-		msg("now runs on YOUR IBM PC");
-		msg("UNIX is a trademark of Bell Labs");
-		p_know[P_MFIND] = TRUE;
+		show_message("you can't move");
+		show_message(" and are forced to watch this advertisement");
+		show_message("rogue: The ULTIMATE Adventure Game");
+		show_message("the most popular game on UNIX ever!");
+		show_message("now runs on YOUR IBM PC");
+		show_message("UNIX is a trademark of Bell Labs");
+		potion_identified[POTION_MONSTER_DETECTION] = TRUE;
 #endif
-	  when P_TFIND:
+	  when POTION_MAGIC_DETECTION:
 		/*
 		 * Potion of magic detection.  Find everything interesting on
 		 * the level and show him where they are.  Also give hints as
 		 * to whether he would want to use the object.
 		 */
-		if (lvl_obj != NULL)
+		if (level_items != NULL)
 		{
-			register THING *tp;
+			register Entity *entity;
 			register bool show;
 
 			show = FALSE;
-			for (tp = lvl_obj; tp != NULL; tp = next(tp))
+			for (entity = level_items; entity != NULL; entity = next(entity))
 			{
-				if (is_magic(tp))
+				if (is_magic(entity))
 				{
 					show = TRUE;
-					mvwaddch(hw, tp->o_pos.y, tp->o_pos.x, goodch(tp));
-					p_know[P_TFIND] = TRUE;
+					mvwaddch(hw, entity->item_position.y, entity->item_position.x, display_item_symbol(entity));
+					potion_identified[POTION_MAGIC_DETECTION] = TRUE;
 				}
 			}
-			for (th = mlist; th != NULL; th = next(th))
+			for (monster = level_monsters; monster != NULL; monster = next(monster))
 			{
-				for (tp = th->t_pack; tp != NULL; tp = next(tp))
+				for (entity = monster->actor_inventory; entity != NULL; entity = next(entity))
 				{
-					if (is_magic(tp))
+					if (is_magic(entity))
 					{
 						show = TRUE;
-						mvwaddch(hw, th->t_pos.y, th->t_pos.x, MAGIC);
-						p_know[P_TFIND] = TRUE;
+						mvwaddch(hw, monster->actor_position.y, monster->actor_position.x, MAGIC);
+						potion_identified[POTION_MAGIC_DETECTION] = TRUE;
 					}
 				}
 			}
 			if (show)
 			{
-				msg("You sense the presence of magic.");
+				show_message("You sense the presence of magic.");
 				break;
 			}
 		}
-		msg("you have a strange feeling for a moment%s.",
-				noterse(", then it passes"));
-	when P_PARALYZE:
-		p_know[P_PARALYZE] = TRUE;
-		no_command = HOLDTIME;
-		player.t_flags &= ~ISRUN;
-		msg("you can't move");
-	when P_SEEINVIS:
-		if (!on(player, CANSEE)) {
-			fuse(unsee, SEEDURATION);
-			look(FALSE);
-			invis_on();
+		show_message("you have a strange feeling for a moment%s.",
+				verbose_text(", then it passes"));
+	when POTION_PARALYSIS:
+		potion_identified[POTION_PARALYSIS] = TRUE;
+		incapacitated_turns = HOLDTIME;
+		player.actor_flags &= ~ACTOR_CHASING;
+		show_message("you can't move");
+	when POTION_SEE_INVISIBLE:
+		if (!has_actor_flag(player, ACTOR_SEES_INVISIBLE)) {
+			schedule_delayed_action(end_monster_detection, SEEDURATION);
+			update_player_view(FALSE);
+			reveal_invisible_monsters();
 		}
-		sight();
-		msg("this potion tastes like %s juice", fruit);
-	when P_RAISE:
-		p_know[P_RAISE] = TRUE;
-		msg("you suddenly feel much more skillful");
-		raise_level();
-	when P_XHEAL:
-		p_know[P_XHEAL] = TRUE;
-		if ((pstats.s_hpt += roll(pstats.s_lvl, 8)) > max_hp)
+		end_blindness();
+		show_message("this potion tastes like %s juice", favorite_fruit);
+	when POTION_GAIN_LEVEL:
+		potion_identified[POTION_GAIN_LEVEL] = TRUE;
+		show_message("you suddenly feel much more skillful");
+		gain_experience_level();
+	when POTION_EXTRA_HEALING:
+		potion_identified[POTION_EXTRA_HEALING] = TRUE;
+		if ((player_stats.hit_points += roll_dice(player_stats.experience_level, 8)) > player_max_hit_points)
 		{
-			if (pstats.s_hpt > max_hp + pstats.s_lvl + 1)
-				++max_hp;
-			pstats.s_hpt = ++max_hp;
+			if (player_stats.hit_points > player_max_hit_points + player_stats.experience_level + 1)
+				++player_max_hit_points;
+			player_stats.hit_points = ++player_max_hit_points;
 		}
-		sight();
-		msg("you begin to feel much better");
-	when P_HASTE:
-		p_know[P_HASTE] = TRUE;
+		end_blindness();
+		show_message("you begin to feel much better");
+	when POTION_HASTE:
+		potion_identified[POTION_HASTE] = TRUE;
 		if (add_haste(TRUE))
-			msg("you feel yourself moving much faster");
-	when P_RESTORE:
-		if (ISRING(LEFT, R_ADDSTR))
-			add_str(&pstats.s_str, -cur_ring[LEFT]->o_ac);
-		if (ISRING(RIGHT, R_ADDSTR))
-			add_str(&pstats.s_str, -cur_ring[RIGHT]->o_ac);
-		if (pstats.s_str < max_stats.s_str)
-			pstats.s_str = max_stats.s_str;
-		if (ISRING(LEFT, R_ADDSTR))
-			add_str(&pstats.s_str, cur_ring[LEFT]->o_ac);
-		if (ISRING(RIGHT, R_ADDSTR))
-			add_str(&pstats.s_str, cur_ring[RIGHT]->o_ac);
-		msg("%syou feel warm all over",
-			noterse("hey, this tastes great.  It makes "));
-	when P_BLIND:
-		p_know[P_BLIND] = TRUE;
-		if (!on(player, ISBLIND))
+			show_message("you feel yourself moving much faster");
+	when POTION_RESTORE_STRENGTH:
+		if (hand_has_ring(LEFT, RING_ADD_STRENGTH))
+			adjust_strength(&player_stats.strength, -equipped_rings[LEFT]->item_modifier);
+		if (hand_has_ring(RIGHT, RING_ADD_STRENGTH))
+			adjust_strength(&player_stats.strength, -equipped_rings[RIGHT]->item_modifier);
+		if (player_stats.strength < maximum_player_stats.strength)
+			player_stats.strength = maximum_player_stats.strength;
+		if (hand_has_ring(LEFT, RING_ADD_STRENGTH))
+			adjust_strength(&player_stats.strength, equipped_rings[LEFT]->item_modifier);
+		if (hand_has_ring(RIGHT, RING_ADD_STRENGTH))
+			adjust_strength(&player_stats.strength, equipped_rings[RIGHT]->item_modifier);
+		show_message("%syou feel warm all over",
+			verbose_text("hey, this tastes great.  It makes "));
+	when POTION_BLINDNESS:
+		potion_identified[POTION_BLINDNESS] = TRUE;
+		if (!has_actor_flag(player, ACTOR_BLIND))
 		{
-			player.t_flags |= ISBLIND;
-			fuse(sight, SEEDURATION);
-			look(FALSE);
+			player.actor_flags |= ACTOR_BLIND;
+			schedule_delayed_action(end_blindness, SEEDURATION);
+			update_player_view(FALSE);
 		}
-		msg("a cloak of darkness falls around you");
-	when P_NOP:
-		msg("this potion tastes extremely dull");
+		show_message("a cloak of darkness falls around you");
+	when POTION_THIRST_QUENCHING:
+		show_message("this potion tastes extremely dull");
 	otherwise:
-		msg("what an odd tasting potion!");
+		show_message("what an odd tasting potion!");
 		return;
 	}
-	status();
+	update_status_line();
 	/*
 	 * Throw the item away
 	 */
-	inpack--;
-	if (obj->o_count > 1)
-		obj->o_count--;
+	inventory_count--;
+	if (item->item_quantity > 1)
+		item->item_quantity--;
 	else
 	{
-		detach(pack, obj);
-		discardit = TRUE;
+		detach(player_inventory, item);
+		consume_potion = TRUE;
 	}
 
-	call_it(p_know[obj->o_which], &p_guess[obj->o_which]);
+	prompt_item_label(potion_identified[item->item_subtype], &potion_labels[item->item_subtype]);
 
-	if (discardit)
-		discard(obj);
+	if (consume_potion)
+		release_entity(item);
 }
 
 /*
@@ -225,15 +225,15 @@ quaff(void)
  *	Turn on the ability to see invisible
  */
 void
-invis_on(void)
+reveal_invisible_monsters(void)
 {
-	register THING *th;
+	register Entity *actor;
 
-	player.t_flags |= CANSEE;
-	for (th = mlist; th != NULL; th = next(th))
-	if (on(*th, ISINVIS) && see_monst(th))
+	player.actor_flags |= ACTOR_SEES_INVISIBLE;
+	for (actor = level_monsters; actor != NULL; actor = next(actor))
+	if (has_actor_flag(*actor, ACTOR_INVISIBLE) && player_can_see_monster(actor))
 	{
-		mvaddch(th->t_pos.y, th->t_pos.x,th->t_disguise);
+		mvaddch(actor->actor_position.y, actor->actor_position.x,actor->actor_disguise);
 	}
 }
 
@@ -242,34 +242,34 @@ invis_on(void)
  *	Put on or off seeing monsters on this level
  */
 bool
-turn_see(bool turn_off)
+set_monster_detection(bool turn_off)
 {
-	register THING *mp;
+	register Entity *monster;
 	register bool can_see, add_new;
-	byte was_there = inch();
+	byte previous_symbol = inch();
 
 	add_new = FALSE;
-	for (mp = mlist; mp != NULL; mp = next(mp)) {
-		move(mp->t_pos.y, mp->t_pos.x);
-		can_see = (see_monst(mp) || (was_there = inch()) == mp->t_type);
+	for (monster = level_monsters; monster != NULL; monster = next(monster)) {
+		move(monster->actor_position.y, monster->actor_position.x);
+		can_see = (player_can_see_monster(monster) || (previous_symbol = inch()) == monster->actor_species);
 		if (turn_off) {
-			if (!see_monst(mp) && mp->t_oldch != '@')
-				addch(mp->t_oldch);
+			if (!player_can_see_monster(monster) && monster->actor_previous_tile != '@')
+				addch(monster->actor_previous_tile);
 		} else {
 			if (!can_see) {
 				standout();
-				mp->t_oldch = was_there;
+				monster->actor_previous_tile = previous_symbol;
 			}
-			addch(mp->t_type);
+			addch(monster->actor_species);
 			if (!can_see) {
 				standend();
 				add_new = TRUE;
 			}
 		}
 	}
-	player.t_flags |= SEEMONST;
+	player.actor_flags |= ACTOR_DETECTS_MONSTERS;
 	if (turn_off)
-		player.t_flags &= ~SEEMONST;
+		player.actor_flags &= ~ACTOR_DETECTS_MONSTERS;
 	return add_new;
 }
 
@@ -278,28 +278,28 @@ turn_see(bool turn_off)
  *	Compute the effect of this potion hitting a monster.
  */
 void
-th_effect(THING *obj, THING *tp)
+apply_thrown_potion(Entity *item, Entity *target)
 {
-	switch (obj->o_which)
+	switch (item->item_subtype)
 	{
-	when P_CONFUSE:
-	case P_BLIND:
-		tp->t_flags |= ISHUH;
-		msg("the %s appears confused", monsters[tp->t_type-'A'].m_name);
-	when P_PARALYZE:
-		tp->t_flags &= ~ISRUN;
-		tp->t_flags |= ISHELD;
-	when P_HEALING:
-	case P_XHEAL:
-		if ((tp->t_stats.s_hpt += rnd(8)) > tp->t_stats.s_maxhp)
-		tp->t_stats.s_hpt = ++tp->t_stats.s_maxhp;
-	when P_RAISE:
-		tp->t_stats.s_hpt += 8;
-		tp->t_stats.s_maxhp += 8;
-		tp->t_stats.s_lvl++;
-	when P_HASTE:
-		tp->t_flags |= ISHASTE;
+	when POTION_CONFUSION:
+	case POTION_BLINDNESS:
+		target->actor_flags |= ACTOR_CONFUSED;
+		show_message("the %s appears confused", monster_definitions[target->actor_species-'A'].name);
+	when POTION_PARALYSIS:
+		target->actor_flags &= ~ACTOR_CHASING;
+		target->actor_flags |= ACTOR_HELD;
+	when POTION_HEALING:
+	case POTION_EXTRA_HEALING:
+		if ((target->actor_stats.hit_points += random_below(8)) > target->actor_stats.max_hit_points)
+		target->actor_stats.hit_points = ++target->actor_stats.max_hit_points;
+	when POTION_GAIN_LEVEL:
+		target->actor_stats.hit_points += 8;
+		target->actor_stats.max_hit_points += 8;
+		target->actor_stats.experience_level++;
+	when POTION_HASTE:
+		target->actor_flags |= ACTOR_HASTED;
 		break;
 	}
-	msg("the flask shatters.");
+	show_message("the flask shatters.");
 }

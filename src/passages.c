@@ -12,117 +12,117 @@
  *	Draw a corridor from a room in a certain direction.
  */
 void
-conn(r1, r2)
-	int r1, r2;
+connect_rooms(first_room_index, second_room_index)
+	int first_room_index, second_room_index;
 {
-	struct room *rpf, *rpt = NULL;
-	register int rmt, rm;
+	struct room *source_room, *destination_room = NULL;
+	register int destination_index, source_index;
 	int distance = 0, turn_spot, turn_distance;
-	int direc;
-	coord del, curr, turn_delta, spos, epos;
+	int direction;
+	Position step, position, turn_delta, start_position, end_position;
 
-	if (r1 < r2) {
-		rm = r1;
-		if (r1 + 1 == r2)
-			direc = 'r';
+	if (first_room_index < second_room_index) {
+		source_index = first_room_index;
+		if (first_room_index + 1 == second_room_index)
+			direction = 'r';
 		else
-			direc = 'd';
+			direction = 'd';
 	} else {
-		rm = r2;
-		if (r2 + 1 == r1)
-			direc = 'r';
+		source_index = second_room_index;
+		if (second_room_index + 1 == first_room_index)
+			direction = 'r';
 		else
-			direc = 'd';
+			direction = 'd';
 	}
-	rpf = &rooms[rm];
+	source_room = &rooms[source_index];
 	/*
 	 * Set up the movement variables, in two cases:
 	 * first drawing one down.
 	 */
-	if (direc == 'd') {
-		rmt = rm + 3;				/* room # of dest */
-		rpt = &rooms[rmt];			/* room pointer of dest */
-		del.x = 0;				/* direction of move */
-		del.y = 1;
+	if (direction == 'd') {
+		destination_index = source_index + 3;				/* room # of dest */
+		destination_room = &rooms[destination_index];			/* room pointer of dest */
+		step.x = 0;				/* direction of move */
+		step.y = 1;
 		/*
 		 * If we are drawing from/to regular or maze rooms, we have
 		 * to pick the spot we draw from/to
 		 */
-		if ((rpf->r_flags & ISGONE) == 0 || (rpf->r_flags & ISMAZE)) {
-			spos.y = rpf->r_pos.y + rpf->r_max.y - 1;
+		if ((source_room->flags & ROOM_ABSENT) == 0 || (source_room->flags & ROOM_MAZE)) {
+			start_position.y = source_room->origin.y + source_room->size.y - 1;
 			do {
-				spos.x = rpf->r_pos.x + rnd(rpf->r_max.x - 2) + 1;
-			} while (chat(spos.y,spos.x) == ' ');
+				start_position.x = source_room->origin.x + random_below(source_room->size.x - 2) + 1;
+			} while (terrain_at(start_position.y,start_position.x) == ' ');
 		} else {
-			spos.x = rpf->r_pos.x;
-			spos.y = rpf->r_pos.y;
+			start_position.x = source_room->origin.x;
+			start_position.y = source_room->origin.y;
 		}
-		epos.y = rpt->r_pos.y;
-		if ((rpt->r_flags & ISGONE) == 0 || (rpt->r_flags & ISMAZE)) {
+		end_position.y = destination_room->origin.y;
+		if ((destination_room->flags & ROOM_ABSENT) == 0 || (destination_room->flags & ROOM_MAZE)) {
 			do {
-				epos.x = rpt->r_pos.x + rnd(rpt->r_max.x - 2) + 1;
-			} while (chat(epos.y,epos.x) == ' ');
+				end_position.x = destination_room->origin.x + random_below(destination_room->size.x - 2) + 1;
+			} while (terrain_at(end_position.y,end_position.x) == ' ');
 		} else
-			epos.x = rpt->r_pos.x;
-		distance = abs(spos.y - epos.y) - 1;	/* distance to move */
+			end_position.x = destination_room->origin.x;
+		distance = abs(start_position.y - end_position.y) - 1;	/* distance to move */
 		turn_delta.y = 0;			/* direction to turn */
-		turn_delta.x = (spos.x < epos.x ? 1 : -1);
-		turn_distance = abs(spos.x - epos.x);	/* how far to turn */
-	} else if (direc == 'r') {			/* setup for moving right */
-		rmt = rm + 1;
-		rpt = &rooms[rmt];
-		del.x = 1;
-		del.y = 0;
-		if ((rpf->r_flags & ISGONE) == 0 || (rpf->r_flags & ISMAZE)) {
-			spos.x = rpf->r_pos.x + rpf->r_max.x-1;
+		turn_delta.x = (start_position.x < end_position.x ? 1 : -1);
+		turn_distance = abs(start_position.x - end_position.x);	/* how far to turn */
+	} else if (direction == 'r') {			/* setup for moving right */
+		destination_index = source_index + 1;
+		destination_room = &rooms[destination_index];
+		step.x = 1;
+		step.y = 0;
+		if ((source_room->flags & ROOM_ABSENT) == 0 || (source_room->flags & ROOM_MAZE)) {
+			start_position.x = source_room->origin.x + source_room->size.x-1;
 			do {
-				spos.y = rpf->r_pos.y + rnd(rpf->r_max.y-2)+1;
-			} while (chat(spos.y,spos.x) == ' ');
+				start_position.y = source_room->origin.y + random_below(source_room->size.y-2)+1;
+			} while (terrain_at(start_position.y,start_position.x) == ' ');
 		} else {
-			spos.x = rpf->r_pos.x;
-			spos.y = rpf->r_pos.y;
+			start_position.x = source_room->origin.x;
+			start_position.y = source_room->origin.y;
 		}
-		epos.x = rpt->r_pos.x;
-		if ((rpt->r_flags & ISGONE) == 0 || (rpt->r_flags & ISMAZE)) {
+		end_position.x = destination_room->origin.x;
+		if ((destination_room->flags & ROOM_ABSENT) == 0 || (destination_room->flags & ROOM_MAZE)) {
 			do {
-				epos.y = rpt->r_pos.y + rnd(rpt->r_max.y-2)+1;
-			} while (chat(epos.y, epos.x) == ' ');
+				end_position.y = destination_room->origin.y + random_below(destination_room->size.y-2)+1;
+			} while (terrain_at(end_position.y, end_position.x) == ' ');
 		} else
-			epos.y = rpt->r_pos.y;
-		distance = abs(spos.x - epos.x) - 1;
-		turn_delta.y = (spos.y < epos.y ? 1 : -1);
+			end_position.y = destination_room->origin.y;
+		distance = abs(start_position.x - end_position.x) - 1;
+		turn_delta.y = (start_position.y < end_position.y ? 1 : -1);
 		turn_delta.x = 0;
-		turn_distance = abs(spos.y - epos.y);
+		turn_distance = abs(start_position.y - end_position.y);
 	}
 #ifdef DEBUG
 	else
 		debug("error in connection tables");
 #endif
-	turn_spot = rnd(distance-1) + 1;
+	turn_spot = random_below(distance-1) + 1;
 	/*
 	 * Draw in the doors on either side of the passage or just put #'s
 	 * if the rooms are gone.
 	 */
-	if (!(rpf->r_flags & ISGONE))
-		door(rpf, &spos);
+	if (!(source_room->flags & ROOM_ABSENT))
+		place_door(source_room, &start_position);
 	else
-		psplat(spos.y, spos.x);
-	if (rpt && !(rpt->r_flags & ISGONE))
-		door(rpt, &epos);
+		carve_passage_cell(start_position.y, start_position.x);
+	if (destination_room && !(destination_room->flags & ROOM_ABSENT))
+		place_door(destination_room, &end_position);
 	else
-		psplat(epos.y, epos.x);
+		carve_passage_cell(end_position.y, end_position.x);
 	/*
 	 * Get ready to move...
 	 */
-	curr.x = spos.x;
-	curr.y = spos.y;
+	position.x = start_position.x;
+	position.y = start_position.y;
 	while (distance)
 	{
 	/*
 	 * Move to new position
 	 */
-	curr.x += del.x;
-	curr.y += del.y;
+	position.x += step.x;
+	position.y += step.y;
 	/*
 	 * Check if we are at the turn place, if so do the turn
 	 */
@@ -130,23 +130,23 @@ conn(r1, r2)
 	{
 		while (turn_distance--)
 		{
-		psplat(curr.y, curr.x);
-		curr.x += turn_delta.x;
-		curr.y += turn_delta.y;
+		carve_passage_cell(position.y, position.x);
+		position.x += turn_delta.x;
+		position.y += turn_delta.y;
 		}
 	}
 	/*
 	 * Continue digging along
 	 */
-	psplat(curr.y, curr.x);
+	carve_passage_cell(position.y, position.x);
 	distance--;
 	}
-	curr.x += del.x;
-	curr.y += del.y;
-	if (!ce(curr, epos)) {
-	epos.x -= del.x;
-	epos.y -= del.y;
-	psplat(epos.y, epos.x);
+	position.x += step.x;
+	position.y += step.y;
+	if (!positions_equal(position, end_position)) {
+	end_position.x -= step.x;
+	end_position.y -= step.y;
+	carve_passage_cell(end_position.y, end_position.x);
 	}
 }
 
@@ -155,16 +155,16 @@ conn(r1, r2)
  *	Draw all the passages on a level.
  */
 void
-do_passages()
+generate_passages()
 {
 	register int i, j;
-	int roomcount;
+	int connected_rooms;
 	static struct rdes
 	{
-	char	conn[MAXROOMS];		/* possible to connect to room i? */
+	char	connect_rooms[MAXROOMS];		/* possible to connect to room i? */
 	char	isconn[MAXROOMS];	/* connection been made to room i? */
 	char	ingraph;		/* this room in graph already? */
-	} rdes[MAXROOMS] = {
+	} room_graph[MAXROOMS] = {
 	{ { 0, 1, 0, 1, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
 	{ { 1, 0, 1, 0, 1, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
 	{ { 0, 1, 0, 0, 0, 1, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
@@ -175,25 +175,25 @@ do_passages()
 	{ { 0, 0, 0, 0, 1, 0, 1, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
 	{ { 0, 0, 0, 0, 0, 1, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 }
 	};
-	struct rdes *r1, *r2 = NULL;
+	struct rdes *source_node, *destination_node = NULL;
 
 	/*
 	 * reinitialize room graph description
 	 */
-	for (r1 = rdes; r1 < &rdes[MAXROOMS]; r1++)
+	for (source_node = room_graph; source_node < &room_graph[MAXROOMS]; source_node++)
 	{
 		for (j = 0; j < MAXROOMS; j++)
-			r1->isconn[j] = FALSE;
-		r1->ingraph = FALSE;
+			source_node->isconn[j] = FALSE;
+		source_node->ingraph = FALSE;
 	}
 
 	/*
 	 * starting with one room, connect it to a random adjacent room and
 	 * then pick a new room to start with.
 	 */
-	roomcount = 1;
-	r1 = &rdes[rnd(MAXROOMS)];
-	r1->ingraph = TRUE;
+	connected_rooms = 1;
+	source_node = &room_graph[random_below(MAXROOMS)];
+	source_node->ingraph = TRUE;
 	do
 	{
 		/*
@@ -201,8 +201,8 @@ do_passages()
 		 */
 		j = 0;
 		for (i = 0; i < MAXROOMS; i++)
-			if (r1->conn[i] && !rdes[i].ingraph && rnd(++j) == 0)
-				r2 = &rdes[i];
+			if (source_node->connect_rooms[i] && !room_graph[i].ingraph && random_below(++j) == 0)
+				destination_node = &room_graph[i];
 		/*
 		 * if no adjacent rooms are outside the graph, pick a new room
 		 * to look from
@@ -210,8 +210,8 @@ do_passages()
 		if (j == 0)
 		{
 			do
-				r1 = &rdes[rnd(MAXROOMS)];
-			while (!r1->ingraph);
+				source_node = &room_graph[random_below(MAXROOMS)];
+			while (!source_node->ingraph);
 		}
 		/*
 		 * otherwise, connect new room to the graph, and draw a tunnel
@@ -219,44 +219,44 @@ do_passages()
 		 */
 		else
 		{
-			r2->ingraph = TRUE;
-			i = r1 - rdes;
-			j = r2 - rdes;
-			conn(i, j);
-			r1->isconn[j] = TRUE;
-			r2->isconn[i] = TRUE;
-			roomcount++;
+			destination_node->ingraph = TRUE;
+			i = source_node - room_graph;
+			j = destination_node - room_graph;
+			connect_rooms(i, j);
+			source_node->isconn[j] = TRUE;
+			destination_node->isconn[i] = TRUE;
+			connected_rooms++;
 		}
-	} while (roomcount < MAXROOMS);
+	} while (connected_rooms < MAXROOMS);
 
 	/*
 	 * attempt to add passages to the graph a random number of times so
 	 * that there isn't always just one unique passage through it.
 	 */
-	for (roomcount = rnd(5); roomcount > 0; roomcount--)
+	for (connected_rooms = random_below(5); connected_rooms > 0; connected_rooms--)
 	{
-		r1 = &rdes[rnd(MAXROOMS)];	/* a random room to look from */
+		source_node = &room_graph[random_below(MAXROOMS)];	/* a random room to look from */
 		/*
 		 * find an adjacent room not already connected
 		 */
 		j = 0;
 		for (i = 0; i < MAXROOMS; i++)
-			if (r1->conn[i] && !r1->isconn[i] && rnd(++j) == 0)
-				r2 = &rdes[i];
+			if (source_node->connect_rooms[i] && !source_node->isconn[i] && random_below(++j) == 0)
+				destination_node = &room_graph[i];
 		/*
 		 * if there is one, connect it and look for the next added
 		 * passage
 		 */
 		if (j != 0)
 		{
-			i = r1 - rdes;
-			j = r2 - rdes;
-			conn(i, j);
-			r1->isconn[j] = TRUE;
-			r2->isconn[i] = TRUE;
+			i = source_node - room_graph;
+			j = destination_node - room_graph;
+			connect_rooms(i, j);
+			source_node->isconn[j] = TRUE;
+			destination_node->isconn[i] = TRUE;
 		}
 	}
-	passnum();
+	number_passages();
 }
 
 
@@ -266,23 +266,23 @@ do_passages()
  *	the exits array of the room.
  */
 void
-door(rm, cp)
-	struct room *rm;
-	coord *cp;
+place_door(room, position)
+	struct room *room;
+	Position *position;
 {
-	register int index, xit;
+	register int index, exit_index;
 
-	index = INDEX(cp->y, cp->x);
-	if (rnd(10) + 1 < level && rnd(5) == 0)
+	index = map_index(position->y, position->x);
+	if (random_below(10) + 1 < dungeon_level && random_below(5) == 0)
 	{
-		_level[index] = (cp->y == rm->r_pos.y || cp->y == rm->r_pos.y + rm->r_max.y - 1) ? HWALL : VWALL;
-		_flags[index] &= ~F_REAL;
+		terrain_map[index] = (position->y == room->origin.y || position->y == room->origin.y + room->size.y - 1) ? HWALL : VWALL;
+		cell_flags[index] &= ~CELL_REVEALED;
 	}
 	else
-		_level[index] = DOOR;
-	xit = rm->r_nexits++;
-	rm->r_exit[xit].y = cp->y;
-	rm->r_exit[xit].x = cp->x;
+		terrain_map[index] = DOOR;
+	exit_index = room->exit_count++;
+	room->exits[exit_index].y = position->y;
+	room->exits[exit_index].x = position->x;
 }
 
 //@ Unused function
@@ -296,9 +296,9 @@ add_pass()
 {
 	register int y, x, ch;
 
-	for (y = 1; y < maxrow; y++)
+	for (y = 1; y < dungeon_bottom_row; y++)
 		for (x = 0; x < COLS; x++)
-			if ((ch = chat(y, x)) == DOOR || ch == PASSAGE)
+			if ((ch = terrain_at(y, x)) == DOOR || ch == PASSAGE)
 				mvaddch(y, x, ch);
 }
 #endif
@@ -307,24 +307,24 @@ add_pass()
  * passnum:
  *	Assign a number to each passageway
  */
-static int pnum;
-static byte newpnum;
+static int passage_number;
+static byte passage_needs_number;
 
 void
-passnum()
+number_passages()
 {
-	register struct room *rp;
+	register struct room *room;
 	register int i;
 
-	pnum = 0;
-	newpnum = FALSE;
-	for (rp = passages; rp < &passages[MAXPASS]; rp++)
-		rp->r_nexits = 0;
-	for (rp = rooms; rp < &rooms[MAXROOMS]; rp++)
-		for (i = 0; i < rp->r_nexits; i++)
+	passage_number = 0;
+	passage_needs_number = FALSE;
+	for (room = passages; room < &passages[MAXPASS]; room++)
+		room->exit_count = 0;
+	for (room = rooms; room < &rooms[MAXROOMS]; room++)
+		for (i = 0; i < room->exit_count; i++)
 		{
-			newpnum++;
-			numpass(rp->r_exit[i].y, rp->r_exit[i].x);
+			passage_needs_number++;
+			mark_connected_passage(room->exits[i].y, room->exits[i].x);
 		}
 }
 /*
@@ -332,48 +332,48 @@ passnum()
  *	Number a passageway square and its brethren
  */
 void
-numpass(y, x)
+mark_connected_passage(y, x)
 	int y, x;
 {
-	register byte *fp;
-	register struct room *rp;
-	register byte ch;
+	register byte *flags_cursor;
+	register struct room *room;
+	register byte character;
 
-	if (offmap(y,x))
+	if (outside_dungeon(y,x))
 		return;
-	fp = &flat(y, x);
-	if (*fp & F_PNUM)
+	flags_cursor = &cell_flags_at(y, x);
+	if (*flags_cursor & PASSAGE_NUMBER_MASK)
 		return;
-	if (newpnum) {
-		pnum++;
-		newpnum = FALSE;
+	if (passage_needs_number) {
+		passage_number++;
+		passage_needs_number = FALSE;
 	}
 	/*
 	 * check to see if it is a door or secret door, i.e., a new exit,
 	 * or a numerable type of place
 	 */
-	if ((ch = chat(y, x)) == DOOR || (!(*fp & F_REAL) && ch != FLOOR)) {
-		rp = &passages[pnum];
-		rp->r_exit[rp->r_nexits].y = y;
-		rp->r_exit[rp->r_nexits++].x = x;
-	} else if (!(*fp & F_PASS))
+	if ((character = terrain_at(y, x)) == DOOR || (!(*flags_cursor & CELL_REVEALED) && character != FLOOR)) {
+		room = &passages[passage_number];
+		room->exits[room->exit_count].y = y;
+		room->exits[room->exit_count++].x = x;
+	} else if (!(*flags_cursor & CELL_PASSAGE))
 		return;
-	*fp |= pnum;
+	*flags_cursor |= passage_number;
 	/*
 	 * recurse on the surrounding places
 	 */
-	numpass(y + 1, x);
-	numpass(y - 1, x);
-	numpass(y, x + 1);
-	numpass(y, x - 1);
+	mark_connected_passage(y + 1, x);
+	mark_connected_passage(y - 1, x);
+	mark_connected_passage(y, x + 1);
+	mark_connected_passage(y, x - 1);
 }
 
 void
-psplat(y, x)
+carve_passage_cell(y, x)
 	shint y, x;
 {
 	register int idx;
 
-	_level[idx = INDEX(y, x)] = PASSAGE;
-	_flags[idx] |= F_PASS;
+	terrain_map[idx = map_index(y, x)] = PASSAGE;
+	cell_flags[idx] |= CELL_PASSAGE;
 }

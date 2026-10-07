@@ -7,44 +7,44 @@
 #include	"rogue.h"
 #include	"curses.h"
 
-static int lastcount;
-static byte lastch, do_take, lasttake;
+static int previous_repeat_count;
+static byte previous_command, pickup_enabled, previous_pickup_enabled;
 
 void
-command()
+process_turn()
 {
-	register int ntimes;
+	register int remaining_actions;
 
-	if (on(player, ISHASTE))
-		ntimes = rnd(2) + 2;
+	if (has_actor_flag(player, ACTOR_HASTED))
+		remaining_actions = random_below(2) + 2;
 	else
-		ntimes = 1;
-	while (ntimes--) {
-		status();
+		remaining_actions = 1;
+	while (remaining_actions--) {
+		update_status_line();
 #ifdef WIZARD
 		if (wizard)
-			noscore = TRUE;
+			score_disabled = TRUE;
 #endif
-		if (no_command) {
-			if (--no_command <= 0) {
-				msg("you can move again");
-				no_command = 0;
+		if (incapacitated_turns) {
+			if (--incapacitated_turns <= 0) {
+				show_message("you can move again");
+				incapacitated_turns = 0;
 			}
-			cur_refresh();  //@ sleeping, fainted, frozen, etc
+			screen_refresh();  //@ sleeping, fainted, frozen, etc
 		} else
-			execcom();
-		do_fuses();
-		do_daemons();
-		for (ntimes = LEFT; ntimes <= RIGHT; ntimes++)
+			execute_command();
+		run_delayed_actions();
+		run_recurring_actions();
+		for (remaining_actions = LEFT; remaining_actions <= RIGHT; remaining_actions++)
 		{
-			if (cur_ring[ntimes])
+			if (equipped_rings[remaining_actions])
 			{
-				switch (cur_ring[ntimes]->o_which)
+				switch (equipped_rings[remaining_actions]->item_subtype)
 				{
-				when R_SEARCH:
+				when RING_SEARCHING:
 					search();
-				when R_TELEPORT:
-					if (rnd(50) == 17)
+				when RING_TELEPORTATION:
+					if (random_below(50) == 17)
 						teleport();
 					break;
 				}
@@ -55,26 +55,26 @@ command()
 
 //@ No need to declare in rogue.h
 byte
-com_char()
+read_command_key()
 {
-	register bool same;
-	register byte ch;
+	register bool run_mode_unchanged;
+	register byte character;
 
-	same = (fastmode == faststate);
-	ch = readchar();
-	if (same)
-		fastmode = faststate;
+	run_mode_unchanged = (auto_run_enabled == scroll_lock_run_enabled);
+	character = read_game_key();
+	if (run_mode_unchanged)
+		auto_run_enabled = scroll_lock_run_enabled;
 	else
-		fastmode = !faststate;
-	switch (ch) {
-		when '\b': ch = 'h';
-		when '+': ch = 't';
-		when '-': ch = 'z';
+		auto_run_enabled = !scroll_lock_run_enabled;
+	switch (character) {
+		when '\b': character = 'h';
+		when '+': character = 't';
+		when '-': character = 'z';
 		break;
 	}
-	if (mpos && !running)
-		msg("");
-	return ch;
+	if (message_column && !running)
+		show_message("");
+	return character;
 }
 
 //@ No need to declare in rogue.h
@@ -83,69 +83,69 @@ com_char()
  * Return the command character to be executed.
  */
 byte
-get_prefix()
+read_command_prefix()
 {
-	register int junk;
-	register byte retch, ch;
+	register int parsed_repeat_count;
+	register byte command_key, character;
 
-	after = TRUE;
-	fastmode = faststate;
-	look(TRUE); //@ draw player in updated position on every non-sleep frame
+	turn_consumed = TRUE;
+	auto_run_enabled = scroll_lock_run_enabled;
+	update_player_view(TRUE); //@ draw player in updated position on every non-sleep frame
 	if (!running)
 		door_stop = FALSE;
-	do_take = TRUE;
-	again = FALSE;
-	if (--count > 0) {
-		do_take = lasttake;
-		retch = lastch;
-		fastmode = FALSE;
-		cur_refresh();  //@ repeated commands, ie, "10s"
+	pickup_enabled = TRUE;
+	repeating_command = FALSE;
+	if (--command_repeat_count > 0) {
+		pickup_enabled = previous_pickup_enabled;
+		command_key = previous_command;
+		auto_run_enabled = FALSE;
+		screen_refresh();  //@ repeated commands, ie, "10s"
 	} else {
-		count = 0;
+		command_repeat_count = 0;
 		if (running) {
-			retch = runch;
-			do_take = lasttake;
-			cur_refresh();  //@ running ("H", "fh", "L", etc)
+			command_key = run_direction;
+			pickup_enabled = previous_pickup_enabled;
+			screen_refresh();  //@ running ("H", "fh", "L", etc)
 		} else {
-			for (retch = 0; retch == 0; ) {
-				switch (ch = com_char()) {
+			for (command_key = 0; command_key == 0; ) {
+				switch (character = read_command_key()) {
 					case '0': case '1': case '2': case '3': case '4':
 					case '5': case '6': case '7': case '8': case '9':
-						junk = count * 10;
-						if ((junk += ch - '0') > 0 && junk < 10000)
-							count = junk;
-						show_count();
+						parsed_repeat_count = command_repeat_count * 10;
+						if ((parsed_repeat_count += character - '0') > 0 && parsed_repeat_count < 10000)
+							command_repeat_count = parsed_repeat_count;
+						show_repeat_count();
 					when 'f':
-						fastmode = !fastmode;
+						auto_run_enabled = !auto_run_enabled;
 					when 'g':
-						do_take = FALSE;
+						pickup_enabled = FALSE;
 					when 'a':
-						retch = lastch;
-						count = lastcount;
-						do_take = lasttake;
-						again = TRUE;
+						command_key = previous_command;
+						command_repeat_count = previous_repeat_count;
+						pickup_enabled = previous_pickup_enabled;
+						repeating_command = TRUE;
 					when ' ':	/* Spaces are ignored */
 					when ESCAPE:
 						door_stop = FALSE;
-						count = 0;
-						show_count();
+						command_repeat_count = 0;
+						show_repeat_count();
 					otherwise:
-						retch = ch;
+						command_key = character;
 				}
 			}
 		}
 	}
-	if (count)
-		fastmode = FALSE;
-	switch (retch) {
+	if (command_repeat_count)
+		auto_run_enabled = FALSE;
+	switch (command_key) {
 	case 'h': case 'j': case 'k': case 'l':
 	case 'y': case 'u': case 'b': case 'n':
-		if (fastmode && !running ) {
-			if (!on(player, ISBLIND)) {
+		if (auto_run_enabled && !running ) {
+			if (!has_actor_flag(player, ACTOR_BLIND)) {
 				door_stop = TRUE;
-				firstmove = TRUE;
+				first_run_step = TRUE;
 			}
-			retch = toupper(retch);
+			command_key = toupper(command_key);
 		}
 		/* fallthrough */
 	case 'H': case 'J': case 'K': case 'L':
@@ -157,117 +157,117 @@ get_prefix()
 #endif //WIZARD
 		break;
 	default:
-		count = 0;
+		command_repeat_count = 0;
 		break;
 	}
-	if (count || lastcount)
-		show_count();
-	lastch = retch;
-	lastcount = count;
-	lasttake = do_take;
-	return retch;
+	if (command_repeat_count || previous_repeat_count)
+		show_repeat_count();
+	previous_command = command_key;
+	previous_repeat_count = command_repeat_count;
+	previous_pickup_enabled = pickup_enabled;
+	return command_key;
 }
 
 void
-show_count()
+show_repeat_count()
 {
 	move(LINES-2, COLS-4);
-	if (count)
-		printw("%-4d", count);
+	if (command_repeat_count)
+		printw("%-4d", command_repeat_count);
 	else
 		addstr("    ");
 }
 
 void
-execcom()
+execute_command()
 {
-	coord mv;
-	register int ch;
+	Position movement;
+	register int character;
 
 	do {
-		switch (ch = get_prefix()) {
+		switch (character = read_command_prefix()) {
 		when 'h': case 'j': case 'k': case 'l':
 		case 'y': case 'u': case 'b': case 'n':
-			find_dir(ch, &mv);
-			do_move(mv.y, mv.x);
+			decode_direction(character, &movement);
+			move_player(movement.y, movement.x);
 		when 'H': case 'J': case 'K': case 'L':
 		case 'Y': case 'U': case 'B': case 'N':
-			do_run(tolower(ch));
+			start_player_run(tolower(character));
 		when 't':
-			if (get_dir())
-				missile(delta.y, delta.x);
+			if (read_direction())
+				throw_item(action_direction.y, action_direction.x);
 			else
-				after = FALSE;
-		when 'Q': after = FALSE; quit();
-		when 'i': after = FALSE; inventory(pack, 0, "");
-		when 'd': drop();
-		when 'q': quaff();
+				turn_consumed = FALSE;
+		when 'Q': turn_consumed = FALSE; quit();
+		when 'i': turn_consumed = FALSE; show_inventory(player_inventory, 0, "");
+		when 'd': drop_item();
+		when 'q': drink_potion();
 		when 'r': read_scroll();
-		when 'e': eat();
+		when 'e': eat_food();
 		when 'w': wield();
-		when 'W': wear();
-		when 'T': take_off();
-		when 'P': ring_on();
-		when 'R': ring_off();
-		when 'c': after = FALSE; call();
-		when '>': after = FALSE; d_level();
-		when '<': after = FALSE; u_level();
-		when '/': after = FALSE; help(helpobjs);
-		when '?': after = FALSE; help(helpcoms);
-		when '!': after = FALSE; fakedos();
+		when 'W': wear_armor();
+		when 'T': remove_armor();
+		when 'P': put_on_ring();
+		when 'R': remove_ring();
+		when 'c': turn_consumed = FALSE; name_item_type();
+		when '>': turn_consumed = FALSE; descend_stairs();
+		when '<': turn_consumed = FALSE; ascend_stairs();
+		when '/': turn_consumed = FALSE; show_help(symbol_help);
+		when '?': turn_consumed = FALSE; show_help(command_help);
+		when '!': turn_consumed = FALSE; show_fake_dos();
 		when 's': search();
 		when 'z':
-			if (get_dir())
-				do_zap();
+			if (read_direction())
+				zap_wand();
 			else
-				after = FALSE;
-		when 'D': after = FALSE; discovered();
+				turn_consumed = FALSE;
+		when 'D': turn_consumed = FALSE; show_discoveries();
 		when CTRL('T'):
-			after = FALSE;
-			msg((expert ^= 1)
+			turn_consumed = FALSE;
+			show_message((expert ^= 1)
 				? "Ok, I'll be brief"
 				: "Goodie, I can use big words again!");
-		when 'F': after = FALSE; do_macro(macro, MACROSZ);
-		when CTRL('F'): after = FALSE; typebuf = macro;
-		when CTRL('R'): after = FALSE; msg(huh);
+		when 'F': turn_consumed = FALSE; edit_keyboard_macro(keyboard_macro, MACROSZ);
+		when CTRL('F'): turn_consumed = FALSE; pending_macro_input = keyboard_macro;
+		when CTRL('R'): turn_consumed = FALSE; show_message(previous_message);
 		when 'v':
-			after = FALSE;
-			if (strcmp(whoami,"The Grand Beeking") == 0)
-				addmsg("(%d)",csum());
-			msg("Rogue version %d.%d (Mr. Mctesq was here)", revno, verno);
-		when 'S': after = FALSE; save_game();
-		when '.': doctor();
+			turn_consumed = FALSE;
+			if (strcmp(player_name,"The Grand Beeking") == 0)
+				append_message("(%d)",code_checksum());
+			show_message("Rogue version %d.%d (Mr. Mctesq was here)", version_major, version_minor);
+		when 'S': turn_consumed = FALSE; save_game();
+		when '.': regenerate_health();
 		when '^':
-			after = FALSE;
-			if (get_dir()) {
-				coord lookat;
+			turn_consumed = FALSE;
+			if (read_direction()) {
+				Position trap_position;
 
-				lookat.y = hero.y + delta.y;
-				lookat.x = hero.x + delta.x;
-				if (chat(lookat.y, lookat.x) != TRAP)
-					msg("no trap there.");
+				trap_position.y = player_position.y + action_direction.y;
+				trap_position.x = player_position.x + action_direction.x;
+				if (terrain_at(trap_position.y, trap_position.x) != TRAP)
+					show_message("no trap there.");
 				else
-					msg("you found %s",
-						tr_name(flat(lookat.y, lookat.x) & F_TMASK));
+					show_message("you found %s",
+						trap_name(cell_flags_at(trap_position.y, trap_position.x) & TRAP_TYPE_MASK));
 			}
-		when 'o': after = FALSE; msg("i don't have any options, oh my!");
+		when 'o': turn_consumed = FALSE; show_message("i don't have any options, oh my!");
 		when CTRL('L'):
-			after = FALSE;
-			msg("the screen looks fine to me (jll was here)");
+			turn_consumed = FALSE;
+			show_message("the screen looks fine to me (jll was here)");
 #ifdef WIZARD
-		when 'C': after = FALSE; create_obj();
+		when 'C': turn_consumed = FALSE; create_obj();
 #endif
 		otherwise:
-			after = FALSE;
-			save_msg = FALSE;
-			msg("illegal command '%s'", io_unctrl(ch));
-			count = 0;
-			save_msg = TRUE;
+			turn_consumed = FALSE;
+			remember_message = FALSE;
+			show_message("illegal command '%s'", describe_key(character));
+			command_repeat_count = 0;
+			remember_message = TRUE;
 		}
-		if (take && do_take)
-			pick_up(take);
-		take = 0;
+		if (pickup_symbol && pickup_enabled)
+			pick_up_item(pickup_symbol);
+		pickup_symbol = 0;
 		if (!running)
 			door_stop = FALSE;
-	} while (after == FALSE);
+	} while (turn_consumed == FALSE);
 }

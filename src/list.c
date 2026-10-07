@@ -9,7 +9,7 @@
 #include "rogue.h"
 #include "curses.h"
 
-static void	*talloc(void);
+static void	*find_free_entity_slot(void);
 
 /*
  * detach:
@@ -17,14 +17,14 @@ static void	*talloc(void);
  */
 void
 list_detach(list, item)
-	register THING **list, *item;
+	register Entity **list, *item;
 {
 	if (*list == item)
 		*list = next(item);
-	if (prev(item) != NULL) item->l_prev->l_next = next(item);
-	if (next(item) != NULL) item->l_next->l_prev = prev(item);
-	item->l_next = NULL;
-	item->l_prev = NULL;
+	if (prev(item) != NULL) item->previous_entity->next_entity = next(item);
+	if (next(item) != NULL) item->next_entity->previous_entity = prev(item);
+	item->next_entity = NULL;
+	item->previous_entity = NULL;
 }
 
 /*
@@ -33,18 +33,18 @@ list_detach(list, item)
  */
 void
 list_attach(list, item)
-	register THING **list, *item;
+	register Entity **list, *item;
 {
 	if (*list != NULL)
 	{
-		item->l_next = *list;
-		(*list)->l_prev = item;
-		item->l_prev = NULL;
+		item->next_entity = *list;
+		(*list)->previous_entity = item;
+		item->previous_entity = NULL;
 	}
 	else
 	{
-		item->l_next = NULL;
-		item->l_prev = NULL;
+		item->next_entity = NULL;
+		item->previous_entity = NULL;
 	}
 	*list = item;
 }
@@ -54,16 +54,16 @@ list_attach(list, item)
  *	Throw the whole blamed thing away
  */
 void
-list_free(ptr)
-	register THING **ptr;
+list_free(list_head)
+	register Entity **list_head;
 {
-	register THING *item;
+	register Entity *item;
 
-	while (*ptr != NULL)
+	while (*list_head != NULL)
 	{
-	item = *ptr;
-	*ptr = next(item);
-	discard(item);
+	item = *list_head;
+	*list_head = next(item);
+	release_entity(item);
 	}
 }
 
@@ -71,18 +71,18 @@ list_free(ptr)
  * new_item
  *	Get a new item with a specified size
  */
-THING *
-new_item()
+Entity *
+allocate_entity()
 {
-	register THING *item;
+	register Entity *item;
 #ifdef DEBUG
-	if ((item = (THING *) talloc()) == NULL)
-		if (me())msg("no more things!");
+	if ((item = (Entity *) find_free_entity_slot()) == NULL)
+		if (me())show_message("no more things!");
 	else
 #else
-	if ((item = (THING *) talloc()) != NULL)
+	if ((item = (Entity *) find_free_entity_slot()) != NULL)
 #endif //DEBUG
-			 item->l_next = item->l_prev = NULL;
+			 item->next_entity = item->previous_entity = NULL;
 	return item;
 }
 
@@ -91,19 +91,19 @@ new_item()
  */
 static
 void *  //@ maybe should be THING*, as this is a specialized malloc()
-talloc()
+find_free_entity_slot()
 {
 	register int i;
 
 	for (i=0;i<MAXITEMS;i++)
 	{
-		if (_t_alloc[i] == 0)
+		if (entity_slot_used[i] == 0)
 		{
-			if (++total > maxitems)
-			maxitems = total;
-			_t_alloc[i]++;
-			setmem(&_things[i],sizeof(THING),0);
-			return &_things[i];
+			if (++allocated_entity_count > peak_entity_count)
+			peak_entity_count = allocated_entity_count;
+			entity_slot_used[i]++;
+			fill_bytes(&entity_pool[i],sizeof(Entity),0);
+			return &entity_pool[i];
 		}
 	}
 	return NULL;
@@ -114,17 +114,17 @@ talloc()
  *	Free up an item
  */
 int
-discard(item)
-	register THING *item;
+release_entity(item)
+	register Entity *item;
 {
 	register int i;
 
 	for (i=0;i<MAXITEMS;i++)
 	{
-		if (item == &_things[i])
+		if (item == &entity_pool[i])
 		{
-			--total;
-			_t_alloc[i] = 0;
+			--allocated_entity_count;
+			entity_slot_used[i] = 0;
 			return 1;
 		}
 	}
