@@ -489,6 +489,7 @@ extern char *a_names[], *flashmsg, *he_man[], huh[],
 		*w_names[], *ws_made[], *ws_type[];
 
 extern struct h_list helpcoms[], helpobjs[];
+extern const size_t he_man_count;
 
 extern int	a_chances[], a_class[], count, dnum, food_left,
 		fung_hit, group, hungry_state, inpack,

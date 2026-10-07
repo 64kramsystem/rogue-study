@@ -281,6 +281,7 @@ char *he_man[] = {
 	"Time Waster",
 	"Bug Chaser"
 };
+const size_t he_man_count = sizeof(he_man) / sizeof(*he_man);
 
 /*
  * Lattice C compiler funnies

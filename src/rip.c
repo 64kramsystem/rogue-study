@@ -23,7 +23,7 @@ static FILE *file;
 #endif
 
 static void	get_scores(struct sc_ent *top10);
-static void	put_scores(struct sc_ent *top10);
+static bool	put_scores(struct sc_ent *top10);
 static void	pr_scores(int newrank, struct sc_ent *top10);
 static int	add_scores(struct sc_ent *newscore, struct sc_ent *oldlist);
 
@@ -37,9 +37,10 @@ score(int amount, int flags, char monst)
 {
 #ifndef DEMO
 #ifndef WIZARD
-	struct sc_ent his_score, top_ten[TOPSCORES];
+	struct sc_ent his_score = {0}, top_ten[TOPSCORES];
 	register int rank=0;
 	char response = ' ';
+	bool written = TRUE;
 
 
 	is_saved = TRUE;
@@ -48,7 +49,7 @@ score(int amount, int flags, char monst)
 	{
 		wait_msg("see rankings");
 	}
-	while ((file = fopen(s_score, "r")) == NULL)
+	while ((file = fopen(s_score, "rb")) == NULL)
 	{
 		printw("\n");
 		if (noscore || (amount == 0))
@@ -59,7 +60,13 @@ reread:
 		{
 		case 'c':
 		case 'C':
-			fclose(fopen(s_score, "w"));
+			file = fopen(s_score, "wb");
+			if (file == NULL) {
+				printw("\nCould not create scorefile: %s\n", strerror(errno));
+				break;
+			}
+			if (fclose(file) != 0)
+				printw("\nCould not close scorefile: %s\n", strerror(errno));
 			break;
 		case 'r':
 		case 'R':
@@ -85,12 +92,16 @@ reread:
 	}
 	fclose(file);
 	if (rank > 0) {
-		if ((file = fopen(s_score, "w")) != NULL) {
-			put_scores(top_ten);
-			fclose(file);
-		}
+		if ((file = fopen(s_score, "wb")) != NULL) {
+			written = put_scores(top_ten);
+			if (fclose(file) != 0)
+				written = FALSE;
+		} else
+			written = FALSE;
 	}
 	pr_scores(rank, top_ten);
+	if (!written)
+		printw("\nCould not write scorefile\n");
 #ifndef ROGUE_DOS_CURSES
 	wait_msg("exit");
 	printw("\n");
@@ -105,18 +116,24 @@ static
 void
 get_scores(struct sc_ent *top10)
 {
-	register int i, retcode = 1;
+	struct sc_ent entry;
+	int i;
 
-	for(i=0; i<TOPSCORES; i++,top10++) {
-		if (retcode > 0)
-			retcode = fread(top10, sizeof(struct sc_ent), 1, file);
-		if (retcode <= 0)
-			top10->sc_gold = 0;
+	memset(top10, 0, TOPSCORES * sizeof(*top10));
+	for (i = 0; i < TOPSCORES; i++) {
+		if (fread(&entry, sizeof(entry), 1, file) != 1)
+			break;
+		/* Old files store native structs, so validate before indexing or printing. */
+		if (entry.sc_gold <= 0 || entry.sc_rank < 1
+		    || (size_t)entry.sc_rank > he_man_count || entry.sc_level < 1
+		    || memchr(entry.sc_name, '\0', sizeof(entry.sc_name)) == NULL)
+			break;
+		top10[i] = entry;
 	}
 }
 
 static
-void
+bool
 put_scores(struct sc_ent *top10)
 {
 	register int i;
@@ -124,8 +141,9 @@ put_scores(struct sc_ent *top10)
 	for (i=0;(i<TOPSCORES) && top10->sc_gold;i++,top10++)
 	{
 		if (fwrite(top10, sizeof(struct sc_ent), 1, file) <= 0)
-			return;
+			return FALSE;
 	}
+	return TRUE;
 }
 
 static
@@ -218,23 +236,19 @@ static
 int
 add_scores(struct sc_ent *newscore, struct sc_ent *oldlist)
 {
-	register struct sc_ent *sentry, *insert;
-	int retcode = TOPSCORES+1;
+	int i = TOPSCORES - 1;
+	int insert = TOPSCORES;
 
-	for(sentry=&oldlist[TOPSCORES-1];sentry>=oldlist;sentry--) {
-		if ((unsigned)newscore->sc_gold > (unsigned)sentry->sc_gold) {
-			insert = sentry;
-			retcode--;
-			if ((insert < &oldlist[TOPSCORES-1]) && sentry->sc_gold)
-				sentry[1] = *sentry;
-		}
-		else
-			break;
+	/* Use an index: decrementing a pointer before oldlist is undefined in C. */
+	for (; i >= 0 && newscore->sc_gold > oldlist[i].sc_gold; i--) {
+		insert = i;
+		if (i < TOPSCORES - 1)
+			oldlist[i + 1] = oldlist[i];
 	}
-	if (retcode == 11)
+	if (insert == TOPSCORES)
 		return 0;
-	*insert = *newscore;
-	return retcode;
+	oldlist[insert] = *newscore;
+	return insert + 1;
 }
 #endif //WIZARD
 #endif //DEMO
