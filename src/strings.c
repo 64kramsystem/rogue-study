@@ -95,6 +95,6 @@ void
 lcase(str)
 	char *str;
 {
-	while ( (*str = tolower(*str)) )
+	while ( (*str = tolower((unsigned char)*str)) )
 		str++;
 }
