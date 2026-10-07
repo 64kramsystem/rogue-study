@@ -34,6 +34,8 @@ Enter a name or press Enter at startup. Use `h j k l` to move left/down/up/right
 
 For a build without X11, use `make ROGUE_NO_X11=1`. `ROGUE_RELEASE=1` enables optimization; `ROGUE_CHARSET=1` selects ASCII with ncurses. Run `make clean` before changing compiler or build options.
 
+Gameplay corrections follow upstream's [`ROGUE_BUGFIX` convention](https://github.com/MestreLion/roguepc/issues/23). Use `make ROGUE_BUGFIX=1` to enable them; without it, historical behavior is preserved. Run `make clean` when changing this option.
+
 ## Configuration and limitations
 
 An optional `rogue.opt` in the game's working directory accepts `key=value` lines and comments beginning with `#`:
