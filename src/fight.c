@@ -450,7 +450,7 @@ report_hit(char *attacker_name, char *defender_name)
 {
 	register char *message_format = "";
 
-	append_message(format_combat_name(attacker_name, TRUE));
+	append_message("%s", format_combat_name(attacker_name, TRUE));
 	switch ((terse || expert) ? 1 : random_below(4))
 	{
 		when 0: message_format = " scored an excellent hit on ";
@@ -472,7 +472,7 @@ report_miss(char *attacker_name, char *defender_name)
 	register char *message_format = "";
 
 
-	append_message(format_combat_name(attacker_name, TRUE));
+	append_message("%s", format_combat_name(attacker_name, TRUE));
 	switch ((terse || expert) ? 1 : random_below(4))
 	{
 		when 0: message_format = (attacker_name == 0 ? " swing and miss" : " swings and misses");
@@ -584,7 +584,7 @@ report_projectile_hit(Entity *weapon, char *monster_name, char *present_verb, ch
 	else
 		append_message("you %s ", past_verb);
 	if (has_actor_flag(player, ACTOR_BLIND))
-		show_message(pronoun_it);
+		show_message("%s", pronoun_it);
 	else
 		show_message("the %s", monster_name);
 }
@@ -682,7 +682,7 @@ kill_monster(Entity *monster, bool print_message)
 	{
 	append_message("you have defeated ");
 	if (has_actor_flag(player, ACTOR_BLIND))
-		show_message(pronoun_it);
+		show_message("%s", pronoun_it);
 	else
 		show_message("the %s", monster_definitions[monster->actor_species-'A'].name);
 	}
