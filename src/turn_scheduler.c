@@ -6,7 +6,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #define EMPTY_ACTION	0
 #define ACTIVE_ACTION	1

@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 
 //@ set_monster_detection() wrapper to use as a fuse

@@ -1,4 +1,4 @@
-#include "extern.h"
+#include "platform.h"
 
 //@ extern char ctp_[]; //@ not needed anymore. could not find definition
 

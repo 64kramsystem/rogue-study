@@ -18,7 +18,7 @@ int protection_watchdog_ticks;
 
 #define	CRC		0x10
 
-static struct dos_registers rom_read = {
+static struct dos_registers track_read_request = {
 	0x206,
 	0,
 	0x2701,
@@ -29,7 +29,7 @@ static struct dos_registers rom_read = {
 	0xF800
 } ;
 
-static struct dos_registers sig1_read = {
+static struct dos_registers signature_read_request = {
 	0x201,
 	UNDEFINED,
 	0x2707,
@@ -40,7 +40,7 @@ static struct dos_registers sig1_read = {
 	UNDEFINED
 } ;
 
-static struct dos_registers sig2_read = {
+static struct dos_registers crc_read_request = {
 	0x201,
 	UNDEFINED,
 	0x27F1,
@@ -57,7 +57,7 @@ static struct dos_registers sig2_read = {
  * Originally in dos.asm
  */
 int
-getds(void)
+dos_data_segment(void)
 {
 	return 0;
 }
@@ -75,22 +75,22 @@ void
 authenticate_game_disk(int drive)
 {
 	int i, flags;
-	struct dos_registers rgs;
-	char buf2[512];
-	char buf1[32];
+	struct dos_registers read_registers;
+	char sector_bytes[512];
+	char signature_bytes[32];
 
 	protection_watchdog_ticks++;
-	rom_read.dx = sig1_read.dx = sig2_read.dx = drive;
-	sig1_read.es = sig2_read.es = getds();
-	sig1_read.bx = (DosOffset)(PointerBits)(&buf1[0]);  //@ bogus address to fit bx
-	sig2_read.bx = (DosOffset)(PointerBits)(&buf2[0]);  //@ ditto
+	track_read_request.dx = signature_read_request.dx = crc_read_request.dx = drive;
+	signature_read_request.es = crc_read_request.es = dos_data_segment();
+	signature_read_request.bx = (DosOffset)(PointerBits)(&signature_bytes[0]);  //@ bogus address to fit bx
+	crc_read_request.bx = (DosOffset)(PointerBits)(&sector_bytes[0]);  //@ ditto
 
 	//@ read sectors until first success, try up to 7 times
 	for (i=0,flags=CF;i<7 && (flags&CF);i++)
 	{
-		rgs = rom_read;
+		read_registers = track_read_request;
 		protection_watchdog_ticks = 0;
-		flags = simulate_dos_interrupt(SW_DSK,&rgs,&rgs);
+		flags = simulate_dos_interrupt(SW_DSK,&read_registers,&read_registers);
 		protection_watchdog_ticks++;
 	}
 	//@ return if no success
@@ -102,9 +102,9 @@ authenticate_game_disk(int drive)
 	//@ read sectors until first success, try up to 3 times
 	for (i=0,flags=CF;i<3 && (flags&CF);i++)
 	{
-		rgs = sig1_read;
+		read_registers = signature_read_request;
 		protection_watchdog_ticks = 0;
-		flags = simulate_dos_interrupt(SW_DSK,&rgs,&rgs);
+		flags = simulate_dos_interrupt(SW_DSK,&read_registers,&read_registers);
 		protection_watchdog_ticks++;
 	}
 	//@ return if no success
@@ -116,14 +116,14 @@ authenticate_game_disk(int drive)
 	//@ try up to 4 times to get a CRC failure on read
 	for (i=0;i<4;i++)
 	{
-		rgs = sig2_read;
+		read_registers = crc_read_request;
 		protection_watchdog_ticks = 0;
-		flags = simulate_dos_interrupt(SW_DSK,&rgs,&rgs);
+		flags = simulate_dos_interrupt(SW_DSK,&read_registers,&read_registers);
 		protection_watchdog_ticks++;
 		//@ failure read by bad CRC is expected and required for validation!
-		if ((flags&CF) && HI(rgs.ax) == CRC)
+		if ((flags&CF) && HI(read_registers.ax) == CRC)
 		{
-			if (memcmp(&buf1[0],&buf2[0x8c],32) == 0)
+			if (memcmp(&signature_bytes[0],&sector_bytes[0x8c],32) == 0)
 				disk_authentication_marker = 0xD0D;
 			protection_watchdog_ticks = 0;
 			return;

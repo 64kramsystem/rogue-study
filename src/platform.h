@@ -22,8 +22,8 @@
  */
 
 //@ header guard not in original, mainly for curses_common.h
-#ifndef EXTERN_H
-#define EXTERN_H
+#ifndef ROGUE_PLATFORM_H
+#define ROGUE_PLATFORM_H
 
 /*@
  * Functions from libc and their "overrides"
@@ -57,7 +57,6 @@
 //@ str{len,cat,cpy,cmp,chr}() and possibly others
 #include <string.h>
 #define copy_value(dest,source)	memmove(&(dest),&(source),sizeof(dest))
-#define strchr	strchr
 #define fill_bytes(dest,length,ch)	memset(dest,ch,length)
 
 //@ sprintf(), f{open,read,seek,write,close}(), remove(), putchar()
@@ -66,7 +65,6 @@
 
 //@ exit(), atoi(), NULL, EXIT_*, malloc(), free(), abs(), setenv(), getenv()
 #include <stdlib.h>
-#define random_seed_from_clock	random_seed_from_clock	//@ use internal seed generator
 
 //@ errno, originally in begin.asm
 #include <errno.h>
@@ -77,7 +75,6 @@
 
 //@ time(), nanosleep()
 #include <time.h>
-#define update_protection_state	update_protection_state
 
 //@ vsprintf()
 #include <stdarg.h>
@@ -101,7 +98,7 @@
 /*@
  * Project includes, defines and typedefs
  */
-#include "swint.h"
+#include "dos_interrupts.h"
 
 //@ created for show_fake_dos(), but could also be used in save.c and load.c
 #ifndef ROGUE_DOS_DRIVE
@@ -211,4 +208,4 @@ extern int current_drive;
 extern int last_drive;
 #endif
 
-#endif //EXTERN_H
+#endif //ROGUE_PLATFORM_H

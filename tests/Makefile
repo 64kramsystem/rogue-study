@@ -10,11 +10,11 @@ test: test_env test_scores
 	rm -rf -- "$$run_dir"; \
 	exit $$status
 
-test_env: test_env.c ../src/env.c ../src/strings.c ../src/rogue.h ../src/extern.h
+test_env: test_env.c ../src/options.c ../src/strings.c ../src/rogue.h ../src/platform.h
 	$(CC) $(CFLAGS) $(SANITIZERS) test_env.c ../src/strings.c -o $@
 
-test_scores: test_scores.c ../src/rip.c ../src/extern.c ../src/strings.c ../src/misc.c ../src/rogue.h ../src/extern.h ../src/curses.h ../src/curses_common.h
-	$(CC) $(CFLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections test_scores.c ../src/extern.c ../src/strings.c ../src/misc.c -Wl,--gc-sections -o $@
+test_scores: test_scores.c ../src/endgame.c ../src/game_state.c ../src/strings.c ../src/gameplay.c ../src/rogue.h ../src/platform.h ../src/screen.h ../src/screen_common.h
+	$(CC) $(CFLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections test_scores.c ../src/game_state.c ../src/strings.c ../src/gameplay.c -Wl,--gc-sections -o $@
 
 clean:
 	rm -f test_env test_scores

@@ -6,7 +6,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 static void	format_item_by_verbosity(char *output, char *terse_format, char *verbose_format, ...);
 static void	show_category_discoveries(byte type);

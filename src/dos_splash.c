@@ -5,7 +5,7 @@
  */
 
 #include	"rogue.h"
-#include	"curses.h"
+#include "screen.h"
 
 /*@
  * References for 3D8h and 3D9h:
