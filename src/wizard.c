@@ -7,7 +7,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #ifdef WIZARD
 static int	get_num(int *place);

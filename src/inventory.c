@@ -1,5 +1,5 @@
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 /*
  * Routines to deal with the pack
@@ -94,7 +94,7 @@ add_to_inventory(Entity *item, bool silent)
 	 */
 	if (item->item_category == SCROLL && item->item_subtype == SCROLL_SCARE_MONSTER)
 	{
-		if (item->item_flags & ACTOR_FOUND)
+		if (item->item_flags & ENTITY_ENCOUNTERED)
 		{
 			detach(level_items, item);
 			mvaddch(player_position.y, player_position.x, floor_symbol);
@@ -103,7 +103,7 @@ add_to_inventory(Entity *item, bool silent)
 			return;
 		}
 		else
-			item->item_flags |= ACTOR_FOUND;
+			item->item_flags |= ENTITY_ENCOUNTERED;
 	}
 
 	inventory_count++;

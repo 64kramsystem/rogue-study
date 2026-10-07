@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #define	DRAGONSHOT  5	/* one chance in DRAGONSHOT that a dragon will flame */
 

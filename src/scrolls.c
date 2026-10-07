@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 char *laugh = "you hear maniacal laughter%s.";
 char *in_dist = " in the distance";

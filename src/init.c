@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 Entity *entity_pool;
 int   *entity_slot_used;

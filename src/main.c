@@ -15,7 +15,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #define is_key(s) ((*s=='-')||(*s=='/'))
 #define is_char(c1,c2) ((c1==c2)||((c1+'a'-'A')==c2))

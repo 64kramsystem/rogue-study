@@ -7,7 +7,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 static void	*find_free_entity_slot(void);
 

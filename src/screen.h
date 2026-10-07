@@ -16,7 +16,7 @@
  * public API as used by the game.
  */
 
-#include "curses_common.h"
+#include "screen_common.h"
 
 #define stdscr	NULL
 #define hw	stdscr

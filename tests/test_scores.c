@@ -1,4 +1,4 @@
-#include "../src/rip.c"
+#include "../src/endgame.c"
 #include <assert.h>
 
 int COLS = 80, LINES = 25, screen_updates_suspended, dos_screen_mode;
