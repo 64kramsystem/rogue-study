@@ -16,93 +16,93 @@ char *in_dist = " in the distance";
 void
 read_scroll()
 {
-	register THING *obj;
+	register Entity *item;
 	register int y, x;
-	register byte ch;
-	register THING *op;
+	register byte character;
+	register Entity *affected_item;
 	register int index;
-	register bool discardit = FALSE;
+	register bool consume_scroll = FALSE;
 
-	obj = get_item("read", SCROLL);
-	if (obj == NULL)
+	item = select_inventory_item("read", SCROLL);
+	if (item == NULL)
 		return;
-	if (obj->o_type != SCROLL){
-		msg("there is nothing on it to read");
+	if (item->item_category != SCROLL){
+		show_message("there is nothing on it to read");
 		return;
 	}
-	ifterse0("the scroll vanishes","as you read the scroll, it vanishes");
+	message_by_verbosity0("the scroll vanishes","as you read the scroll, it vanishes");
 	/*
 	 * Calculate the effect it has on the poor guy.
 	 */
-	if (obj == cur_weapon)
-		cur_weapon = NULL;
-	switch (obj->o_which){
-	when S_CONFUSE:
+	if (item == equipped_weapon)
+		equipped_weapon = NULL;
+	switch (item->item_subtype){
+	when SCROLL_CONFUSE_MONSTER:
 		/*
 		 * Scroll of monster confusion.  Give him that power.
 		 */
-		player.t_flags |= CANHUH;
-		msg("your hands begin to glow red");
-	when S_ARMOR:
-		if (cur_armor != NULL) {
-			cur_armor->o_ac--;
-			cur_armor->o_flags &= ~ISCURSED;
-			ifterse0("your armor glows faintly",
+		player.actor_flags |= ACTOR_CAN_CONFUSE;
+		show_message("your hands begin to glow red");
+	when SCROLL_ENCHANT_ARMOR:
+		if (equipped_armor != NULL) {
+			equipped_armor->item_modifier--;
+			equipped_armor->item_flags &= ~ITEM_CURSED;
+			message_by_verbosity0("your armor glows faintly",
 				"your armor glows faintly for a moment");
 		}
-	when S_HOLD:
+	when SCROLL_HOLD_MONSTERS:
 		/*
 		 * Hold monster scroll.  Stop all monsters within two spaces
 		 * from chasing after the hero.
 		 */
 
-		for (x = hero.x - 3; x <= hero.x + 3; x++)
+		for (x = player_position.x - 3; x <= player_position.x + 3; x++)
 			if (x >= 0 && x < COLS)
-				for (y = hero.y - 3; y <= hero.y + 3; y++)
-					if ((y > 0 && y < maxrow) && ((op=moat(y, x)) != NULL)) {
-						op->t_flags &= ~ISRUN;
-						op->t_flags |= ISHELD;
+				for (y = player_position.y - 3; y <= player_position.y + 3; y++)
+					if ((y > 0 && y < dungeon_bottom_row) && ((affected_item=monster_at(y, x)) != NULL)) {
+						affected_item->actor_flags &= ~ACTOR_CHASING;
+						affected_item->actor_flags |= ACTOR_HELD;
 					}
-	when S_SLEEP:
+	when SCROLL_SLEEP:
 		/*
 		 * Scroll which makes you fall asleep
 		 */
-		s_know[S_SLEEP] = TRUE;
-		no_command += rnd(SLEEPTIME) + 4;
-		player.t_flags &= ~ISRUN;
-		msg("you fall asleep");
-	when S_CREATE:
+		scroll_identified[SCROLL_SLEEP] = TRUE;
+		incapacitated_turns += random_below(SLEEPTIME) + 4;
+		player.actor_flags &= ~ACTOR_CHASING;
+		show_message("you fall asleep");
+	when SCROLL_CREATE_MONSTER:
 		{
-		coord mp;
+		Position monster_position;
 
-		if (plop_monster(hero.y, hero.x, &mp) && (op=new_item()) != NULL)
-			new_monster(op, randmonster(FALSE), &mp);
+		if (find_monster_spawn_position(player_position.y, player_position.x, &monster_position) && (affected_item=allocate_entity()) != NULL)
+			new_monster(affected_item, random_monster_species(FALSE), &monster_position);
 		else
-			ifterse0("you hear a faint cry of anguish",
+			message_by_verbosity0("you hear a faint cry of anguish",
 				"you hear a faint cry of anguish in the distance");
 		}
-	when S_IDENT:
+	when SCROLL_IDENTIFY:
 		/*
 		 * Identify, let the rogue figure something out
 		 */
-		s_know[S_IDENT] = TRUE;
-		msg("this scroll is an identify scroll");
-		if (! strcmp(s_menu,"on") || !strcmp(s_menu,"sel"))
-			more(" More ");
-		whatis();
-	when S_MAP:
+		scroll_identified[SCROLL_IDENTIFY] = TRUE;
+		show_message("this scroll is an identify scroll");
+		if (! strcmp(menu_option,"on") || !strcmp(menu_option,"sel"))
+			show_more_prompt(" More ");
+		identify_item();
+	when SCROLL_MAPPING:
 		/*
 		 * Scroll of magic mapping.
 		 */
-		s_know[S_MAP] = TRUE;
-		msg("oh, now this scroll has a map on it");
+		scroll_identified[SCROLL_MAPPING] = TRUE;
+		show_message("oh, now this scroll has a map on it");
 		/*
 		 * Take all the things we want to keep hidden out of the window
 		 */
-		for (y = 1; y < maxrow; y++)
+		for (y = 1; y < dungeon_bottom_row; y++)
 			for (x = 0; x < COLS; x++) {
-				index = INDEX(y, x);
-				switch (ch = _level[index])
+				index = map_index(y, x);
+				switch (character = terrain_map[index])
 				{
 				case VWALL:
 				case HWALL:
@@ -110,55 +110,55 @@ read_scroll()
 				case URWALL:
 				case LLWALL:
 				case LRWALL:
-					if (!(_flags[index] & F_REAL)) {
-						ch = _level[index] = DOOR;
-						_flags[index] &= ~F_REAL;
+					if (!(cell_flags[index] & CELL_REVEALED)) {
+						character = terrain_map[index] = DOOR;
+						cell_flags[index] &= ~CELL_REVEALED;
 					}
 					/* fallthrough */
 				case DOOR:
 				case PASSAGE:
 				case STAIRS:
-					if ((op = moat(y, x)) != NULL)
-						if (op->t_oldch == ' ')
-							op->t_oldch = ch;
+					if ((affected_item = monster_at(y, x)) != NULL)
+						if (affected_item->actor_previous_tile == ' ')
+							affected_item->actor_previous_tile = character;
 					break;
 				default:
-					ch = ' ';
+					character = ' ';
 				}
-				if (ch == DOOR) {
+				if (character == DOOR) {
 					move(y,x);
 					if (inch() != DOOR)
 						standout();
 				}
-				if (ch != ' ')
-					mvaddch(y, x, ch);
+				if (character != ' ')
+					mvaddch(y, x, character);
 				standend();
 			}
-	when S_GFIND:
+	when SCROLL_FOOD_DETECTION:
 		/*
 		 * Scroll of food detection
 		 */
-		ch = FALSE;
-		for (op = lvl_obj; op != NULL; op = next(op)) {
-			if (op->o_type == FOOD) {
-				ch = TRUE;
+		character = FALSE;
+		for (affected_item = level_items; affected_item != NULL; affected_item = next(affected_item)) {
+			if (affected_item->item_category == FOOD) {
+				character = TRUE;
 				standout();
-				mvwaddch(hw, op->o_pos.y, op->o_pos.x, FOOD);
+				mvwaddch(hw, affected_item->item_position.y, affected_item->item_position.x, FOOD);
 				standend();
 			} else /* as a bonus this will detect amulets as well */
-			if (op->o_type == AMULET) {
-				ch = TRUE;
+			if (affected_item->item_category == AMULET) {
+				character = TRUE;
 				standout();
-				mvwaddch(hw, op->o_pos.y, op->o_pos.x, AMULET);
+				mvwaddch(hw, affected_item->item_position.y, affected_item->item_position.x, AMULET);
 				standend();
 			}
 		}
-		if (ch) {
-			s_know[S_GFIND] = TRUE;
-			msg("your nose tingles as you sense food");
+		if (character) {
+			scroll_identified[SCROLL_FOOD_DETECTION] = TRUE;
+			show_message("your nose tingles as you sense food");
 		} else
-			ifterse0("you hear a growling noise close by","you hear a growling noise very close to you");
-	when S_TELEP:
+			message_by_verbosity0("you hear a growling noise close by","you hear a growling noise very close to you");
+	when SCROLL_TELEPORT:
 		/*
 		 * Scroll of teleportation:
 		 * Make him dissapear and reappear
@@ -166,50 +166,50 @@ read_scroll()
 		{
 		register struct room *cur_room;
 
-		cur_room = proom;
+		cur_room = player_room;
 		teleport();
-		if (cur_room != proom)
-			s_know[S_TELEP] = TRUE;
+		if (cur_room != player_room)
+			scroll_identified[SCROLL_TELEPORT] = TRUE;
 		}
-	when S_ENCH:
-		if (cur_weapon == NULL || cur_weapon->o_type != WEAPON)
-		msg("you feel a strange sense of loss");
+	when SCROLL_ENCHANT_WEAPON:
+		if (equipped_weapon == NULL || equipped_weapon->item_category != WEAPON)
+		show_message("you feel a strange sense of loss");
 		else
 		{
-		cur_weapon->o_flags &= ~ISCURSED;
-		if (rnd(2) == 0)
-			cur_weapon->o_hplus++;
+		equipped_weapon->item_flags &= ~ITEM_CURSED;
+		if (random_below(2) == 0)
+			equipped_weapon->item_hit_bonus++;
 		else
-			cur_weapon->o_dplus++;
-		ifterse1("your %s glows blue","your %s glows blue for a moment", w_names[cur_weapon->o_which]);
+			equipped_weapon->item_damage_bonus++;
+		message_by_verbosity1("your %s glows blue","your %s glows blue for a moment", weapon_names[equipped_weapon->item_subtype]);
 		}
-	when S_SCARE:
+	when SCROLL_SCARE_MONSTER:
 		/*
 		 * Reading it is a mistake and produces laughter at the
 		 * poor rogue's boo boo.
 		 */
-			msg(laugh, terse || expert ? "" : in_dist);
-	when S_REMOVE:
-		if (cur_armor != NULL)
-			cur_armor->o_flags &= ~ISCURSED;
-		if (cur_weapon != NULL)
-			cur_weapon->o_flags &= ~ISCURSED;
-		if (cur_ring[LEFT] != NULL)
-			cur_ring[LEFT]->o_flags &= ~ISCURSED;
-		if (cur_ring[RIGHT] != NULL)
-			cur_ring[RIGHT]->o_flags &= ~ISCURSED;
-		ifterse0("somebody is watching over you","you feel as if somebody is watching over you");
-	when S_AGGR:
+			show_message(laugh, terse || expert ? "" : in_dist);
+	when SCROLL_REMOVE_CURSE:
+		if (equipped_armor != NULL)
+			equipped_armor->item_flags &= ~ITEM_CURSED;
+		if (equipped_weapon != NULL)
+			equipped_weapon->item_flags &= ~ITEM_CURSED;
+		if (equipped_rings[LEFT] != NULL)
+			equipped_rings[LEFT]->item_flags &= ~ITEM_CURSED;
+		if (equipped_rings[RIGHT] != NULL)
+			equipped_rings[RIGHT]->item_flags &= ~ITEM_CURSED;
+		message_by_verbosity0("somebody is watching over you","you feel as if somebody is watching over you");
+	when SCROLL_AGGRAVATE_MONSTERS:
 		/*
 		 * This scroll aggravates all the monsters on the current
 		 * level and sets them running towards the hero
 		 */
-		aggravate();
-		ifterse("you hear a humming noise",
+		aggravate_monsters();
+		message_by_verbosity("you hear a humming noise",
 					"you hear a high pitched humming noise");
-	when S_NOP:
-		msg("this scroll seems to be blank");
-	when S_VORPAL:
+	when SCROLL_BLANK:
+		show_message("this scroll seems to be blank");
+	when SCROLL_VORPALIZE:
 		/*
 		 * Extra Vorpal Enchant Weapon
 		 *     Give weapon +1,+1
@@ -224,25 +224,25 @@ read_scroll()
 		 *
 		 * If he doesn't have a weapon I get to chortle again!
 		 */
-		if (cur_weapon == NULL || cur_weapon->o_type != WEAPON)
-			msg(laugh, terse || expert ? "" : in_dist);
+		if (equipped_weapon == NULL || equipped_weapon->item_category != WEAPON)
+			show_message(laugh, terse || expert ? "" : in_dist);
 		else {
 			/*
 			 * You aren't allowed to doubly vorpalize a weapon.
 			 */
-			if (cur_weapon->o_enemy != 0) {
-				msg("your %s vanishes in a puff of smoke",
-				w_names[cur_weapon->o_which]);
-				detach(pack, cur_weapon);
-				discard(cur_weapon);
-				cur_weapon = NULL;
+			if (equipped_weapon->item_slays_species != 0) {
+				show_message("your %s vanishes in a puff of smoke",
+				weapon_names[equipped_weapon->item_subtype]);
+				detach(player_inventory, equipped_weapon);
+				release_entity(equipped_weapon);
+				equipped_weapon = NULL;
 			} else {
-				cur_weapon->o_enemy = pick_mons();
-				cur_weapon->o_hplus++;
-				cur_weapon->o_dplus++;
-				cur_weapon->o_charges = 1;
-				msg(flashmsg, w_names[cur_weapon->o_which],
-					terse || expert ? "" : intense);
+				equipped_weapon->item_slays_species = random_vorpal_enemy();
+				equipped_weapon->item_hit_bonus++;
+				equipped_weapon->item_damage_bonus++;
+				equipped_weapon->item_charges = 1;
+				show_message(vorpal_flash_message, weapon_names[equipped_weapon->item_subtype],
+					terse || expert ? "" : vorpal_flash_intensity);
 
 				/*
 				 * Sometimes this is a mixed blessing ...
@@ -259,24 +259,24 @@ read_scroll()
 			}
 		}
 	otherwise:
-		msg("what a puzzling scroll!");
+		show_message("what a puzzling scroll!");
 		return;
 	}
-	look(TRUE);	/* put the result of the scroll on the screen */
-	status();
+	update_player_view(TRUE);	/* put the result of the scroll on the screen */
+	update_status_line();
 	/*
 	 * Get rid of the thing
 	 */
-	inpack--;
-	if (obj->o_count > 1)
-	obj->o_count--;
+	inventory_count--;
+	if (item->item_quantity > 1)
+	item->item_quantity--;
 	else
 	{
-	detach(pack, obj);
-	discardit = TRUE;
+	detach(player_inventory, item);
+	consume_scroll = TRUE;
 	}
-	call_it(s_know[obj->o_which], &s_guess[obj->o_which]);
+	prompt_item_label(scroll_identified[item->item_subtype], &scroll_labels[item->item_subtype]);
 
-	if (discardit)
-	discard(obj);
+	if (consume_scroll)
+	release_entity(item);
 }

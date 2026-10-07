@@ -8,10 +8,10 @@
 #include "rogue.h"
 #include "curses.h"
 
-#define EMPTY	0
-#define FULL	1
-#define DAEMON -1
-#define MAXDAEMONS 20
+#define EMPTY_ACTION	0
+#define ACTIVE_ACTION	1
+#define RECURRING_ACTION -1
+#define MAX_SCHEDULED_ACTIONS 20
 
 /*@
  * struct delayed_action, as well as functions using it as return type such
@@ -31,9 +31,9 @@
  */
 static
 struct delayed_action {
-	void (*d_func)();
-	int d_time;
-} d_list[MAXDAEMONS];
+	void (*callback)();
+	int turns_remaining;
+} scheduled_actions[MAX_SCHEDULED_ACTIONS];
 
 /*
  * d_slot:
@@ -41,13 +41,13 @@ struct delayed_action {
  */
 static
 struct delayed_action *
-d_slot(void)
+find_free_action_slot(void)
 {
-	register struct delayed_action *dev;
+	register struct delayed_action *action;
 
-	for (dev = d_list; dev < &d_list[MAXDAEMONS]; dev++)
-		if (dev->d_func == EMPTY)
-			return dev;
+	for (action = scheduled_actions; action < &scheduled_actions[MAX_SCHEDULED_ACTIONS]; action++)
+		if (action->callback == EMPTY_ACTION)
+			return action;
 #ifdef DEBUG
 	debug("Ran out of fuse slots");
 #endif
@@ -60,13 +60,13 @@ d_slot(void)
  */
 static
 struct delayed_action *
-find_slot(void (*func)())
+find_action_slot(void (*func)())
 {
-	register struct delayed_action *dev;
+	register struct delayed_action *action;
 
-	for (dev = d_list; dev < &d_list[MAXDAEMONS]; dev++)
-	if (func == dev->d_func)
-		return dev;
+	for (action = scheduled_actions; action < &scheduled_actions[MAX_SCHEDULED_ACTIONS]; action++)
+	if (func == action->callback)
+		return action;
 	return NULL;
 }
 
@@ -75,13 +75,13 @@ find_slot(void (*func)())
  *	Start a daemon, takes a function.
  */
 void
-start_daemon(void (*func)())
+schedule_recurring_action(void (*func)())
 {
-	register struct delayed_action *dev;
+	register struct delayed_action *action;
 
-	dev = d_slot();
-	dev->d_func = func;
-	dev->d_time = DAEMON;
+	action = find_free_action_slot();
+	action->callback = func;
+	action->turns_remaining = RECURRING_ACTION;
 }
 
 /*
@@ -89,22 +89,22 @@ start_daemon(void (*func)())
  *	Run all the daemons, passing the argument to the function.
  */
 void
-do_daemons(void)
+run_recurring_actions(void)
 {
-	register struct delayed_action *dev;
+	register struct delayed_action *action;
 
 	/*
 	 * Loop through the devil list
 	 */
-	for (dev = d_list; dev < &d_list[MAXDAEMONS]; dev++)
+	for (action = scheduled_actions; action < &scheduled_actions[MAX_SCHEDULED_ACTIONS]; action++)
 	{
 		/*
 		 * Executing each one, giving it the proper arguments
 		 * @ Sorry, no more "arguments". And it was a single one.
 		 */
-		if (dev->d_time == DAEMON && dev->d_func != EMPTY)
+		if (action->turns_remaining == RECURRING_ACTION && action->callback != EMPTY_ACTION)
 		{
-			(*dev->d_func)();
+			(*action->callback)();
 		}
 	}
 }
@@ -114,13 +114,13 @@ do_daemons(void)
  *	Start a fuse to go off in a certain number of turns
  */
 void
-fuse(void (*func)(), int time)
+schedule_delayed_action(void (*func)(), int time)
 {
-	register struct delayed_action *wire;
+	register struct delayed_action *action;
 
-	wire = d_slot();
-	wire->d_func = func;
-	wire->d_time = time;
+	action = find_free_action_slot();
+	action->callback = func;
+	action->turns_remaining = time;
 }
 
 /*
@@ -128,13 +128,13 @@ fuse(void (*func)(), int time)
  *	Increase the time until a fuse goes off
  */
 void
-lengthen(void (*func)(), int xtime)
+extend_delayed_action(void (*func)(), int xtime)
 {
-	register struct delayed_action *wire;
+	register struct delayed_action *action;
 
-	if ((wire = find_slot(func)) == NULL)
+	if ((action = find_action_slot(func)) == NULL)
 		return;
-	wire->d_time += xtime;
+	action->turns_remaining += xtime;
 }
 
 /*
@@ -142,13 +142,13 @@ lengthen(void (*func)(), int xtime)
  *	Put out a fuse
  */
 void
-extinguish(void (*func)())
+cancel_delayed_action(void (*func)())
 {
-	register struct delayed_action *wire;
+	register struct delayed_action *action;
 
-	if ((wire = find_slot(func)) == NULL)
+	if ((action = find_action_slot(func)) == NULL)
 		return;
-	wire->d_func = EMPTY;
+	action->callback = EMPTY_ACTION;
 }
 
 /*
@@ -156,22 +156,22 @@ extinguish(void (*func)())
  *	Decrement counters and start needed fuses
  */
 void
-do_fuses(void)
+run_delayed_actions(void)
 {
-	register struct delayed_action *wire;
+	register struct delayed_action *action;
 
 	/*
 	 * Step though the list
 	 */
-	for (wire = d_list; wire < &d_list[MAXDAEMONS]; wire++) {
+	for (action = scheduled_actions; action < &scheduled_actions[MAX_SCHEDULED_ACTIONS]; action++) {
 	/*
 	 * Decrementing counters and starting things we want.  We also need
 	 * to remove the fuse from the list once it has gone off.
 	 */
-		if (wire->d_func != EMPTY && wire->d_time > 0 && --wire->d_time == 0)
+		if (action->callback != EMPTY_ACTION && action->turns_remaining > 0 && --action->turns_remaining == 0)
 		{
-			(*wire->d_func)();
-			wire->d_func = EMPTY;
+			(*action->callback)();
+			action->callback = EMPTY_ACTION;
 		}
 	}
 }

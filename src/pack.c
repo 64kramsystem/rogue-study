@@ -8,16 +8,16 @@
  */
 
 static
-THING *
-pack_obj(byte ch, byte *chp)
+Entity *
+inventory_item_for_key(byte inventory_key, byte *final_key)
 {
-	register THING *obj;
-	register byte och;
+	register Entity *item;
+	register byte previous_key;
 
-	for (obj = pack, och = 'a'; obj != NULL; obj = next(obj), och++)
-		if (ch == och)
-			return obj;
-	*chp = och;
+	for (item = player_inventory, previous_key = 'a'; item != NULL; item = next(item), previous_key++)
+		if (inventory_key == previous_key)
+			return item;
+	*final_key = previous_key;
 	return NULL;
 }
 
@@ -28,16 +28,16 @@ pack_obj(byte ch, byte *chp)
  *	it off the ground.
  */
 void
-add_pack(THING *obj, bool silent)
+add_to_inventory(Entity *item, bool silent)
 {
-	register THING *op, *lp = NULL;
+	register Entity *other_item, *previous_item = NULL;
 	register bool exact, from_floor;
-	register byte floor;
+	register byte floor_symbol;
 
-	if (obj == NULL)
+	if (item == NULL)
 	{
 		from_floor = TRUE;
-		if ((obj = find_obj(hero.y, hero.x)) == NULL)
+		if ((item = item_at(player_position.y, player_position.x)) == NULL)
 			return;
 	}
 	else
@@ -58,25 +58,25 @@ add_pack(THING *obj, bool silent)
 	 *  any room even exist. proom is set in enter_room(), which is first
 	 *  called in new_level()
 	 */
-	floor = (proom != NULL && (proom->r_flags & ISGONE)) ? PASSAGE : FLOOR;
-	if (obj->o_group)
+	floor_symbol = (player_room != NULL && (player_room->flags & ROOM_ABSENT)) ? PASSAGE : FLOOR;
+	if (item->item_stack_group)
 	{
-		for (op = pack; op != NULL; op = next(op))
+		for (other_item = player_inventory; other_item != NULL; other_item = next(other_item))
 		{
-			if (op->o_group == obj->o_group)
+			if (other_item->item_stack_group == item->item_stack_group)
 			{
 			/*
 			 * Put it in the pack and notify the user
 			 */
-				op->o_count += obj->o_count;
+				other_item->item_quantity += item->item_quantity;
 				if (from_floor)
 				{
-					detach(lvl_obj, obj);
-					mvaddch(hero.y, hero.x, floor);
-					chat(hero.y, hero.x) = floor;
+					detach(level_items, item);
+					mvaddch(player_position.y, player_position.x, floor_symbol);
+					terrain_at(player_position.y, player_position.x) = floor_symbol;
 				}
-				discard(obj);
-				obj = op;
+				release_entity(item);
+				item = other_item;
 				goto picked_up;
 			}
 		}
@@ -84,52 +84,52 @@ add_pack(THING *obj, bool silent)
 	/*
 	 * Check if there is room
 	 */
-	if (inpack >= MAXPACK-1)
+	if (inventory_count >= MAXPACK-1)
 	{
-		msg("you can't carry anything else");
+		show_message("you can't carry anything else");
 		return;
 	}
 	/*
 	 * Check for and deal with scare monster scrolls
 	 */
-	if (obj->o_type == SCROLL && obj->o_which == S_SCARE)
+	if (item->item_category == SCROLL && item->item_subtype == SCROLL_SCARE_MONSTER)
 	{
-		if (obj->o_flags & ISFOUND)
+		if (item->item_flags & ACTOR_FOUND)
 		{
-			detach(lvl_obj, obj);
-			mvaddch(hero.y, hero.x, floor);
-			chat(hero.y, hero.x) = floor;
-			msg("the scroll turns to dust%s.", noterse(" as you pick it up"));
+			detach(level_items, item);
+			mvaddch(player_position.y, player_position.x, floor_symbol);
+			terrain_at(player_position.y, player_position.x) = floor_symbol;
+			show_message("the scroll turns to dust%s.", verbose_text(" as you pick it up"));
 			return;
 		}
 		else
-			obj->o_flags |= ISFOUND;
+			item->item_flags |= ACTOR_FOUND;
 	}
 
-	inpack++;
+	inventory_count++;
 	if (from_floor)
 	{
-		detach(lvl_obj, obj);
-		mvaddch(hero.y, hero.x, floor);
-		chat(hero.y, hero.x) = floor;
+		detach(level_items, item);
+		mvaddch(player_position.y, player_position.x, floor_symbol);
+		terrain_at(player_position.y, player_position.x) = floor_symbol;
 	}
 	/*
 	 * Search for an object of the same type
 	 */
 	exact = FALSE;
-	for (op = pack; op != NULL; op = next(op))
-		if (obj->o_type == op->o_type)
+	for (other_item = player_inventory; other_item != NULL; other_item = next(other_item))
+		if (item->item_category == other_item->item_category)
 			break;
-	if (op == NULL)
+	if (other_item == NULL)
 	{
 		/*
 		 * Put it at the end of the pack since it is a new type
 		 */
-		for (op = pack; op != NULL; op = next(op))
+		for (other_item = player_inventory; other_item != NULL; other_item = next(other_item))
 		{
-			if (op->o_type != FOOD)
+			if (other_item->item_category != FOOD)
 				break;
-			lp = op;
+			previous_item = other_item;
 		}
 	}
 	else
@@ -137,30 +137,30 @@ add_pack(THING *obj, bool silent)
 		/*
 		 * Search for an object which is exactly the same
 		 */
-		while (op->o_type == obj->o_type)
+		while (other_item->item_category == item->item_category)
 		{
-			if (op->o_which == obj->o_which)
+			if (other_item->item_subtype == item->item_subtype)
 			{
 				exact = TRUE;
 				break;
 			}
-			lp = op;
-			if ((op = next(op)) == NULL)
+			previous_item = other_item;
+			if ((other_item = next(other_item)) == NULL)
 				break;
 		}
 	}
-	if (op == NULL)
+	if (other_item == NULL)
 	{
 		/*
 		 * Didn't find an exact match, just stick it here
 		 */
-		if (pack == NULL)
-			pack = obj;
+		if (player_inventory == NULL)
+			player_inventory = item;
 		else
 		{
-			lp->l_next = obj;
-			obj->l_prev = lp;
-			obj->l_next = NULL;
+			previous_item->next_entity = item;
+			item->previous_entity = previous_item;
+			item->next_entity = NULL;
 		}
 	}
 	else
@@ -169,30 +169,30 @@ add_pack(THING *obj, bool silent)
 		 * If we found an exact match.  If it is a potion, food, or a
 		 * scroll, increase the count, otherwise put it with its clones.
 		 */
-		if (exact && ISMULT(obj->o_type))
+		if (exact && is_stackable_category(item->item_category))
 		{
-			op->o_count++;
-			discard(obj);
-			obj = op;
+			other_item->item_quantity++;
+			release_entity(item);
+			item = other_item;
 			goto picked_up;
 		}
-		if ((obj->l_prev = prev(op)) != NULL)
+		if ((item->previous_entity = prev(other_item)) != NULL)
 		{
-			obj->l_prev->l_next = obj;
+			item->previous_entity->next_entity = item;
 		}
 		else
 		{
-			pack = obj;
+			player_inventory = item;
 		}
-		obj->l_next = op;
-		op->l_prev = obj;
+		item->next_entity = other_item;
+		other_item->previous_entity = item;
 	}
 picked_up:
 	/*
 	 * If this was the object of something's desire, that monster will
 	 * get mad and run at the hero
 	 */
-	for (op = mlist; op != NULL; op = next(op))
+	for (other_item = level_monsters; other_item != NULL; other_item = next(other_item))
 	{
 		/*
 		 *  compiler bug: jll : 2-7-83
@@ -209,22 +209,22 @@ picked_up:
 		 * be not chasing (sleeping, another room, Ice Monster, etc), so a
 		 * destination could possibly have never been assigned.
 		 */
-		if (op->t_dest != NULL &&
-		   (op->t_dest->x == obj->o_pos.x) && (op->t_dest->y == obj->o_pos.y))
-			op->t_dest = &hero;
+		if (other_item->actor_destination != NULL &&
+		   (other_item->actor_destination->x == item->item_position.x) && (other_item->actor_destination->y == item->item_position.y))
+			other_item->actor_destination = &player_position;
 	}
 
-	if (obj->o_type == AMULET)
+	if (item->item_category == AMULET)
 	{
-		amulet = TRUE;
+		carrying_amulet = TRUE;
 		saw_amulet = TRUE;
 	}
 	/*
 	 * Notify the user
 	 */
 	if (!silent)
-		msg("%s%s (%c)",noterse("you now have "),
-			inv_name(obj, TRUE), pack_char(obj));
+		show_message("%s%s (%c)",verbose_text("you now have "),
+			describe_item(item, TRUE), inventory_key(item));
 }
 
 /*
@@ -232,14 +232,14 @@ picked_up:
  *	List what is in the pack
  */
 byte
-inventory(THING *list, int type, char *lstr)
+show_inventory(Entity *items, int type, char *line_prefix)
 {
-	register byte ch;
-	register int n_objs;
-	char inv_temp[MAXSTR];
+	register byte character;
+	register int displayed_count;
+	char line_format[MAXSTR];
 
-	n_objs = 0;
-	for (ch = 'a'; list != NULL; ch++, list = next(list))
+	displayed_count = 0;
+	for (character = 'a'; items != NULL; character++, items = next(items))
 	{
 		/*
 		 * Don't print this one if:
@@ -247,23 +247,23 @@ inventory(THING *list, int type, char *lstr)
 		 *	it isn't a callable type AND
 		 *	it isn't a zappable weapon
 		 */
-		if (type && type != list->o_type && !(type == CALLABLE &&
-		  (list->o_type == SCROLL || list->o_type == POTION ||
-		  list->o_type == RING || list->o_type == STICK)) &&
-		  !(type == WEAPON && list->o_type == POTION) &&
-		  !(type == STICK && list->o_enemy && list->o_charges))
+		if (type && type != items->item_category && !(type == CALLABLE &&
+		  (items->item_category == SCROLL || items->item_category == POTION ||
+		  items->item_category == RING || items->item_category == STICK)) &&
+		  !(type == WEAPON && items->item_category == POTION) &&
+		  !(type == STICK && items->item_slays_species && items->item_charges))
 			continue;
-		n_objs++;
-		sprintf(inv_temp, "%c) %%s", ch);
-		add_line(lstr, inv_temp, inv_name(list, FALSE));
+		displayed_count++;
+		sprintf(line_format, "%c) %%s", character);
+		add_line(line_prefix, line_format, describe_item(items, FALSE));
 	}
-	if (n_objs == 0)
+	if (displayed_count == 0)
 	{
-		msg(type == 0 ? "you are empty handed" :
+		show_message(type == 0 ? "you are empty handed" :
 					"you don't have anything appropriate");
 		return 0;
 	}
-	return(end_line(lstr));
+	return(end_line(line_prefix));
 }
 
 /*
@@ -271,19 +271,19 @@ inventory(THING *list, int type, char *lstr)
  *	Add something to characters pack.
  */
 void
-pick_up(byte ch)
+pick_up_item(byte character)
 {
-	register THING *obj;
+	register Entity *item;
 
-	switch (ch)
+	switch (character)
 	{
 	case GOLD:
-		if ((obj = find_obj(hero.y, hero.x)) == NULL)
+		if ((item = item_at(player_position.y, player_position.x)) == NULL)
 		return;
-		money(obj->o_goldval);
-		detach(lvl_obj, obj);
-		discard(obj);
-		proom->r_goldval = 0;
+		collect_gold(item->item_gold_amount);
+		detach(level_items, item);
+		release_entity(item);
+		player_room->gold_amount = 0;
 		break;
 	default:
 	case ARMOR:
@@ -294,7 +294,7 @@ pick_up(byte ch)
 	case AMULET:
 	case RING:
 	case STICK:
-		add_pack(NULL, FALSE);
+		add_to_inventory(NULL, FALSE);
 		break;
 	}
 }
@@ -303,68 +303,68 @@ pick_up(byte ch)
  * get_item:
  *	Pick something out of a pack for a purpose
  */
-THING *
-get_item(char *purpose, int type)
+Entity *
+select_inventory_item(char *purpose, int type)
 {
-	register THING *obj;
-	register byte ch;
-	byte och;
-	static byte lch;
-	static THING *wasthing = NULL;
-	byte gi_state;	/* get item sub state */
-	int once_only = FALSE;
+	register Entity *item;
+	register byte character;
+	byte command_key;
+	static byte last_inventory_key;
+	static Entity *previous_item = NULL;
+	byte selection_state;	/* get item sub state */
+	int show_help_once = FALSE;
 
-	if (((!strncmp(s_menu,"sel",3) && strcmp(purpose,"eat")
-	  && strcmp(purpose,"drop"))) || !strcmp(s_menu,"on"))
-		once_only = TRUE;
+	if (((!strncmp(menu_option,"sel",3) && strcmp(purpose,"eat")
+	  && strcmp(purpose,"drop"))) || !strcmp(menu_option,"on"))
+		show_help_once = TRUE;
 
-	gi_state = again;
-	if (pack == NULL)
-		msg("you aren't carrying anything");
+	selection_state = repeating_command;
+	if (player_inventory == NULL)
+		show_message("you aren't carrying anything");
 	else {
-		ch = lch;
+		character = last_inventory_key;
 		for (;;) {
 			/*
 			 * if we are doing something AGAIN, and the pack hasn't
 			 * changed then don't ask just give him the same thing
 			 * he got on the last command.
 			 */
-			if (gi_state && wasthing == pack_obj(ch, &och))
+			if (selection_state && previous_item == inventory_item_for_key(character, &command_key))
 				goto skip;
-			if (once_only) {
-				ch = '*';
+			if (show_help_once) {
+				character = '*';
 				goto skip;
 			}
 			if (!terse && !expert)
-				addmsg("which object do you want to ");
-			msg("%s? (* for list): ",purpose);
+				append_message("which object do you want to ");
+			show_message("%s? (* for list): ",purpose);
 			/*
 			 * ignore any alt characters that may be typed
 			 */
-			ch = readchar();
+			character = read_game_key();
 			skip:
-			mpos = 0;
-			gi_state = FALSE;
-			once_only = FALSE;
-			if (ch == '*') {
-				if ((ch = inventory(pack, type, purpose)) == 0) {
-					after = FALSE;
+			message_column = 0;
+			selection_state = FALSE;
+			show_help_once = FALSE;
+			if (character == '*') {
+				if ((character = show_inventory(player_inventory, type, purpose)) == 0) {
+					turn_consumed = FALSE;
 					return NULL;
 				}
-				if (ch == ' ')
+				if (character == ' ')
 					continue;
-				lch = ch;
+				last_inventory_key = character;
 			}
 			/*
 			 * Give the poor player a chance to abort the command
 			 */
-			if (ch == ESCAPE) {
-				after = FALSE;
-				msg("");
+			if (character == ESCAPE) {
+				turn_consumed = FALSE;
+				show_message("");
 				return NULL;
 			}
-			if ((obj = pack_obj(ch, &och)) == NULL) {
-				ifterse1("range is 'a' to '%c'","please specify a letter between 'a' and '%c'", och-1);
+			if ((item = inventory_item_for_key(character, &command_key)) == NULL) {
+				message_by_verbosity1("range is 'a' to '%c'","please specify a letter between 'a' and '%c'", command_key-1);
 				continue;
 			} else {
 				/*
@@ -374,10 +374,10 @@ get_item(char *purpose, int type)
 				 * thing from the pack later this flag will get set.
 				 */
 				if (strcmp(purpose, "identify")) {
-					lch = ch;
-					wasthing = obj;
+					last_inventory_key = character;
+					previous_item = item;
 				}
-				return obj;
+				return item;
 		   }
 		}
 	}
@@ -389,17 +389,17 @@ get_item(char *purpose, int type)
  *	Return which character would address a pack object
  */
 byte
-pack_char(THING *obj)
+inventory_key(Entity *target_item)
 {
-	register THING *item;
-	register byte c;
+	register Entity *item;
+	register byte item_key;
 
-	c = 'a';
-	for (item = pack; item != NULL; item = next(item))
-		if (item == obj)
-			return c;
+	item_key = 'a';
+	for (item = player_inventory; item != NULL; item = next(item))
+		if (item == target_item)
+			return item_key;
 		else
-			c++;
+			item_key++;
 	return '?';
 }
 
@@ -408,16 +408,16 @@ pack_char(THING *obj)
  *	Add or subtract gold from the pack
  */
 void
-money(int value)
+collect_gold(int value)
 {
 	register byte floor;
 
-	floor = (proom->r_flags & ISGONE) ? PASSAGE : FLOOR;
-	purse += value;
-	mvaddch(hero.y, hero.x, floor);
-	chat(hero.y, hero.x) = floor;
+	floor = (player_room->flags & ROOM_ABSENT) ? PASSAGE : FLOOR;
+	player_gold += value;
+	mvaddch(player_position.y, player_position.x, floor);
+	terrain_at(player_position.y, player_position.x) = floor;
 	if (value > 0)
 	{
-		msg("you found %d gold pieces", value);
+		show_message("you found %d gold pieces", value);
 	}
 }

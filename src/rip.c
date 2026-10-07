@@ -9,23 +9,23 @@
 #include "curses.h"
 
 //@ moved from rogue.h
-#define TOPSCORES	10
-struct sc_ent {
-	char sc_name[38];
-	int sc_rank;
-	int sc_gold;
-	int sc_fate;
-	int sc_level;
+#define MAX_HIGH_SCORES	10
+struct score_entry {
+	char player_name[38];
+	int experience_level;
+	int gold;
+	int fate;
+	int dungeon_level;
 };
 
 #ifndef DEMO
-static FILE *file;
+static FILE *score_file;
 #endif
 
-static void	get_scores(struct sc_ent *top10);
-static bool	put_scores(struct sc_ent *top10);
-static void	pr_scores(int newrank, struct sc_ent *top10);
-static int	add_scores(struct sc_ent *newscore, struct sc_ent *oldlist);
+static void	read_scores(struct score_entry *scores);
+static bool	write_scores(struct score_entry *scores);
+static void	display_scores(int new_rank, struct score_entry *scores);
+static int	insert_score(struct score_entry *new_score, struct score_entry *scores);
 
 /*
  * score:
@@ -33,39 +33,39 @@ static int	add_scores(struct sc_ent *newscore, struct sc_ent *oldlist);
  */
 /* VARARGS2 */
 void
-score(int amount, int flags, char monst)
+update_high_scores(int amount, int end_reason, char death_cause)
 {
 #ifndef DEMO
 #ifndef WIZARD
-	struct sc_ent his_score = {0}, top_ten[TOPSCORES];
+	struct score_entry player_score = {0}, scores[MAX_HIGH_SCORES];
 	register int rank=0;
 	char response = ' ';
 	bool written = TRUE;
 
 
-	is_saved = TRUE;
+	screen_updates_suspended = TRUE;
 
-	if (amount || flags || monst)
+	if (amount || end_reason || death_cause)
 	{
-		wait_msg("see rankings");
+		wait_for_enter("see rankings");
 	}
-	while ((file = fopen(s_score, "rb")) == NULL)
+	while ((score_file = fopen(score_filename, "rb")) == NULL)
 	{
 		printw("\n");
-		if (noscore || (amount == 0))
+		if (score_disabled || (amount == 0))
 			return;
-		str_attr("No scorefile: %Create %Retry %Abort");
+		print_highlighted_text("No scorefile: %Create %Retry %Abort");
 reread:
-		switch(response = readchar())
+		switch(response = read_game_key())
 		{
 		case 'c':
 		case 'C':
-			file = fopen(s_score, "wb");
-			if (file == NULL) {
+			score_file = fopen(score_filename, "wb");
+			if (score_file == NULL) {
 				printw("\nCould not create scorefile: %s\n", strerror(errno));
 				break;
 			}
-			if (fclose(file) != 0)
+			if (fclose(score_file) != 0)
 				printw("\nCould not close scorefile: %s\n", strerror(errno));
 			break;
 		case 'r':
@@ -79,31 +79,31 @@ reread:
 		}
 	}
 	printw("\n");
-	get_scores(top_ten);
+	read_scores(scores);
 
-	if (noscore != TRUE)
+	if (score_disabled != TRUE)
 	{
-		strcpy(his_score.sc_name,whoami);
-		his_score.sc_gold = amount;
-		his_score.sc_fate = flags ? flags : monst;
-		his_score.sc_level = max_level;
-		his_score.sc_rank  = pstats.s_lvl;
-		rank = add_scores(&his_score, top_ten);
+		strcpy(player_score.player_name,player_name);
+		player_score.gold = amount;
+		player_score.fate = end_reason ? end_reason : death_cause;
+		player_score.dungeon_level = deepest_level;
+		player_score.experience_level  = player_stats.experience_level;
+		rank = insert_score(&player_score, scores);
 	}
-	fclose(file);
+	fclose(score_file);
 	if (rank > 0) {
-		if ((file = fopen(s_score, "wb")) != NULL) {
-			written = put_scores(top_ten);
-			if (fclose(file) != 0)
+		if ((score_file = fopen(score_filename, "wb")) != NULL) {
+			written = write_scores(scores);
+			if (fclose(score_file) != 0)
 				written = FALSE;
 		} else
 			written = FALSE;
 	}
-	pr_scores(rank, top_ten);
+	display_scores(rank, scores);
 	if (!written)
 		printw("\nCould not write scorefile\n");
 #ifndef ROGUE_DOS_CURSES
-	wait_msg("exit");
+	wait_for_enter("exit");
 	printw("\n");
 #endif
 #endif //WIZARD
@@ -114,33 +114,33 @@ reread:
 #ifndef WIZARD
 static
 void
-get_scores(struct sc_ent *top10)
+read_scores(struct score_entry *scores)
 {
-	struct sc_ent entry;
+	struct score_entry entry;
 	int i;
 
-	memset(top10, 0, TOPSCORES * sizeof(*top10));
-	for (i = 0; i < TOPSCORES; i++) {
-		if (fread(&entry, sizeof(entry), 1, file) != 1)
+	memset(scores, 0, MAX_HIGH_SCORES * sizeof(*scores));
+	for (i = 0; i < MAX_HIGH_SCORES; i++) {
+		if (fread(&entry, sizeof(entry), 1, score_file) != 1)
 			break;
 		/* Old files store native structs, so validate before indexing or printing. */
-		if (entry.sc_gold <= 0 || entry.sc_rank < 1
-		    || (size_t)entry.sc_rank > he_man_count || entry.sc_level < 1
-		    || memchr(entry.sc_name, '\0', sizeof(entry.sc_name)) == NULL)
+		if (entry.gold <= 0 || entry.experience_level < 1
+		    || (size_t)entry.experience_level > rank_name_count || entry.dungeon_level < 1
+		    || memchr(entry.player_name, '\0', sizeof(entry.player_name)) == NULL)
 			break;
-		top10[i] = entry;
+		scores[i] = entry;
 	}
 }
 
 static
 bool
-put_scores(struct sc_ent *top10)
+write_scores(struct score_entry *scores)
 {
 	register int i;
 
-	for (i=0;(i<TOPSCORES) && top10->sc_gold;i++,top10++)
+	for (i=0;(i<MAX_HIGH_SCORES) && scores->gold;i++,scores++)
 	{
-		if (fwrite(top10, sizeof(struct sc_ent), 1, file) <= 0)
+		if (fwrite(scores, sizeof(struct score_entry), 1, score_file) <= 0)
 			return FALSE;
 	}
 	return TRUE;
@@ -148,84 +148,84 @@ put_scores(struct sc_ent *top10)
 
 static
 void
-pr_scores(int newrank, struct sc_ent *top10)
+display_scores(int new_rank, struct score_entry *scores)
 {
 	register int i;
-	int curl;
-	char dthstr[30];
-	char *altmsg;
+	int row;
+	char death_description[30];
+	char *special_message;
 
 #ifdef ROGUE_DOS_CURSES
 	switch_page(old_page_no);
 #endif
 	clear();
 	high();
-	if (scr_type == 7)
+	if (dos_screen_mode == 7)
 		standout();
 	mvaddstr(0,0,"Guildmaster's Hall Of Fame:");
 	standend();
 	yellow();
 	mvaddstr(2,0,"Gold");
 
-	for (i=0;i<TOPSCORES;i++,top10++)
+	for (i=0;i<MAX_HIGH_SCORES;i++,scores++)
 	{
-		altmsg = NULL;
+		special_message = NULL;
 		brown();
-		if (newrank - 1 == i)
+		if (new_rank - 1 == i)
 		{
-			if (scr_type == 7)
+			if (dos_screen_mode == 7)
 				standout();
 			else
 				yellow();
 		}
-		if (top10->sc_gold <=0 )
+		if (scores->gold <=0 )
 			break;
-		curl = 4 + ((COLS==40)?(i * 2):i);
-		move (curl,0);
-		printw("%d ",top10->sc_gold);
-		move (curl,6);
-		if (newrank - 1 != i)
+		row = 4 + ((COLS==40)?(i * 2):i);
+		move (row,0);
+		printw("%d ",scores->gold);
+		move (row,6);
+		if (new_rank - 1 != i)
 			red();
-		printw("%s",top10->sc_name);
-		if ((newrank) - 1 != i)
+		printw("%s",scores->player_name);
+		if ((new_rank) - 1 != i)
 			brown();
-		if (top10->sc_level >= 26)  //@ There is AMULETLEVEL, you know?
-			altmsg = " Honored by the Guild";
+		if (scores->dungeon_level >= 26)  //@ There is AMULETLEVEL, you know?
+			special_message = " Honored by the Guild";
 
-		if (is_alpha(top10->sc_fate))
+		if (is_alpha(scores->fate))
 		{
-			sprintf(dthstr," killed by %s",
-				killname((0xff & top10->sc_fate), TRUE));
-			if (COLS == 40 && strlen(dthstr) > 23)
-				strcpy(dthstr," killed");
+			sprintf(death_description," killed by %s",
+				death_cause_name((0xff & scores->fate), TRUE));
+			if (COLS == 40 && strlen(death_description) > 23)
+				strcpy(death_description," killed");
 		}
 		else
 		{
-			switch(top10->sc_fate)
+			switch(scores->fate)
 			{
 				case 2:
-					altmsg = " A total winner!";
+					special_message = " A total winner!";
 					break;
 				case 1:
-					strcpy(dthstr," quit");
+					strcpy(death_description," quit");
 					break;
 				default:
-					strcpy(dthstr," wierded out");
+					strcpy(death_description," wierded out");
 					break;
 			}
 		}
-		if ((signed)(strlen(top10->sc_name) + 10 +
-			strlen(he_man[top10->sc_rank-1])) < COLS)
+		if ((signed)(strlen(scores->player_name) + 10 +
+			strlen(rank_names[scores->experience_level-1])) < COLS)
 		{
-			if (top10->sc_rank > 1 && (strlen(top10->sc_name)))
-				printw(" \"%s\"",he_man[top10->sc_rank - 1]);
+			if (scores->experience_level > 1 && (strlen(scores->player_name)))
+				printw(" \"%s\"",rank_names[scores->experience_level - 1]);
 		}
 		if (COLS == 40)
-			move(curl+1,6);
-		if (altmsg == NULL)
-			printw("%s on level %d",dthstr,top10->sc_level);
+			move(row+1,6);
+		if (special_message == NULL)
+			printw("%s on level %d",death_description,scores->dungeon_level);
 		else
-			addstr(altmsg);
+			addstr(special_message);
 	}
 	standend();
 	if (COLS == 80)
@@ -234,20 +234,20 @@ pr_scores(int newrank, struct sc_ent *top10)
 
 static
 int
-add_scores(struct sc_ent *newscore, struct sc_ent *oldlist)
+insert_score(struct score_entry *new_score, struct score_entry *scores)
 {
-	int i = TOPSCORES - 1;
-	int insert = TOPSCORES;
+	int i = MAX_HIGH_SCORES - 1;
+	int insert = MAX_HIGH_SCORES;
 
 	/* Use an index: decrementing a pointer before oldlist is undefined in C. */
-	for (; i >= 0 && newscore->sc_gold > oldlist[i].sc_gold; i--) {
+	for (; i >= 0 && new_score->gold > scores[i].gold; i--) {
 		insert = i;
-		if (i < TOPSCORES - 1)
-			oldlist[i + 1] = oldlist[i];
+		if (i < MAX_HIGH_SCORES - 1)
+			scores[i + 1] = scores[i];
 	}
-	if (insert == TOPSCORES)
+	if (insert == MAX_HIGH_SCORES)
 		return 0;
-	oldlist[insert] = *newscore;
+	scores[insert] = *new_score;
 	return insert + 1;
 }
 #endif //WIZARD
@@ -258,13 +258,13 @@ add_scores(struct sc_ent *newscore, struct sc_ent *oldlist)
  *	Do something really fun when he dies
  */
 void
-death(char monst)
+show_death_screen(char death_cause)
 {
-	char buf[MAXSTR];
+	char text[MAXSTR];
 #ifndef DEMO
 	register int year;
 
-	purse -= purse / 10;
+	player_gold -= player_gold / 10;
 
 #ifdef ROGUE_DOS_CURSES
 	switch_page(old_page_no);
@@ -285,9 +285,9 @@ death(char monst)
 	center(22, "___\\/(\\/)/(\\/ \\\\(//)\\)\\/(//)\\\\)//(\\__");
 	standend();
 
-	if (scr_type == 7)
+	if (dos_screen_mode == 7)
 		uline();
-	center(14, your_na);
+	center(14, tombstone_player_name);
 	standend();
 
 	/*@
@@ -298,47 +298,47 @@ death(char monst)
 	 * the default "pirated" message. The same method is used with your_na
 	 * above.
 	 */
-	killname(monst, TRUE);
+	death_cause_name(death_cause, TRUE);
 
-	strcpy(buf,"killed by");
+	strcpy(text,"killed by");
 
-	center(15,buf);
-	center(16, kild_by);
+	center(15,text);
+	center(16, tombstone_death_cause);
 
-	sprintf(buf, "%u Au", purse);
-	center(18, buf);
+	sprintf(text, "%u Au", player_gold);
+	center(18, text);
 
 #ifdef ROGUE_DOS_CLOCK
-	regs->ax = 0x2a << 8;
-	swint(SW_DOS,regs);
-	year = regs->cx;
+	dos_regs->ax = 0x2a << 8;
+	call_dos_interrupt(SW_DOS,dos_regs);
+	year = dos_regs->cx;
 #else
-	year = md_localtime()->year;
+	year = current_local_time()->year;
 #endif
-	sprintf(buf, "%u", year);
-	center(19, buf);
+	sprintf(text, "%u", year);
+	center(19, text);
 	raise_curtain();
 	move(LINES-1, 0);
-	score(purse, 0, monst);
+	update_high_scores(player_gold, 0, death_cause);
 #else //DEMO
 	register char *killer;
 	demo(0);
-	killer = killname(monst, TRUE);
+	killer = death_cause_name(death_cause, TRUE);
 
-	strcpy(buf,"This time you were killed by");
-	strcat(buf," ");
-	strcat(buf,killer);
-	if (strlen(buf) > (COLS-2))
+	strcpy(text,"This time you were killed by");
+	strcat(text," ");
+	strcat(text,killer);
+	if (strlen(text) > (COLS-2))
 		center(6,"This time you were killed");
 	else
-		center(6, buf);
+		center(6, text);
 	move(LINES-2,0);
 #ifndef ROGUE_DOS_CURSES
-	wait_msg("exit");
+	wait_for_enter("exit");
 	printw("\n");
 #endif
 #endif //DEMO
-	md_exit(EXIT_SUCCESS);
+	exit_game(EXIT_SUCCESS);
 }
 
 /*
@@ -346,13 +346,13 @@ death(char monst)
  *	Code for a winner
  */
 void
-total_winner(void)
+show_victory_screen(void)
 {
 #ifndef DEMO
-	register THING *obj;
+	register Entity *item;
 	register int worth = 0;
-	register byte c;
-	register int oldpurse;
+	register byte column;
+	register int previous_gold;
 
 #ifdef ROGUE_DOS_CURSES
 	switch_page(old_page_no);
@@ -384,35 +384,35 @@ total_winner(void)
 	printw("admitted to the fighters guild.\n\n\n");
 #endif //MINROG
 	mvaddstr(LINES - 1, 0, "--Press space to continue--");
-	wait_for(' ');
+	wait_for_key(' ');
 	clear();
 	mvaddstr(0, 0, "   Worth  Item");
-	oldpurse = purse;
-	for (c = 'a', obj = pack; obj != NULL; c++, obj = next(obj))
+	previous_gold = player_gold;
+	for (column = 'a', item = player_inventory; item != NULL; column++, item = next(item))
 	{
-	switch (obj->o_type)
+	switch (item->item_category)
 	{
 		when FOOD:
-			worth = 2 * obj->o_count;
+			worth = 2 * item->item_quantity;
 		when WEAPON:
-			switch (obj->o_which)
+			switch (item->item_subtype)
 			{
 				when MACE: worth = 8;
 				when SWORD: worth = 15;
 				when CROSSBOW: worth = 30;
 				when ARROW: worth = 1;
 				when DAGGER: worth = 2;
-				when TWOSWORD: worth = 75;
+				when TWO_HANDED_SWORD: worth = 75;
 				when DART: worth = 1;
 				when BOW: worth = 15;
 				when BOLT: worth = 1;
 				when SPEAR: worth = 5;
 				break;
 			}
-			worth *= 3 * (obj->o_hplus + obj->o_dplus) + obj->o_count;
-			obj->o_flags |= ISKNOW;
+			worth *= 3 * (item->item_hit_bonus + item->item_damage_bonus) + item->item_quantity;
+			item->item_flags |= ITEM_IDENTIFIED;
 		when ARMOR:
-			switch (obj->o_which)
+			switch (item->item_subtype)
 			{
 				when LEATHER: worth = 20;
 				when RING_MAIL: worth = 25;
@@ -424,57 +424,57 @@ total_winner(void)
 				when PLATE_MAIL: worth = 150;
 				break;
 			}
-			worth += (9 - obj->o_ac) * 100;
-			worth += (10 * (a_class[obj->o_which] - obj->o_ac));
-			obj->o_flags |= ISKNOW;
+			worth += (9 - item->item_modifier) * 100;
+			worth += (10 * (armor_classes[item->item_subtype] - item->item_modifier));
+			item->item_flags |= ITEM_IDENTIFIED;
 		when SCROLL:
-			worth = s_magic[obj->o_which].mi_worth;
-			worth *= obj->o_count;
-			if (!s_know[obj->o_which])
+			worth = scroll_definitions[item->item_subtype].value;
+			worth *= item->item_quantity;
+			if (!scroll_identified[item->item_subtype])
 				worth /= 2;
-			s_know[obj->o_which] = TRUE;
+			scroll_identified[item->item_subtype] = TRUE;
 		when POTION:
-			worth = p_magic[obj->o_which].mi_worth;
-			worth *= obj->o_count;
-			if (!p_know[obj->o_which])
+			worth = potion_definitions[item->item_subtype].value;
+			worth *= item->item_quantity;
+			if (!potion_identified[item->item_subtype])
 				worth /= 2;
-			p_know[obj->o_which] = TRUE;
+			potion_identified[item->item_subtype] = TRUE;
 		when RING:
-			worth = r_magic[obj->o_which].mi_worth;
-			if (obj->o_which == R_ADDSTR || obj->o_which == R_ADDDAM ||
-				obj->o_which == R_PROTECT || obj->o_which == R_ADDHIT)
+			worth = ring_definitions[item->item_subtype].value;
+			if (item->item_subtype == RING_ADD_STRENGTH || item->item_subtype == RING_DAMAGE ||
+				item->item_subtype == RING_PROTECTION || item->item_subtype == RING_DEXTERITY)
 			{
-				if (obj->o_ac > 0)
-					worth += obj->o_ac * 100;
+				if (item->item_modifier > 0)
+					worth += item->item_modifier * 100;
 				else
 					worth = 10;
 			}
-			if (!(obj->o_flags & ISKNOW))
+			if (!(item->item_flags & ITEM_IDENTIFIED))
 				worth /= 2;
-			obj->o_flags |= ISKNOW;
-			r_know[obj->o_which] = TRUE;
+			item->item_flags |= ITEM_IDENTIFIED;
+			ring_identified[item->item_subtype] = TRUE;
 		when STICK:
-			worth = ws_magic[obj->o_which].mi_worth;
-			worth += 20 * obj->o_charges;
-			if (!(obj->o_flags & ISKNOW))
+			worth = wand_definitions[item->item_subtype].value;
+			worth += 20 * item->item_charges;
+			if (!(item->item_flags & ITEM_IDENTIFIED))
 				worth /= 2;
-			obj->o_flags |= ISKNOW;
-			ws_know[obj->o_which] = TRUE;
+			item->item_flags |= ITEM_IDENTIFIED;
+			wand_identified[item->item_subtype] = TRUE;
 			when AMULET:
 			worth = 1000;
 			break;
 	}
 	if (worth < 0)
 		worth = 0;
-	move(c - 'a' + 1, 0);
-	printw( "%c) %5d  %s", c, worth, inv_name(obj, FALSE));
-	purse += worth;
+	move(column - 'a' + 1, 0);
+	printw( "%c) %5d  %s", column, worth, describe_item(item, FALSE));
+	player_gold += worth;
 	}
-	move(c - 'a' + 1, 0);
-	printw("   %5u  Gold Pieces          ", oldpurse);
-	score(purse, 2, 0);
+	move(column - 'a' + 1, 0);
+	printw("   %5u  Gold Pieces          ", previous_gold);
+	update_high_scores(player_gold, 2, 0);
 #endif //DEMO
-	md_exit(EXIT_SUCCESS);
+	exit_game(EXIT_SUCCESS);
 }
 
 /*
@@ -482,41 +482,41 @@ total_winner(void)
  *	Convert a code to a monster name
  */
 char *
-killname(byte monst, bool doart)
+death_cause_name(byte cause, bool include_article)
 {
-	register char *sp;
-	register bool article;
+	register char *cause_name;
+	register bool needs_article;
 
-	sp = prbuf;
-	article = TRUE;
-	switch (monst)
+	cause_name = description_buffer;
+	needs_article = TRUE;
+	switch (cause)
 	{
 	when 'a':
-		sp = "arrow";
+		cause_name = "arrow";
 	when 'b':
-		sp = "bolt";
+		cause_name = "bolt";
 	when 'd':
-		sp = "dart";
+		cause_name = "dart";
 	when 's':
-		sp = "starvation";
-		article = FALSE;
+		cause_name = "starvation";
+		needs_article = FALSE;
 	when 'f':
-		sp = "fall";
+		cause_name = "fall";
 	otherwise:
-		if (ismonster(monst))
-			sp = monsters[monst-'A'].m_name;
+		if (is_monster_symbol(cause))
+			cause_name = monster_definitions[cause-'A'].name;
 		else
 		{
-			sp = "God";
-			article = FALSE;
+			cause_name = "God";
+			needs_article = FALSE;
 		}
 	}
-	if (doart && article)
-	sprintf(prbuf, "a%s ", vowelstr(sp));
+	if (include_article && needs_article)
+	sprintf(description_buffer, "a%s ", article_suffix(cause_name));
 	else
-	prbuf[0] = '\0';
-	strcat(prbuf, sp);
-	return prbuf;
+	description_buffer[0] = '\0';
+	strcat(description_buffer, cause_name);
+	return description_buffer;
 }
 
 #ifdef DEMO
@@ -542,16 +542,16 @@ demo(int endtype)
 	standend();
 	if (is_color)
 		lmagenta();
-	sprintf(demobuf,"Sorry, %s but this is just a demonstration",whoami);
+	sprintf(demobuf,"Sorry, %s but this is just a demonstration",player_name);
 	if (terse)
 		sprintf(demobuf,"Sorry, this is just a demonstration");
 	center(4,demobuf);
 	if (endtype == 1)   /* quiter */
 	{
-		sprintf(demobuf,"You quit with %u pieces of Gold",purse);
+		sprintf(demobuf,"You quit with %u pieces of Gold",player_gold);
 		center(6,demobuf);
 	} else if (endtype == DEMOTIME) {
-		sprintf(demobuf,"You ended with %u gold pieces",purse);
+		sprintf(demobuf,"You ended with %u gold pieces",player_gold);
 		center(6,demobuf);
 	}
 	if (terse)
@@ -588,9 +588,9 @@ demo(int endtype)
 		return;
 	move(LINES-2,0);
 #ifndef ROGUE_DOS_CURSES
-	wait_msg("exit");
+	wait_for_enter("exit");
 	printw("\n");
 #endif
-	md_exit(EXIT_SUCCESS);
+	exit_game(EXIT_SUCCESS);
 }
 #endif //DEMO

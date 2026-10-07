@@ -28,8 +28,8 @@
  *  Globals for curses
  *  (extern'ed in curses.h)
  */
-int is_saved = FALSE;  //@ in practice, TRUE disables status updates in SIG2()
-int scr_type = -1;
+int screen_updates_suspended = FALSE;  //@ in practice, TRUE disables status updates in SIG2()
+int dos_screen_mode = -1;
 #ifdef ROGUE_DOS_CURSES
 int LINES=25, COLS=80;
 bool iscuron = TRUE;
@@ -47,11 +47,11 @@ extern int LINES, COLS;
  */
 
 // Terminal size we *want*, not necessarily what we will get
-int cur_LINES = min(25, MAXLINES);
-int cur_COLS  = min(ROGUE_COLUMNS, MAXCOLS);
+int game_screen_rows = min(25, MAXLINES);
+int game_screen_columns  = min(ROGUE_COLUMNS, MAXCOLS);
 
 // if curses is initialized or not. If extern'ed, should be read-only
-bool init_curses = FALSE;
+bool screen_initialized = FALSE;
 
 /* Charset used. Could be initially set via env file, but should not be changed
  * mid-game unless we create a function to re-draw the screen. The code should
@@ -61,7 +61,7 @@ bool init_curses = FALSE;
  * with _XOPEN_CURSES. ROGUE_CHARSET is a factory default that already accounts
  * for Unicode availability and compile-time options.
  */
-int	charset = ROGUE_CHARSET;
+int	character_set = ROGUE_CHARSET;
 
 /*
  * Number of colors we're working with, regardless if terminal has more colors
@@ -76,7 +76,7 @@ int	charset = ROGUE_CHARSET;
  *
  * If extern'ed, should obviously be read-only
  */
-int 	colors;
+int 	screen_color_count;
 
 // if user allows us to redefine color palette to match original RGB
 bool change_colors = TRUE;
@@ -89,7 +89,7 @@ bool use_terminal_fgbg = TRUE;
 int tab_size = 8;
 
 //@ private
-static int ch_attr = A_DOS_NORMAL;
+static int current_dos_attribute = A_DOS_NORMAL;
 #ifdef ROGUE_DOS_CURSES
 static int page_no = 0;
 static int c_row, c_col;   /*  Save cursor positions so we don't ask dos */
@@ -98,13 +98,13 @@ static int no_check = FALSE;  //@ do not wait for video retrace. Former extern
 #else
 #ifdef ROGUE_WIDECHAR
 static cchar_t  curtain[MAXLINES][MAXCOLS + 1];
-static cchar_t  cctemp;
+static cchar_t  temporary_screen_cell;
 #else
 static chtype   curtain[MAXLINES][MAXCOLS + 1];  // temp buffer for curtain animations
 #endif // ROGUE_WIDECHAR
-static int	KEY_MASK;
-static wchar_t	ccunicode[2] = L" ";  // temp buffer
-static CCODE	ccode = {'\0', ccunicode, '\0'};  // temp charcode
+static int	TERMINAL_KEY_MASK;
+static wchar_t	fallback_unicode[2] = L" ";  // temp buffer
+static CharacterMapping	fallback_character_mapping = {'\0', fallback_unicode, '\0'};  // temp charcode
 static bool	colors_changed = FALSE;  // if colors palette was redefined
 #endif  // ROGUE_DOS_CURSES
 
@@ -114,18 +114,18 @@ static bool	colors_changed = FALSE;  // if colors palette was redefined
  * is the best long term solution.
  */
 #if   defined (ROGUE_DOS_CURSES)
-char savewin[2048 * sizeof(chtype)];  //@ originally 4096 bytes
+char saved_screen[2048 * sizeof(chtype)];  //@ originally 4096 bytes
 #elif defined (ROGUE_WIDECHAR)
-cchar_t	savewin[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
+cchar_t	saved_screen[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
 #else
-chtype	savewin[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
+chtype	saved_screen[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
 #endif
 
 /*@
  * Original used decimal literals for both tables
  */
 #define MAXATTR 17
-static byte color_attr[] = {
+static byte color_attributes[] = {
 	A_DOS_NORMAL,                  /*  0 normal         */
 	A_DOS_GREEN,                   /*  1 green          */
 	A_DOS_CYAN,                    /*  2 cyan           */
@@ -154,7 +154,7 @@ static byte color_attr[] = {
  *
  * And surprisingly high()/set_attr(15) is set to normal white (ie, light gray)
  */
-static byte monoc_attr[] = {
+static byte monochrome_attributes[] = {
 	A_DOS_NORMAL,      /*  0 normal         */
 	A_DOS_NORMAL,      /*  1 green          */
 	A_DOS_NORMAL,      /*  2 cyan           */
@@ -175,7 +175,7 @@ static byte monoc_attr[] = {
 	0                  /* no more           */
 } ;
 
-static byte *at_table;
+static byte *active_attributes;
 
 /*@
  * Changes in ASCII chars from Unix Rogue (and roguelike ASCII tradition):
@@ -187,7 +187,7 @@ static byte *at_table;
  * the one to break such a well-known convention, and get flamed for heresy.
  * You do it.
  */
-static CCODE ctab[] = {
+static CharacterMapping game_character_mappings[] = {
 		/*
 		 * Dungeon chars. If a char in this block is not unique, such as
 		 * the ASCII for room corners, cur_inch() reverse search will map
@@ -237,7 +237,7 @@ static CCODE ctab[] = {
 		{'`', L"`", 0}  // if ` appears on screen, something went wrong!
 };
 
-static CCODE btab[] = {
+static CharacterMapping box_character_mappings[] = {
 		// single-width box glyphs
 		{'|', L"\x2502", VLINE},      // │
 		{'-', L"\x2500", HLINE},      // ─
@@ -290,7 +290,7 @@ static CCODE btab[] = {
  * 7	0552	KEY_FIND
  * 1	0601	KEY_SELECT
  */
-static TTYSEQ ttymap[] = {
+static TerminalKeySequence terminal_key_mappings[] = {
 		{TTY_SS3 "j", '*'},
 		{TTY_SS3 "k", '+'},
 		{TTY_SS3 "m", '-'},
@@ -302,11 +302,11 @@ static TTYSEQ ttymap[] = {
 		{TTY_CSI "4~", KEY_END},
 };
 
-static byte dbl_box[BX_SIZE] = {
+static byte double_box_characters[BX_SIZE] = {
 	DULCORNER, DURCORNER, DLLCORNER, DLRCORNER, DVLINE, DHLINE, DHLINE
 };
 
-static byte sng_box[BX_SIZE] = {
+static byte single_box_characters[BX_SIZE] = {
 	ULCORNER, URCORNER, LLCORNER, LRCORNER, VLINE, HLINE, HLINE
 };
 
@@ -315,7 +315,7 @@ static byte fat_box[BX_SIZE] = {
 	0xdb, 0xdb, 0xdb, 0xdb, 0xdb, 0xdf, 0xdc
 };
 */
-static byte spc_box[BX_SIZE] = {
+static byte blank_box_characters[BX_SIZE] = {
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20
 };
 
@@ -323,10 +323,10 @@ static byte spc_box[BX_SIZE] = {
  * Table for IBM extended key translation
  * moved from march_dep.c
  */
-static struct xlate {
+static struct key_translation {
 	int keycode;
 	byte keyis;
-} xtab[] = {
+} key_translations[] = {
 #ifdef ROGUE_DOS_CURSES
 	{C_HOME,	'y'},
 	{C_UP,		'k'},
@@ -396,11 +396,11 @@ static struct xlate {
  * supposed to make terminals play a beep.
  */
 void
-cur_beep(void)
+screen_beep(void)
 {
 #ifdef ROGUE_DOS_CURSES
 	byte speaker = 0x61;       //@ speaker port
-	byte saved = in(speaker);  // input control info from keyboard/speaker port
+	byte saved = dos_read_port(speaker);  // input control info from keyboard/speaker port
 	byte cmd = saved;
 	int cycles = 300;          // count of speaker cycles
 	int c;
@@ -408,13 +408,13 @@ cur_beep(void)
 	while (--cycles)
 	{
 		cmd &= 0x0fc;          // speaker off pulse (mask out bit 0 and 1)
-		out(speaker, cmd);     // send command to speaker port
+		dos_write_port(speaker, cmd);     // send command to speaker port
 		for(c=50; c; c--) {;}  // kill time for tone half-cycle
 		cmd |= 0x10;           // speaker on pulse (bit 1 on)
-		out(speaker, cmd);     // send command to speaker port
+		dos_write_port(speaker, cmd);     // send command to speaker port
 		for(c=50; c; c--) {;}  // kill time for tone half-cycle
 	}
-	out(speaker, saved);       // restore speaker/keyboard port value
+	dos_write_port(speaker, saved);       // restore speaker/keyboard port value
 #ifdef ROGUE_DEBUG
 	printf("\a");  //@ lame, I know... but it works
 #endif
@@ -439,7 +439,7 @@ cur_beep(void)
  * Return ERR on non-ASCII chars and on window resize.
  */
 int
-cur_getch_timeout(int msdelay)
+screen_read_key(int timeout_ms)
 {
 #ifdef ROGUE_DOS_CURSES
 	/*@
@@ -449,41 +449,41 @@ cur_getch_timeout(int msdelay)
 	 */
 	return getchar();
 #else
-	int ch = 0;
+	int character = 0;
 
-	wtimeout(stdscr, msdelay);
+	wtimeout(stdscr, timeout_ms);
 
 
 #ifdef ROGUE_WIDECHAR
-	wint_t wchi;
-	int ret;
-	if ((ret = wget_wch(stdscr, &wchi)) == ERR || (ret == OK && !isascii(wchi)))
+	wint_t wide_key;
+	int input_status;
+	if ((input_status = wget_wch(stdscr, &wide_key)) == ERR || (input_status == OK && !isascii(wide_key)))
 	{
 		// we're only interested in ASCII input
-		ch = ERR;
+		character = ERR;
 	}
 	else
 	{
 		// KEY_* codes always fit int, so no need for any special test
-		ch = (int)wchi;
+		character = (int)wide_key;
 	}
 #else
-	ch = wgetch(stdscr);
+	character = wgetch(stdscr);
 #endif  // ROGUE_WIDECHAR
 	// mask-map custom keys
-	if (ch != ERR)
+	if (character != ERR)
 	{
-		ch = KEY_MASK & ch;
+		character = TERMINAL_KEY_MASK & character;
 	}
 
 	// window resize needs special handling. all others go through xlate/xtab
-	if (ch == KEY_RESIZE)
+	if (character == KEY_RESIZE)
 	{
 		resize_screen();
-		ch = ERR;
+		character = ERR;
 	}
 	nodelay(stdscr, FALSE);
-	return ch;
+	return character;
 #endif  // ROGUE_DOS_CURSES
 }
 
@@ -495,21 +495,21 @@ cur_getch_timeout(int msdelay)
  * Moved from mach_dep.c as part of readchar()
  */
 byte
-xlate_ch(int ch)
+translate_key(int character)
 {
-	struct xlate *x;
+	struct key_translation *translation;
 	/*
 	 * Now read a character and translate it if it appears in the
 	 * translation table
 	 */
-	for (x = xtab; x < xtab + (sizeof xtab) / sizeof *xtab; x++)
+	for (translation = key_translations; translation < key_translations + (sizeof key_translations) / sizeof *key_translations; translation++)
 	{
-		if (ch == x->keycode) {
-			ch = x->keyis;
+		if (character == translation->keycode) {
+			character = translation->keyis;
 			break;
 		}
 	}
-	return (byte)ch;
+	return (byte)character;
 }
 
 
@@ -531,7 +531,7 @@ xlate_ch(int ch)
  * DL = col
  */
 int
-cur_move(row, col)
+screen_move(row, col)
 	int row;
 	int col;
 {
@@ -541,10 +541,10 @@ cur_move(row, col)
 
 	if (iscuron)
 	{
-		regs->ax = HIGH(2);
-		regs->bx = HIGH(page_no);
-		regs->dx = HILO(row, col);
-		swint(SW_SCR, regs);
+		dos_regs->ax = HIGH(2);
+		dos_regs->bx = HIGH(page_no);
+		dos_regs->dx = HILO(row, col);
+		call_dos_interrupt(SW_SCR, dos_regs);
 	}
 #else
 	return wmove(stdscr, row, col);
@@ -591,10 +591,10 @@ putchr(byte ch)
 	if (iscuron)
 	{
 		// Use BIOS call
-		regs->ax = HILO(9, ch);
-		regs->bx = HILO(page_no, ch_attr);
-		regs->cx = 1;
-		swint(SW_SCR, regs);
+		dos_regs->ax = HILO(9, ch);
+		dos_regs->bx = HILO(page_no, current_dos_attribute);
+		dos_regs->cx = 1;
+		call_dos_interrupt(SW_SCR, dos_regs);
 	}
 	else
 	{
@@ -605,7 +605,7 @@ putchr(byte ch)
 		 * scr_row[] array takes that into account, so we can use c_row
 		 * directly. See winit().
 		 */
-		dmaout(HILO(ch_attr, ch), 1,
+		dos_write_memory(HILO(current_dos_attribute, ch), 1,
 			scr_ds, scr_row[c_row] + 2 * c_col);
 	}
 #ifdef ROGUE_DEBUG
@@ -645,66 +645,66 @@ putchr(byte ch)
  * AL = character
  */
 byte
-cur_inch(void)
+screen_read_character(void)
 {
 #ifdef ROGUE_DOS_CURSES
 	chtype chrattr = 0;
 
 	if (iscuron)
 	{
-		regs->ax = HIGH(8);
-		regs->bx = HIGH(page_no);
-		chrattr = swint(SW_SCR, regs);
+		dos_regs->ax = HIGH(8);
+		dos_regs->bx = HIGH(page_no);
+		chrattr = call_dos_interrupt(SW_SCR, dos_regs);
 	}
 	else
 	{
 		if (!no_check){;}
-		dmain(&chrattr, 1, scr_ds, scr_row[c_row] + 2 * c_col);
+		dos_read_memory(&chrattr, 1, scr_ds, scr_row[c_row] + 2 * c_col);
 	}
 	return (byte)LOW(chrattr);
 #else
-	byte chd = 0;
-	CCODE *ccp;
-	wchar_t wch;  // character on screen
-	wchar_t wcr;  // reference character on ctab mapping
+	byte dos_character = 0;
+	CharacterMapping *mapping;
+	wchar_t screen_character;  // character on screen
+	wchar_t candidate_character;  // reference character on ctab mapping
 #ifdef ROGUE_WIDECHAR
-	cchar_t cch;
-	wchar_t wcha[CCHARW_MAX + 1];
-	attr_t dummya;
-	short dummyc;
+	cchar_t screen_cell;
+	wchar_t wide_characters[CCHARW_MAX + 1];
+	attr_t ignored_attributes;
+	short ignored_color_pair;
 
-	win_wch(stdscr, &cch);
-	getcchar(&cch, wcha, &dummya, &dummyc, NULL);
-	wch = wcha[0];
+	win_wch(stdscr, &screen_cell);
+	getcchar(&screen_cell, wide_characters, &ignored_attributes, &ignored_color_pair, NULL);
+	screen_character = wide_characters[0];
 #else
 
-	wch = (wchar_t)(A_CHARTEXT & winch(stdscr));
+	screen_character = (wchar_t)(A_CHARTEXT & winch(stdscr));
 #endif  // ROGUE_WIDECHAR
 	// if not on mapping list, will report as itself
-	chd = (byte)wch;
+	dos_character = (byte)screen_character;
 
-	if (charset == CP437)
+	if (character_set == CP437)
 	{
-		return chd;
+		return dos_character;
 	}
-	for(ccp = ctab; ccp->dos; ccp++)
+	for(mapping = game_character_mappings; mapping->dos; mapping++)
 	{
-		switch (charset)
+		switch (character_set)
 		{
-		default:      wcr = L'\0';
+		default:      candidate_character = L'\0';
 		break;
-		case ASCII:   wcr = (wchar_t)ccp->ascii;
+		case ASCII:   candidate_character = (wchar_t)mapping->ascii;
 		break;
-		case UNICODE: wcr = *ccp->unicode;
+		case UNICODE: candidate_character = *mapping->unicode;
 		break;
 		}
-		if (wch == wcr)
+		if (screen_character == candidate_character)
 		{
-			chd = ccp->dos;
+			dos_character = mapping->dos;
 			break;
 		}
 	}
-	return chd;
+	return dos_character;
 #endif  // ROGUE_DOS_CURSES
 }
 
@@ -727,13 +727,13 @@ cur_inch(void)
  * Originally in dos.asm
  */
 void
-wsetmem(buffer, count, attrchar)
+wsetmem(buffer, command_repeat_count, attrchar)
 	void *buffer;
-	int count;
+	int command_repeat_count;
 	chtype attrchar;  // enforced to prevent misuse
 {
-	while (count--)
-		((chtype *)buffer)[count] = (chtype)attrchar;
+	while (command_repeat_count--)
+		((chtype *)buffer)[command_repeat_count] = (chtype)attrchar;
 }
 #endif
 
@@ -741,11 +741,11 @@ wsetmem(buffer, count, attrchar)
  * clear screen
  */
 void
-cur_clear(void)
+screen_clear(void)
 {
 #ifdef ROGUE_DOS_CURSES
 	if (scr_ds == svwin_ds)
-		wsetmem(savewin, LINES*COLS, 0x0720);
+		wsetmem(saved_screen, LINES*COLS, 0x0720);
 	else
 		blot_out(0,0,LINES-1,COLS-1);
 #else
@@ -758,29 +758,29 @@ cur_clear(void)
  *  Turn cursor on and off
  */
 bool
-cursor(bool ison)
+set_cursor_visible(bool visible)
 {
 #ifdef ROGUE_DOS_CURSES
-	register bool oldstate;
+	register bool previous_visibility;
 
-	if (iscuron == ison)
-		return ison;
-	oldstate = iscuron;
-	iscuron = ison;
+	if (iscuron == visible)
+		return visible;
+	previous_visibility = iscuron;
+	iscuron = visible;
 
-	regs->ax = 0x100;
-	if (ison)
+	dos_regs->ax = 0x100;
+	if (visible)
 	{
-		regs->cx = (is_color ? 0x607 : 0xb0c);
-		swint(SW_SCR, regs);
-		cur_move(c_row, c_col);
+		dos_regs->cx = (is_color ? 0x607 : 0xb0c);
+		call_dos_interrupt(SW_SCR, dos_regs);
+		screen_move(c_row, c_col);
 	}
 	else
 	{
-		regs->cx = 0xf00;
-		swint(SW_SCR, regs);
+		dos_regs->cx = 0xf00;
+		call_dos_interrupt(SW_SCR, dos_regs);
 	}
-	return(oldstate);
+	return(previous_visibility);
 #else
 	/*@
 	 * curs_set return values:
@@ -789,9 +789,9 @@ cursor(bool ison)
 	 *   1 = normal
 	 *   2 = very visible
 	 */
-	int oldstate = curs_set(ison);
+	int previous_visibility = curs_set(visible);
 
-	if (oldstate == 0 || oldstate == ERR)
+	if (previous_visibility == 0 || previous_visibility == ERR)
 		return FALSE;
 	else
 		return TRUE;
@@ -803,14 +803,14 @@ cursor(bool ison)
  * get curent cursor position
  */
 void
-getrc(rp,cp)
-	int *rp, *cp;
+get_cursor_position(row,column)
+	int *row, *column;
 {
 #ifdef ROGUE_DOS_CURSES
-	*rp = c_row;
-	*cp = c_col;
+	*row = c_row;
+	*column = c_col;
 #else
-	getyx(stdscr, *rp, *cp);
+	getyx(stdscr, *row, *column);
 #endif
 }
 
@@ -822,19 +822,19 @@ real_rc(pn, rp,cp)
 	/*
 	 * pc bios: read current cursor position
 	 */
-	regs->ax = 0x300;
-	regs->bx = pn << 8;
+	dos_regs->ax = 0x300;
+	dos_regs->bx = pn << 8;
 
-	swint(SW_SCR, regs);
+	call_dos_interrupt(SW_SCR, dos_regs);
 
-	*rp = regs->dx >> 8;
-	*cp = regs->dx & 0xff;
+	*rp = dos_regs->dx >> 8;
+	*cp = dos_regs->dx & 0xff;
 }
 #endif
 
 //@ Not in original
 void
-cur_refresh(void)
+screen_refresh(void)
 {
 #ifndef ROGUE_DOS_CURSES
 	wrefresh(stdscr);
@@ -845,14 +845,14 @@ cur_refresh(void)
  *	clrtoeol
  */
 void
-cur_clrtoeol(void)
+screen_clear_to_eol(void)
 {
 #ifdef ROGUE_DOS_CURSES
 	int r,c;
 
 	if (scr_ds == svwin_ds)
 		return;
-	getrc(&r,&c);
+	get_cursor_position(&r,&c);
 	blot_out(r,c,r,COLS-1);
 #else
 	wclrtoeol(stdscr);
@@ -860,27 +860,27 @@ cur_clrtoeol(void)
 }
 
 void
-cur_mvaddstr(r,c,s)
-	int r,c;
+screen_write_text_at(row,column,s)
+	int row,column;
 	char *s;
 {
-	cur_move(r, c);
-	cur_addstr(s);
+	screen_move(row, column);
+	screen_write_text(s);
 }
 
 void
-cur_mvaddch(int r, int c, byte chr)
+screen_write_character_at(int row, int column, byte character)
 {
-	cur_move(r, c);
-	cur_addch(chr);
+	screen_move(row, column);
+	screen_write_character(character);
 }
 
 byte
-cur_mvinch(r, c)
-	int r, c;
+screen_read_character_at(row, column)
+	int row, column;
 {
-	cur_move(r, c);
-	return cur_inch();
+	screen_move(row, column);
+	return screen_read_character();
 }
 
 
@@ -889,21 +889,21 @@ cur_mvinch(r, c)
  * character position
  */
 void
-cur_addch(byte chr)
+screen_write_character(byte character)
 {
 #ifdef ROGUE_DOS_CURSES
 	int r, c;
 #endif
 	byte old_attr;
 
-	old_attr = ch_attr;
+	old_attr = current_dos_attribute;
 
-	if (at_table == color_attr)
+	if (active_attributes == color_attributes)
 	{
 		/* if it is inside a room */
-		if (ch_attr == A_DOS_NORMAL)
+		if (current_dos_attribute == A_DOS_NORMAL)
 		{
-			switch(chr)
+			switch(character)
 			{
 			case DOOR:
 			case VWALL:
@@ -912,20 +912,20 @@ cur_addch(byte chr)
 			case URWALL:
 			case LLWALL:
 			case LRWALL:
-				ch_attr = A_DOS_BROWN;  /* brown */
+				current_dos_attribute = A_DOS_BROWN;  /* brown */
 				break;
 			case FLOOR:
-				ch_attr = A_DOS_GREEN | A_DOS_BRIGHT;  /* light green */
+				current_dos_attribute = A_DOS_GREEN | A_DOS_BRIGHT;  /* light green */
 				break;
 			case STAIRS:
-				ch_attr = A_DOS_BLACK | A_DOS_BG(A_DOS_GREEN) | A_DOS_BLINK; /* black on green */
+				current_dos_attribute = A_DOS_BLACK | A_DOS_BG(A_DOS_GREEN) | A_DOS_BLINK; /* black on green */
 				break;
 			case TRAP:
-				ch_attr = A_DOS_MAGENTA;  /* magenta */
+				current_dos_attribute = A_DOS_MAGENTA;  /* magenta */
 				break;
 			case GOLD:
 			case PLAYER:
-				ch_attr = A_DOS_YELLOW;  /* yellow */
+				current_dos_attribute = A_DOS_YELLOW;  /* yellow */
 				break;
 			case POTION:
 			case SCROLL:
@@ -934,24 +934,24 @@ cur_addch(byte chr)
 			case AMULET:
 			case RING:
 			case WEAPON:
-				ch_attr = A_DOS_BLUE | A_DOS_BRIGHT;
+				current_dos_attribute = A_DOS_BLUE | A_DOS_BRIGHT;
 				break;
 			case FOOD:
-				ch_attr = A_DOS_RED;
+				current_dos_attribute = A_DOS_RED;
 				break;
 			}
 		}
 		/* if inside a passage or a maze */
-		else if (ch_attr == A_DOS_STANDOUT)
+		else if (current_dos_attribute == A_DOS_STANDOUT)
 		{
-			switch(chr)
+			switch(character)
 			{
 			case FOOD:
-				ch_attr = A_DOS_RED | A_DOS_STANDOUT ;  /* red @ on white */
+				current_dos_attribute = A_DOS_RED | A_DOS_STANDOUT ;  /* red @ on white */
 				break;
 			case GOLD:
 			case PLAYER:
-				ch_attr = A_DOS_YELLOW | A_DOS_STANDOUT;  /* yellow on white */
+				current_dos_attribute = A_DOS_YELLOW | A_DOS_STANDOUT;  /* yellow on white */
 				break;
 			case POTION:
 			case SCROLL:
@@ -960,13 +960,13 @@ cur_addch(byte chr)
 			case AMULET:
 			case RING:
 			case WEAPON:
-				ch_attr = A_DOS_BLUE | A_DOS_STANDOUT;  /* blue on white */
+				current_dos_attribute = A_DOS_BLUE | A_DOS_STANDOUT;  /* blue on white */
 				break;
 			}
 		}
 		//@ I suspect STAIRS used with high() is a case that never happen...
-		else if (ch_attr == (A_DOS_BRIGHT | A_DOS_NORMAL) && chr == STAIRS)
-			ch_attr = A_DOS_BLACK | A_DOS_BG(A_DOS_GREEN) | A_DOS_BLINK;
+		else if (current_dos_attribute == (A_DOS_BRIGHT | A_DOS_NORMAL) && character == STAIRS)
+			current_dos_attribute = A_DOS_BLACK | A_DOS_BG(A_DOS_GREEN) | A_DOS_BLINK;
 	}
 
 #ifdef ROGUE_DOS_CURSES
@@ -975,54 +975,54 @@ cur_addch(byte chr)
 	 * or just CR and scroll the whole window content up.
 	 * Otherwise just put the char and advance the cursor.
 	 */
-	getrc(&r,&c);
-	if (chr == '\n') {
+	get_cursor_position(&r,&c);
+	if (character == '\n') {
 		if (r == LINES-1)
 		{
 			scroll_up(0, LINES-1, 1);
-			cur_move(LINES-1, 0);
+			screen_move(LINES-1, 0);
 		}
 		else
 		{
-			cur_move(r+1, 0);
+			screen_move(r+1, 0);
 		}
 	}
 	else
 	{
-		putchr(chr);
-		cur_move(r,c+1);
+		putchr(character);
+		screen_move(r,c+1);
 	}
 #else
-	switch (charset)
+	switch (character_set)
 	{
 	default:
 	case ASCII:
-		chr = ascii_from_dos(chr, ctab);
+		character = ascii_from_dos(character, game_character_mappings);
 		/* fallthrough */
 	case CP437:
-		waddch(stdscr, chr | attr_from_dos(ch_attr));
+		waddch(stdscr, character | curses_attributes_from_dos(current_dos_attribute));
 		break;
 #ifdef ROGUE_WIDECHAR
 	case UNICODE:
-		wadd_wch(stdscr, unicode_from_dos(chr, ch_attr, ctab));
+		wadd_wch(stdscr, unicode_from_dos(character, current_dos_attribute, game_character_mappings));
 		break;
 #endif  // ROGUE_WIDECHAR
 	}
 #endif  // ROGUE_DOS_CURSES
-	ch_attr = old_attr;
+	current_dos_attribute = old_attr;
 	return;
 }
 
 
 void
-cur_addstr(s)
+screen_write_text(s)
 	char *s;
 {
 #ifdef ROGUE_DEBUG
 	print_int_calls = FALSE;
 #endif
 	while(*s)
-		cur_addch(*s++);
+		screen_write_character(*s++);
 #ifdef ROGUE_DEBUG
 #ifdef ROGUE_DOS_CURSES
 	printf("\n");
@@ -1034,20 +1034,20 @@ cur_addstr(s)
 #ifndef ROGUE_DOS_CURSES
 #ifdef ROGUE_WIDECHAR
 cchar_t *
-unicode_from_dos(byte chd, byte dos_attr, CCODE *mapping)
+unicode_from_dos(byte dos_character, byte dos_attr, CharacterMapping *mapping)
 {
 	short color;
 	attr_t attrs;
 
-	CCODE *ccp = charcode_from_dos(chd, mapping);
-	attrw_from_dos(dos_attr, &attrs, &color);
+	CharacterMapping *matched_mapping = charcode_from_dos(dos_character, mapping);
+	wide_attributes_from_dos(dos_attr, &attrs, &color);
 
-	setcchar(&cctemp,
-			ccp->unicode,
+	setcchar(&temporary_screen_cell,
+			matched_mapping->unicode,
 			attrs,
 			color,
 			NULL);
-	return &cctemp;
+	return &temporary_screen_cell;
 }
 #endif  // ROGUE_WIDECHAR
 
@@ -1058,20 +1058,20 @@ define_keys(void)
 #ifdef NCURSES_VERSION
 	int i;
 	int shift;
-	TTYSEQ *ptr, *max;
+	TerminalKeySequence *sequence, *sequence_end;
 
 	// get the shift offset of the bit past KEY_MAX
 	for (i=KEY_MAX, shift=1; i>>=1; shift++);
 
 	// define the mask that will be used by cur_getch() and friends
-	KEY_MASK = (1 << shift) - 1;
+	TERMINAL_KEY_MASK = (1 << shift) - 1;
 
 	// define keys. first key gets i>0 to leave room for user terminfo keys
-	for (i=8, ptr=ttymap, max=ASIZE(ttymap); ptr < max; ptr++)
+	for (i=8, sequence=terminal_key_mappings, sequence_end=ARRAY_END(terminal_key_mappings); sequence < sequence_end; sequence++)
 	{
-		if(!key_defined(ptr->def))
+		if(!key_defined(sequence->def))
 		{
-			define_key(ptr->def, ((i++) << shift) | ptr->dest);
+			define_key(sequence->def, ((i++) << shift) | sequence->dest);
 		}
 	}
 #endif  // NCURSES_VERSION
@@ -1079,33 +1079,33 @@ define_keys(void)
 
 
 byte
-ascii_from_dos(byte chd, CCODE *mapping)
+ascii_from_dos(byte dos_character, CharacterMapping *mapping)
 {
-	return charcode_from_dos(chd, mapping)->ascii;
+	return charcode_from_dos(dos_character, mapping)->ascii;
 }
 
 
-CCODE *
-charcode_from_dos(byte chd, CCODE *mapping)
+CharacterMapping *
+charcode_from_dos(byte dos_character, CharacterMapping *mapping)
 {
-	CCODE *ccp;
+	CharacterMapping *candidate_mapping;
 
 	// Shortcut for "ordinary" chars that map to themselves
-	if (chd == '\0' || chd == '\n' || (isascii(chd) && isprint(chd)))
+	if (dos_character == '\0' || dos_character == '\n' || (isascii(dos_character) && isprint(dos_character)))
 	{
-		ccode.ascii = ccode.dos = *ccode.unicode = chd;
-		return &ccode;
+		fallback_character_mapping.ascii = fallback_character_mapping.dos = *fallback_character_mapping.unicode = dos_character;
+		return &fallback_character_mapping;
 	}
 
-	for(ccp = mapping; ccp->dos; ccp++)
+	for(candidate_mapping = mapping; candidate_mapping->dos; candidate_mapping++)
 	{
-		if (chd == ccp->dos)
+		if (dos_character == candidate_mapping->dos)
 		{
-			return ccp;
+			return candidate_mapping;
 		}
 	}
 	// if not found, will return the sentinel
-	return ccp;
+	return candidate_mapping;
 }
 
 /*
@@ -1115,9 +1115,9 @@ charcode_from_dos(byte chd, CCODE *mapping)
  * This could be changed in the future.
  */
 short
-color_from_dos(byte dos_attr, bool fg)
+color_from_dos(byte dos_attr, bool foreground)
 {
-	byte color = (dos_attr >> (fg ? A_DOS_FG_COLOR : A_DOS_BG_COLOR)) & \
+	byte color = (dos_attr >> (foreground ? A_DOS_FG_COLOR : A_DOS_BG_COLOR)) & \
 			A_DOS_COLOR_MASK;
 
 	// swap red and blue components so DOS index match ANSI's
@@ -1148,10 +1148,10 @@ color_from_dos(byte dos_attr, bool fg)
  * ("complex renditions" in ncurses docs). For those there is attrw_from_dos()
  */
 chtype
-attr_from_dos(byte dos_attr)
+curses_attributes_from_dos(byte dos_attr)
 {
 	chtype attr = A_NORMAL | COLOR_PAIR(0);
-	short fg, bg;
+	short foreground, background;
 
 	// shortcut to avoid setting (and calculating) a spurious color pair
 	if (dos_attr == A_DOS_NORMAL)
@@ -1160,15 +1160,15 @@ attr_from_dos(byte dos_attr)
 	if (dos_attr & A_DOS_BLINK)
 		attr |= A_BLINK;
 
-	fg = color_from_dos(dos_attr, TRUE);
-	bg = color_from_dos(dos_attr, FALSE);
+	foreground = color_from_dos(dos_attr, TRUE);
+	background = color_from_dos(dos_attr, FALSE);
 
 	if (dos_attr & A_DOS_BRIGHT)
 	{
-		if (colors < 16)
+		if (screen_color_count < 16)
 			attr |= A_BOLD;
 		else
-			fg += 8;
+			foreground += 8;
 	}
 
 #ifdef NCURSES_VERSION
@@ -1192,14 +1192,14 @@ attr_from_dos(byte dos_attr)
 	 * as foreground.
 	 */
 	if (((dos_attr & A_DOS_STANDOUT) == A_DOS_STANDOUT)
-			&& colors != 8
+			&& screen_color_count != 8
 			&& use_terminal_fgbg)
 	{
 		attr |= A_REVERSE;
 
-		short tmp = bg;
-		bg = fg;
-		fg = tmp;
+		short tmp = background;
+		background = foreground;
+		foreground = tmp;
 	}
 #endif  // NCURSES_VERSION
 
@@ -1208,8 +1208,8 @@ attr_from_dos(byte dos_attr)
 	 * all, but map the entries in monoc_attr from original intentions to
 	 * current curses A_* attributes like underline, bold, standout, etc.
 	 */
-	if (colors > 0)
-		attr |= COLOR_PAIR_N(fg, bg);
+	if (screen_color_count > 0)
+		attr |= COLOR_PAIR_N(foreground, background);
 
 	return attr;
 }
@@ -1217,7 +1217,7 @@ attr_from_dos(byte dos_attr)
 
 #ifdef ROGUE_WIDECHAR
 void
-attrw_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
+wide_attributes_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
 {
 	/*
 	 * A sloppy version could simply assume that attr_t is typedef'd to
@@ -1231,7 +1231,7 @@ attrw_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
 	 * Tempting, but we shall not make such assumptions. By the book, boys!
 	 */
 
-	short fg, bg;
+	short foreground, background;
 
 	*attrs = WA_NORMAL;
 	*color_pair = 0;
@@ -1242,32 +1242,32 @@ attrw_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
 	if (dos_attr & A_DOS_BLINK)
 		*attrs |= WA_BLINK;
 
-	fg = color_from_dos(dos_attr, TRUE);
-	bg = color_from_dos(dos_attr, FALSE);
+	foreground = color_from_dos(dos_attr, TRUE);
+	background = color_from_dos(dos_attr, FALSE);
 
 	if (dos_attr & A_DOS_BRIGHT)
 	{
-		if (colors < 16)
+		if (screen_color_count < 16)
 			*attrs |= WA_BOLD;
 		else
-			fg += 8;
+			foreground += 8;
 	}
 
 #ifdef NCURSES_VERSION
 	if (((dos_attr & A_DOS_STANDOUT) == A_DOS_STANDOUT)
-			&& colors != 8
+			&& screen_color_count != 8
 			&& use_terminal_fgbg)
 	{
 		*attrs |= WA_REVERSE;
 
-		short tmp = bg;
-		bg = fg;
-		fg = tmp;
+		short tmp = background;
+		background = foreground;
+		foreground = tmp;
 	}
 #endif  // NCURSES_VERSION
 
-	if (colors > 0)
-		*color_pair = PAIR_INDEX(fg, bg);
+	if (screen_color_count > 0)
+		*color_pair = PAIR_INDEX(foreground, background);
 }
 #endif  // ROGUE_WIDECHAR
 
@@ -1275,9 +1275,9 @@ attrw_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
 void
 init_curses_colors(void)
 {
-	int fg, dos_fg, dfg;
-	int bg, dos_bg, dbg;
-	int i, r, g, b, cube;
+	int foreground, dos_fg, dfg;
+	int background, dos_bg, dbg;
+	int i, row, g, b, cube;
 	int colormode;
 	int cmap[16];
 
@@ -1292,7 +1292,7 @@ init_curses_colors(void)
 	 */
 	if (!has_colors() || COLORS < 8)
 	{
-		colors = 0;
+		screen_color_count = 0;
 		return;
 	}
 
@@ -1321,11 +1321,11 @@ init_curses_colors(void)
 	 */
 
 	// colormode is only used here, colors is global
-	colors = 16;
+	screen_color_count = 16;
 	if      (COLORS >= 256) colormode = 256;
 	else if (COLORS >=  88) colormode =  88;
 	else if (COLORS >=  16) colormode =  16;
-	else                    colormode = colors = 8;
+	else                    colormode = screen_color_count = 8;
 
 	switch(colormode)
 	{
@@ -1347,17 +1347,17 @@ init_curses_colors(void)
 
 	if (cube)
 	{
-		for (i = 0; i < colors; i++)
+		for (i = 0; i < screen_color_count; i++)
 		{
-			r = (cube - 1) * CGA_RED(i);
+			row = (cube - 1) * CGA_RED(i);
 			g = (cube - 1) * CGA_GREEN(i);
 			b = (cube - 1) * CGA_BLUE(i);
-			cmap[i] = 16 + cube * cube * r + cube * g + b;
+			cmap[i] = 16 + cube * cube * row + cube * g + b;
 		}
 	}
 	else if (colors_changed)
 	{
-		for (i = 0; i < colors; i++)
+		for (i = 0; i < screen_color_count; i++)
 		{
 			init_color(i,
 					1000 * CGA_RED(i),
@@ -1368,7 +1368,7 @@ init_curses_colors(void)
 	}
 	else
 	{
-		for (i = 0; i < colors; i++)
+		for (i = 0; i < screen_color_count; i++)
 		{
 			cmap[i] = i;  // 1:1 mapping
 		}
@@ -1390,7 +1390,7 @@ init_curses_colors(void)
 
 	dos_fg = color_from_dos(A_DOS_NORMAL, TRUE);
 	dos_bg = color_from_dos(A_DOS_NORMAL, FALSE);
-	if ((A_DOS_NORMAL & A_DOS_BRIGHT) && colors > 8)
+	if ((A_DOS_NORMAL & A_DOS_BRIGHT) && screen_color_count > 8)
 		dos_fg += 8;
 
 	dfg = cmap[COLOR_WHITE];
@@ -1410,13 +1410,13 @@ init_curses_colors(void)
 	use_terminal_fgbg = FALSE;
 #endif  // NCURSES_VERSION
 
-	for (bg = 0; bg < colors; bg++)
+	for (background = 0; background < screen_color_count; background++)
 	{
-		for (fg = colors - (bg ? 2 : 1); fg >= 0; fg--)
+		for (foreground = screen_color_count - (background ? 2 : 1); foreground >= 0; foreground--)
 		{
-			init_pair(PAIR_INDEX(fg, bg),
-					(fg == dos_fg) ? dfg : cmap[fg],
-					(bg == dos_bg) ? dbg : cmap[bg]);
+			init_pair(PAIR_INDEX(foreground, background),
+					(foreground == dos_fg) ? dfg : cmap[foreground],
+					(background == dos_bg) ? dbg : cmap[background]);
 		}
 	}
 
@@ -1426,7 +1426,7 @@ init_curses_colors(void)
 	printw("Color mode: %d colors, using %s\n", colormode,
 			cube ? "color cube" :
 			colors_changed ? "RGB" :
-			colors > 8 ? "ANSI 16" :
+			screen_color_count > 8 ? "ANSI 16" :
 			"ANSI 8 + Bold");
 	for (i = 0; i < 8; i++)
 	{
@@ -1440,7 +1440,7 @@ init_curses_colors(void)
 				(int)(255 * CGA_BLUE(i))
 		);
 		for(j=15;j;j--) waddch(stdscr, '#' | COLOR_PAIR_N(i, 0));
-		if (colors > 8)
+		if (screen_color_count > 8)
 			for(j=15;j;j--) waddch(stdscr, '#' | COLOR_PAIR_N(i + 8, 0));
 		else
 			for(j=15;j;j--) waddch(stdscr, '#' | COLOR_PAIR_N(i, 0) | A_BOLD);
@@ -1460,16 +1460,16 @@ init_curses_colors(void)
 void
 resize_screen()
 {
-	if ((LINES != cur_LINES) || (COLS != cur_COLS))
+	if ((LINES != game_screen_rows) || (COLS != game_screen_columns))
 	{
-		if (resizeterm(cur_LINES, cur_COLS) == OK)
+		if (resizeterm(game_screen_rows, game_screen_columns) == OK)
 		{
 			flushinp();  //@ eat up the generated KEY_RESIZE
 		}
 		else
 		{
 			fatal("Could not resize resize terminal to %u x %u\n",
-					cur_COLS, cur_LINES);
+					game_screen_columns, game_screen_rows);
 		}
 	}
 }
@@ -1477,13 +1477,13 @@ resize_screen()
 
 
 void
-set_attr(bute)
-	int bute;
+set_display_attribute(attribute_index)
+	int attribute_index;
 {
-	if (bute < MAXATTR)
-		ch_attr = at_table[bute];
+	if (attribute_index < MAXATTR)
+		current_dos_attribute = active_attributes[attribute_index];
 	else
-		ch_attr = bute;
+		current_dos_attribute = attribute_index;
 #ifndef ROGUE_DOS_CURSES
 	/*@
 	 * XOpen Curses standard and ncurses docs clearly says that both
@@ -1491,25 +1491,25 @@ set_attr(bute)
 	 * regardless if current screen cell is chtype or cchar_t. So we still
 	 * use attrset() for ncursesw
 	 */
-	attrset(attr_from_dos(ch_attr));
+	attrset(curses_attributes_from_dos(current_dos_attribute));
 #endif
 }
 
 #ifdef ROGUE_DOS_CURSES
 //@ unused, and proper varargs implementation would require cur_vprintw()
 void
-error(mline,msg,a1,a2,a3,a4,a5)
+error(mline,show_message,a1,a2,a3,a4,a5)
 	int mline;
-	char *msg;
+	char *show_message;
 	int a1,a2,a3,a4,a5;
 {
 	int row, col;
 
-	getrc(&row,&col);
-	cur_move(mline,0);
-	cur_clrtoeol();
-	cur_printw(msg,a1,a2,a3,a4,a5);
-	cur_move(row,col);
+	get_cursor_position(&row,&col);
+	screen_move(mline,0);
+	screen_clear_to_eol();
+	screen_printf(show_message,a1,a2,a3,a4,a5);
+	screen_move(row,col);
 }
 
 //@ unused, and already stubbed in original
@@ -1552,7 +1552,7 @@ isjr()
 	static int machine = 0;
 
 	if (machine == 0) {
-		dmain(&machine,1,0xf000,0xfffe);
+		dos_read_memory(&machine,1,0xf000,0xfffe);
 		machine &= 0xff;
 	}
 	return machine == JR;
@@ -1566,7 +1566,7 @@ isjr()
  *						  -- determine screen memory location for dma
  */
 void
-winit(void)
+initialize_screen(void)
 {
 #ifdef ROGUE_DOS_CURSES
 	register int i, cnt;
@@ -1576,13 +1576,13 @@ winit(void)
 	 */
 #ifdef ROGUE_DOS_SCREEN
 	//@ if get_mode() also returned BH, it could be used here
-	regs->ax = 15 << 8;
-	swint(SW_SCR, regs);
-	old_page_no = regs->bx >> 8;
-	scr_type = regs->ax = 0xff & regs->ax;
+	dos_regs->ax = 15 << 8;
+	call_dos_interrupt(SW_SCR, dos_regs);
+	old_page_no = dos_regs->bx >> 8;
+	dos_screen_mode = dos_regs->ax = 0xff & dos_regs->ax;
 #else
 	old_page_no = 0;
-	scr_type = ROGUE_SCR_TYPE;
+	dos_screen_mode = ROGUE_SCR_TYPE;
 #endif
 	/*
 	 * initialization is any good because restarting game
@@ -1593,7 +1593,7 @@ winit(void)
 	LINES   =  25;
 	COLS    =  80;
 	scr_ds  =  0xB800;
-	at_table = monoc_attr;
+	active_attributes = monochrome_attributes;
 
 	/*@
 	 * BIOS INT 10h/AX=0Fh table for AL values used in the switch:
@@ -1608,12 +1608,12 @@ winit(void)
 	 * - EGA in mode 3 could also be 80x43
 	 * - VGA in mode 3 could also be 80x43 or 80x50
 	 */
-	switch (scr_type) {
+	switch (dos_screen_mode) {
 		/*
 		 *  It is a TV
 		 */
 		case 1:
-			at_table = color_attr;
+			active_attributes = color_attributes;
 			/* fallthrough */
 		case 0:
 			COLS = 40;
@@ -1623,7 +1623,7 @@ winit(void)
 		 * Its a high resolution monitor
 		 */
 		case 3:
-			at_table = color_attr;
+			active_attributes = color_attributes;
 			/* fallthrough */
 		case 2:
 			break;
@@ -1641,8 +1641,8 @@ winit(void)
 			fatal("Program can't be run in graphics mode");
 		 */
 		default:
-			cur_move(24,0);
-			fatal("Unknown screen type (%d)",regs->ax);
+			screen_move(24,0);
+			fatal("Unknown screen type (%d)",dos_regs->ax);
 			break;
 	}
 
@@ -1669,16 +1669,16 @@ winit(void)
 	//@ newmem(2);  // no longer need memory alignment
 	switch_page(3);
 	if (old_page_no != page_no)
-		cur_clear();
-	cur_move(c_row, c_col);
+		screen_clear();
+	screen_move(c_row, c_col);
 	if (isjr())
 		no_check = TRUE;
 
 	//@ this was right after all calls to winit(), so moved here
 	if (!no_check)
-		no_check = do_force;
+		no_check = skip_retrace_check;
 #else
-	if (init_curses)
+	if (screen_initialized)
 		return;
 
 	/*@
@@ -1700,20 +1700,20 @@ winit(void)
 	 * compile-time, but perhaps also subject to initial terminal size
 	 * and/or env file setting.
 	 */
-	scr_type = ROGUE_SCR_TYPE;
+	dos_screen_mode = ROGUE_SCR_TYPE;
 
 	setenv("ESCDELAY", "25", FALSE);
 	initscr();
-	init_curses = TRUE;
-	if ((LINES < cur_LINES) || (COLS < cur_COLS))
+	screen_initialized = TRUE;
+	if ((LINES < game_screen_rows) || (COLS < game_screen_columns))
 	{
 		fatal("%u-column mode requires at least a %u x %u screen\n"
 				"Your terminal size is %u x %u\n",
-				cur_COLS, cur_COLS, cur_LINES, COLS, LINES);
+				game_screen_columns, game_screen_columns, game_screen_rows, COLS, LINES);
 	}
 #ifdef ROGUE_DEBUG
 	printw("Real terminal size:  %3u x %3u\n", LINES, COLS);
-	printw("Setting up Rogue to: %3u x %3u\n", cur_LINES, cur_COLS);
+	printw("Setting up Rogue to: %3u x %3u\n", game_screen_rows, game_screen_columns);
 #endif
 	start_color();
 	cbreak();  //@ do not buffer input until ENTER
@@ -1725,7 +1725,7 @@ winit(void)
 	define_keys();
 	init_curses_colors();
 
-	at_table = colors ? color_attr : monoc_attr;
+	active_attributes = screen_color_count ? color_attributes : monochrome_attributes;
 #ifdef ROGUE_DEBUG
 	wgetch(stdscr);
 #endif
@@ -1735,8 +1735,8 @@ winit(void)
 	 * it was scattered after all winit() calls, so moved here.
 	 * This replaces disabled forcebw()
 	 */
-	if (bwflag)
-		at_table = monoc_attr;
+	if (monochrome_requested)
+		active_attributes = monochrome_attributes;
 }
 
 /*@ no longer needed, integrated in winit()
@@ -1754,25 +1754,25 @@ forcebw()
  *		it can be retieved using windex
  */
 void
-wdump()
+save_screen()
 {
-	sav_win();
-	dmain(savewin,LINES*COLS,scr_ds,0);
-	is_saved = TRUE;
+	get_saved_screen();
+	dos_read_memory(saved_screen,LINES*COLS,scr_ds,0);
+	screen_updates_suspended = TRUE;
 }
 
 char *
-sav_win()
+get_saved_screen()
 {
 	/*@ savewin is now a fixed size array
 	if (savewin == (char *)_flags)
 		dmaout(savewin,LINES*COLS,0xb800,8192);
 	*/
-	return(savewin);
+	return(saved_screen);
 }
 
 void
-res_win()
+release_saved_screen()
 {
 	/*@ savewin is now a fixed size array
 	if (savewin == (char *)_flags)
@@ -1785,50 +1785,50 @@ res_win()
  *		restor the window saved on disk
  */
 void
-wrestor()
+restore_screen()
 {
-	dmaout(savewin,LINES*COLS,scr_ds,0);
-	res_win();
-	is_saved = FALSE;
+	dos_write_memory(saved_screen,LINES*COLS,scr_ds,0);
+	release_saved_screen();
+	screen_updates_suspended = FALSE;
 }
 #else
 /*@
  * Dump the screen to the savewin buffer
  */
 void
-wdump(void)
+save_screen(void)
 {
 	int line;
-	int c_row, c_col;
+	int saved_row, saved_column;
 
-	getyx(stdscr, c_row, c_col);
+	getyx(stdscr, saved_row, saved_column);
 	for (line = 0; line < LINES; line++)
 	{
-		cur_mvinchnstr(line, 0, savewin[line], COLS);
+		curses_read_cells(line, 0, saved_screen[line], COLS);
 	}
-	wmove(stdscr, c_row, c_col);
+	wmove(stdscr, saved_row, saved_column);
 
-	is_saved = TRUE;
+	screen_updates_suspended = TRUE;
 }
 
 /*@
  * Restore the screen from the savewin buffer
  */
 void
-wrestor(void)
+restore_screen(void)
 {
 	int line;
-	int c_row, c_col;
+	int saved_row, saved_column;
 
-	getyx(stdscr, c_row, c_col);
+	getyx(stdscr, saved_row, saved_column);
 	for (line = 0; line < LINES; line++)
 	{
-		cur_mvaddchnstr(line, 0, savewin[line], COLS);
+		curses_restore_cells(line, 0, saved_screen[line], COLS);
 	}
-	wmove(stdscr, c_row, c_col);
+	wmove(stdscr, saved_row, saved_column);
 	wrefresh(stdscr);
 
-	is_saved = FALSE;
+	screen_updates_suspended = FALSE;
 }
 #endif
 
@@ -1837,18 +1837,18 @@ wrestor(void)
  *   @renamed from wclose()
  */
 void
-cur_endwin()
+shutdown_screen()
 {
 #ifdef ROGUE_DOS_CURSES
 	/*
 	 * Restor cursor (really you want to restor video state, but be carefull)
 	 */
-	if (scr_type >= 0)
-		cursor(TRUE);
+	if (dos_screen_mode >= 0)
+		set_cursor_visible(TRUE);
 	if (page_no != old_page_no)
 		switch_page(old_page_no);
 #else
-	if (init_curses)
+	if (screen_initialized)
 	{
 		endwin();
 
@@ -1874,7 +1874,7 @@ cur_endwin()
 			// ?
 		}
 		 */
-		init_curses = FALSE;
+		screen_initialized = FALSE;
 
 #ifdef ROGUE_DEBUG
 		printf("Curses window closed\n");
@@ -1887,34 +1887,34 @@ cur_endwin()
  *  Some general drawing routines
  */
 int
-cur_line(byte chd, int length, bool orientation)
+screen_draw_line(byte dos_character, int length, bool orientation)
 {
-	chtype ch;
+	chtype character;
 #ifdef ROGUE_WIDECHAR
 	cchar_t *cch;
 #endif  // ROGUE_WIDECHAR
 
-	switch (charset)
+	switch (character_set)
 	{
 	default:
 	case ASCII:
-		ch = ascii_from_dos(chd, btab);
-		if (ch == '\0')
-			ch = ascii_from_dos(chd, ctab);
-		chd = (byte)ch;
+		character = ascii_from_dos(dos_character, box_character_mappings);
+		if (character == '\0')
+			character = ascii_from_dos(dos_character, game_character_mappings);
+		dos_character = (byte)character;
 		/* fallthrough */
 	case CP437:
-		ch = chd | attr_from_dos(ch_attr);
+		character = dos_character | curses_attributes_from_dos(current_dos_attribute);
 		if (orientation == VERTICAL)
-			wvline(stdscr, ch, length);
+			wvline(stdscr, character, length);
 		else
-			whline(stdscr, ch, length);
+			whline(stdscr, character, length);
 		break;
 #ifdef ROGUE_WIDECHAR
 	case UNICODE:
-		cch = unicode_from_dos(chd, ch_attr, btab);
+		cch = unicode_from_dos(dos_character, current_dos_attribute, box_character_mappings);
 		if (cch->chars[0] == L'\0')
-			cch = unicode_from_dos(chd, ch_attr, ctab);
+			cch = unicode_from_dos(dos_character, current_dos_attribute, game_character_mappings);
 		if (orientation == VERTICAL)
 			wvline_set(stdscr, cch, length);
 		else
@@ -1926,9 +1926,9 @@ cur_line(byte chd, int length, bool orientation)
 }
 
 void
-cur_box(int ul_r, int ul_c, int lr_r, int lr_c)
+screen_draw_box(int top, int left, int bottom, int right)
 {
-	vbox(dbl_box, ul_r, ul_c, lr_r, lr_c);
+	draw_custom_box(double_box_characters, top, left, bottom, right);
 }
 
 /*
@@ -1936,53 +1936,53 @@ cur_box(int ul_r, int ul_c, int lr_r, int lr_c)
  *        upper left coordinate and the lower right
  */
 void
-vbox(box, ul_r,ul_c,lr_r,lr_c)
-	byte box[BX_SIZE];
-	int ul_r,ul_c,lr_r,lr_c;
+draw_custom_box(border_characters, top,left,bottom,right)
+	byte border_characters[BX_SIZE];
+	int top,left,bottom,right;
 {
 	bool wason;
 	int i;
-	int r,c;
+	int row,column;
 
-	wason = cursor(FALSE);
-	getrc(&r,&c);
+	wason = set_cursor_visible(FALSE);
+	get_cursor_position(&row,&column);
 
 #ifdef ROGUE_DOS_CURSES
 	/*
 	 * draw horizontal boundry
 	 */
-	cur_move(ul_r, ul_c+1);
-	repchr(box[BX_HT], i = (lr_c - ul_c - 1));
-	cur_move(lr_r, ul_c+1);
-	repchr(box[BX_HB], i);
+	screen_move(top, left+1);
+	repeat_character(border_characters[BX_HT], i = (right - left - 1));
+	screen_move(bottom, left+1);
+	repeat_character(border_characters[BX_HB], i);
 	/*
 	 * draw vertical boundry
 	 */
-	for (i=ul_r+1;i<lr_r;i++) {
-		cur_mvaddch(i,ul_c,box[BX_VW]);
-		cur_mvaddch(i,lr_c,box[BX_VW]);
+	for (i=top+1;i<bottom;i++) {
+		screen_write_character_at(i,left,border_characters[BX_VW]);
+		screen_write_character_at(i,right,border_characters[BX_VW]);
 	}
 	/*
 	 * draw corners
 	 */
-	cur_mvaddch(ul_r,ul_c,box[BX_UL]);
-	cur_mvaddch(ul_r,lr_c,box[BX_UR]);
-	cur_mvaddch(lr_r,ul_c,box[BX_LL]);
-	cur_mvaddch(lr_r,lr_c,box[BX_LR]);
+	screen_write_character_at(top,left,border_characters[BX_UL]);
+	screen_write_character_at(top,right,border_characters[BX_UR]);
+	screen_write_character_at(bottom,left,border_characters[BX_LL]);
+	screen_write_character_at(bottom,right,border_characters[BX_LR]);
 #else
-	i = (lr_c - ul_c - 1); cur_mvhline(ul_r, ul_c+1, box[BX_HT], i);
-	                       cur_mvhline(lr_r, ul_c+1, box[BX_HB], i);
-	i = (lr_r - ul_r - 1); cur_mvvline(ul_r+1, ul_c, box[BX_VW], i);
-	                       cur_mvvline(ul_r+1, lr_c, box[BX_VW], i);
+	i = (right - left - 1); screen_draw_horizontal_line_at(top, left+1, border_characters[BX_HT], i);
+	                       screen_draw_horizontal_line_at(bottom, left+1, border_characters[BX_HB], i);
+	i = (bottom - top - 1); screen_draw_vertical_line_at(top+1, left, border_characters[BX_VW], i);
+	                       screen_draw_vertical_line_at(top+1, right, border_characters[BX_VW], i);
 
 	//@ corners - do not go through cur_addch(), different mapping
-	cur_mvhline(ul_r,ul_c,box[BX_UL], 1);
-	cur_mvhline(ul_r,lr_c,box[BX_UR], 1);
-	cur_mvhline(lr_r,ul_c,box[BX_LL], 1);
-	cur_mvhline(lr_r,lr_c,box[BX_LR], 1);
+	screen_draw_horizontal_line_at(top,left,border_characters[BX_UL], 1);
+	screen_draw_horizontal_line_at(top,right,border_characters[BX_UR], 1);
+	screen_draw_horizontal_line_at(bottom,left,border_characters[BX_LL], 1);
+	screen_draw_horizontal_line_at(bottom,right,border_characters[BX_LR], 1);
 #endif
-	cur_move(r,c);
-	cursor(wason);
+	screen_move(row,column);
+	set_cursor_visible(wason);
 }
 
 /*
@@ -1993,7 +1993,7 @@ center(row,string)
 	int row;
 	char *string;
 {
-	cur_mvaddstr(row,(COLS-strlen(string))/2,string);
+	screen_write_text_at(row,(COLS-strlen(string))/2,string);
 }
 
 
@@ -2014,15 +2014,15 @@ center(row,string)
  * printw(Ieeeee)
  */
 void
-cur_printw(const char *msg, ...)
+screen_printf(const char *format, ...)
 {
-	char pwbuf[132];
-	va_list argp;
+	char text[132];
+	va_list arguments;
 
-	va_start(argp, msg);
-	vsnprintf(pwbuf, sizeof(pwbuf), msg, argp);
-	va_end(argp);
-	cur_addstr(pwbuf);
+	va_start(arguments, format);
+	vsnprintf(text, sizeof(text), format, arguments);
+	va_end(arguments);
+	screen_write_text(text);
 }
 
 #ifdef ROGUE_DOS_CURSES
@@ -2030,12 +2030,12 @@ void
 scroll_up(start_row,end_row,nlines)
 	int start_row,end_row,nlines;
 {
-	regs->ax = 0x600 + nlines;
-	regs->bx = 0x700;
-	regs->cx = start_row << 8;
-	regs->dx = (end_row << 8) + COLS - 1;
-	swint(SW_SCR,regs);
-	cur_move(end_row,c_col);
+	dos_regs->ax = 0x600 + nlines;
+	dos_regs->bx = 0x700;
+	dos_regs->cx = start_row << 8;
+	dos_regs->dx = (end_row << 8) + COLS - 1;
+	call_dos_interrupt(SW_SCR,dos_regs);
+	screen_move(end_row,c_col);
 }
 
 //@ unused
@@ -2043,12 +2043,12 @@ void
 scroll_dn(start_row,end_row,nlines)
 	int start_row,end_row,nlines;
 {
-	regs->ax = 0x700 + nlines;
-	regs->bx = 0x700;
-	regs->cx = start_row << 8;
-	regs->dx = (end_row << 8) + COLS - 1;
-	swint(SW_SCR,regs);
-	cur_move(start_row,c_col);
+	dos_regs->ax = 0x700 + nlines;
+	dos_regs->bx = 0x700;
+	dos_regs->cx = start_row << 8;
+	dos_regs->dx = (end_row << 8) + COLS - 1;
+	call_dos_interrupt(SW_SCR,dos_regs);
+	screen_move(start_row,c_col);
 }
 
 //@ unused
@@ -2067,12 +2067,12 @@ void
 blot_out(ul_row,ul_col,lr_row,lr_col)
 	int ul_row,ul_col,lr_row,lr_col;
 {
-	regs->ax = 0x600;
-	regs->bx = 0x700;
-	regs->cx = (ul_row<<8) + ul_col;
-	regs->dx = (lr_row<<8) + lr_col;
-	swint(SW_SCR,regs);
-	cur_move(ul_row,ul_col);
+	dos_regs->ax = 0x600;
+	dos_regs->bx = 0x700;
+	dos_regs->cx = (ul_row<<8) + ul_col;
+	dos_regs->dx = (lr_row<<8) + lr_col;
+	call_dos_interrupt(SW_SCR,dos_regs);
+	screen_move(ul_row,ul_col);
 }
 
 /*
@@ -2092,18 +2092,18 @@ fixup(void)
  * Use current attribute, and do not go through cur_addch() processing
  */
 void
-repchr(byte chr, int cnt)
+repeat_character(byte character, int count)
 {
 #ifdef ROGUE_DOS_CURSES
-	while(cnt-- > 0) {
-		putchr(chr);
-		c_col++;
+	while(count-- > 0) {
+		putchr(character);
+		saved_column++;
 	}
 #else
-	int c_row, c_col;
-	getyx(stdscr, c_row, c_col);
-	cur_hline(chr, cnt);
-	wmove(stdscr, c_row, c_col + cnt);
+	int saved_row, saved_column;
+	getyx(stdscr, saved_row, saved_column);
+	screen_draw_horizontal_line(character, count);
+	wmove(stdscr, saved_row, saved_column + count);
 #endif
 }
 
@@ -2111,37 +2111,37 @@ repchr(byte chr, int cnt)
  * Clear the screen in an interesting fashion
  */
 void
-implode()
+animate_level_transition()
 {
-	int j, delay, r, c, cinc = COLS/10/2, er, ec;
+	int j, delay, row, column, column_step = COLS/10/2, bottom, right;
 
-	er = (COLS == 80 ? LINES-3 : LINES-4);
+	bottom = (COLS == 80 ? LINES-3 : LINES-4);
 #ifdef ROGUE_DOS_CURSES
 	/*
 	 * If the curtain is down, just clear the memory
 	 */
 	if (scr_ds == svwin_ds) {
-		wsetmem(savewin, (er + 1) * COLS, 0x0720);
+		wsetmem(saved_screen, (bottom + 1) * COLS, 0x0720);
 		return;
 	}
-	delay = scr_type == 7 ? 500 : 10;
+	delay = dos_screen_mode == 7 ? 500 : 10;
 #else
 	delay = 50;
 #endif
-	for (r = 0,c = 0,ec = COLS-1; r < 10; r++,c += cinc,er--,ec -= cinc) {
-		vbox(sng_box, r, c, er, ec);
+	for (row = 0,column = 0,right = COLS-1; row < 10; row++,column += column_step,bottom--,right -= column_step) {
+		draw_custom_box(single_box_characters, row, column, bottom, right);
 		wrefresh(stdscr);
 		msleep(delay);
-		for (j = r+1; j <= er-1; j++) {
+		for (j = row+1; j <= bottom-1; j++) {
 #ifdef ROGUE_DOS_CURSES
-			cur_move(j, c+1); repchr(' ', cinc-1);
-			cur_move(j, ec-cinc+1); repchr(' ', cinc-1);
+			screen_move(j, column+1); repeat_character(' ', column_step-1);
+			screen_move(j, right-column_step+1); repeat_character(' ', column_step-1);
 #else
-			cur_mvhline(j, c+1, ' ', cinc-1);
-			cur_mvhline(j, ec-cinc+1, ' ', cinc-1);
+			screen_draw_horizontal_line_at(j, column+1, ' ', column_step-1);
+			screen_draw_horizontal_line_at(j, right-column_step+1, ' ', column_step-1);
 #endif
 		}
-		vbox(spc_box, r, c, er, ec);
+		draw_custom_box(blank_box_characters, row, column, bottom, right);
 	}
 	wrefresh(stdscr);
 }
@@ -2162,24 +2162,24 @@ drop_curtain(void)
 	if (svwin_ds == -1)
 		return;
 	old_ds = scr_ds;
-	dmain(savewin, LINES * COLS, scr_ds, 0);
-	cursor(FALSE);
+	dos_read_memory(saved_screen, LINES * COLS, scr_ds, 0);
+	set_cursor_visible(FALSE);
 	/*@
 	 * The different delay for mono and color adapters implies the BIOS call
 	 * used by repchr()->putchr() is significantly faster under mono video mode,
 	 */
-	delay = (scr_type == 7 ? 3000 : 2000);
+	delay = (dos_screen_mode == 7 ? 3000 : 2000);
 	green();
-	vbox(sng_box, 0, 0, LINES-1, COLS-1);
+	draw_custom_box(single_box_characters, 0, 0, LINES-1, COLS-1);
 	yellow();
 	for (r = 1; r < LINES-1; r++) {
-		cur_move(r, 1);
-		repchr(PASSAGE, COLS-2);
+		screen_move(r, 1);
+		repeat_character(PASSAGE, COLS-2);
 		for (j = delay; j--; )
 			;
 	}
 	scr_ds = svwin_ds;
-	cur_move(0,0);
+	screen_move(0,0);
 	cur_standend();
 }
 
@@ -2191,9 +2191,9 @@ raise_curtain(void)
 	if (svwin_ds == -1)
 		return;
 	scr_ds = old_ds;
-	delay = (scr_type == 7 ? 3000 : 2000);
+	delay = (dos_screen_mode == 7 ? 3000 : 2000);
 	for (i = 0, o = (LINES-1)*COLS*2; i < LINES; i++, o -= COLS*2) {
-		dmaout(savewin + o, COLS, scr_ds, o);
+		dos_write_memory(saved_screen + o, COLS, scr_ds, o);
 		for (j = delay; j--; )
 			;
 	}
@@ -2223,25 +2223,25 @@ raise_curtain(void)
 void
 drop_curtain(void)
 {
-	int r;
+	int row;
 	int delay = CURTAIN_TIME / LINES;
 
-	cursor(FALSE);
+	set_cursor_visible(FALSE);
 	green();
-	vbox(sng_box, 0, 0, LINES-1, COLS-1);
-	cur_mvinchnstr(0, 0, curtain[0], COLS);
+	draw_custom_box(single_box_characters, 0, 0, LINES-1, COLS-1);
+	curses_read_cells(0, 0, curtain[0], COLS);
 	wrefresh(stdscr);
 	msleep(delay);  // not in original
 	yellow();
-	for (r = 1; r < LINES-1; r++) {
-		cur_mvhline(r, 1, FILLER, COLS-2);
-		cur_mvinchnstr(r, 0, curtain[r], COLS);
+	for (row = 1; row < LINES-1; row++) {
+		screen_draw_horizontal_line_at(row, 1, FILLER, COLS-2);
+		curses_read_cells(row, 0, curtain[row], COLS);
 		wrefresh(stdscr);
 		msleep(delay);
 	}
-	cur_mvinchnstr(LINES-1, 0, curtain[LINES-1], COLS);
+	curses_read_cells(LINES-1, 0, curtain[LINES-1], COLS);
 	msleep(delay);  // not in original, optional
-	cur_move(0,0);
+	screen_move(0,0);
 	cur_standend();
 	wclear(stdscr);
 }
@@ -2254,28 +2254,28 @@ void
 raise_curtain(void)
 {
 	int line;
-	int c_row, c_col;
+	int saved_row, saved_column;
 	int delay = CURTAIN_TIME / LINES;
 
 	// save current screen
-	getyx(stdscr, c_row, c_col);
-	wdump();
+	getyx(stdscr, saved_row, saved_column);
+	save_screen();
 
 	// restore and display the curtain
 	for (line = 0; line < LINES; line++)
 	{
-		cur_mvaddchnstr(line, 0, curtain[line], COLS);
+		curses_restore_cells(line, 0, curtain[line], COLS);
 	}
 
 	// progressively restore screen
 	for (line = LINES-1; line >= 0; line--)
 	{
-		cur_mvaddchnstr(line, 0, savewin[line], COLS);
+		curses_restore_cells(line, 0, saved_screen[line], COLS);
 		wrefresh(stdscr);
 		msleep(delay);
 	}
-	wmove(stdscr, c_row, c_col);
-	is_saved = FALSE;
+	wmove(stdscr, saved_row, saved_column);
+	screen_updates_suspended = FALSE;
 }
 #endif
 
@@ -2287,7 +2287,7 @@ switch_page(pn)
 {
 	register int pgsize;
 
-	if (scr_type == 7) {
+	if (dos_screen_mode == 7) {
 		page_no = 0;
 		return;
 	}
@@ -2295,8 +2295,8 @@ switch_page(pn)
 		pgsize = 2048;
 	else
 		pgsize = 4096;
-	regs->ax = 0x0500 | pn;
-	swint(SW_SCR, regs);
+	dos_regs->ax = 0x0500 | pn;
+	call_dos_interrupt(SW_SCR, dos_regs);
 	scr_ds = 0xb800 + ((pgsize * pn) >> 4);
 	page_no = pn;
 }
@@ -2304,7 +2304,7 @@ switch_page(pn)
 
 
 byte
-get_mode(void)
+get_dos_video_mode(void)
 /*@
  * Get current video mode using software interrupt 10h, AH=0Fh
  *
@@ -2317,11 +2317,11 @@ get_mode(void)
  * For EGA text, AL is 03h for color or 07h for monochrome
  */
 {
-	struct sw_regs regs;
+	struct dos_registers dos_regs;
 
-	regs.ax = 0xF00;  //@ AH = 0Fh
-	swint(SW_SCR,&regs);
-	return 0xff & regs.ax;
+	dos_regs.ax = 0xF00;  //@ AH = 0Fh
+	call_dos_interrupt(SW_SCR,&dos_regs);
+	return 0xff & dos_regs.ax;
 }
 
 /*@
@@ -2334,14 +2334,14 @@ get_mode(void)
  * Return AL
  */
 byte
-video_mode(type)
+set_dos_video_mode(type)
 	int type;
 {
-	struct sw_regs regs;
+	struct dos_registers dos_regs;
 
-	regs.ax = type;
-	swint(SW_SCR,&regs);
-	return regs.ax;
+	dos_regs.ax = type;
+	call_dos_interrupt(SW_SCR,&dos_regs);
+	return dos_regs.ax;
 }
 
 
@@ -2372,14 +2372,14 @@ video_mode(type)
  * keep typed string or set first char to '\0', effectively blanking str.
  */
 int
-getinfo(str,size)
-	char *str;
+read_line(text,size)
+	char *text;
 	int size;
 {
-	register char *retstr;
-	int ch;
-	int readcnt = 0;
-	int wason, ret = 1;
+	register char *input_start;
+	int character;
+	int input_length = 0;
+	int previous_cursor_visibility, result = 1;
 #ifdef ROGUE_DOS_CURSES
 	/*@
 	 * Save the line state before typing begins, and restore it after user ends
@@ -2394,38 +2394,38 @@ getinfo(str,size)
 	 */
 	char buf[160];
 
-	dmain(buf, 80, scr_ds, 0);
+	dos_read_memory(buf, 80, scr_ds, 0);
 #endif
-	retstr = str;
-	*str = 0;
-	wason = cursor(TRUE);
-	while(ret == 1)
+	input_start = text;
+	*text = 0;
+	previous_cursor_visibility = set_cursor_visible(TRUE);
+	while(result == 1)
 	{
 #ifdef ROGUE_DOS_CURSES
-		if((ch = cur_getch()) == EOF)
+		if((character = cur_getch()) == EOF)
 		{
-			ch = '\n';
+			character = '\n';
 		}
 #else
 		//@ Blocking getch() is fine, as SIG2() is not called anyway
-		while ((ch = wgetch(stdscr)) == ERR);
-		if (ch > KEY_MIN)
+		while ((character = wgetch(stdscr)) == ERR);
+		if (character > KEY_MIN)
 		{
-			ch = KEY_MASK & ch;
+			character = TERMINAL_KEY_MASK & character;
 		}
 #endif
-		switch(ch)
+		switch(character)
 		{
 			case ESCAPE:
-				while(str != retstr) {
+				while(text != input_start) {
 					backspace();
-					readcnt--;
-					str--;
+					input_length--;
+					text--;
 				}
 				//@ null-termination was not in original
-				ret = *str++ = ESCAPE;
-				*str = 0;
-				cursor(wason);
+				result = *text++ = ESCAPE;
+				*text = 0;
+				set_cursor_visible(previous_cursor_visibility);
 				break;
 #ifndef ROGUE_DOS_CURSES
 			case KEY_RESIZE:
@@ -2434,39 +2434,39 @@ getinfo(str,size)
 			case KEY_BACKSPACE:
 #endif
 			case '\b':
-				if (str != retstr) {
+				if (text != input_start) {
 					backspace();
-					readcnt--;
-					str--;
+					input_length--;
+					text--;
 				}
 				break;
 			default:
-				if ( readcnt >= size) {
+				if ( input_length >= size) {
 					beep();
 					break;
 				}
-				if (!isprint(ch))
+				if (!isprint(character))
 				{
 					break;
 				}
-				readcnt++;
-				addch(ch);
-				*str++ = ch;
+				input_length++;
+				addch(character);
+				*text++ = character;
 				break;
 #ifndef ROGUE_DOS_CURSES
 			case KEY_ENTER:
 #endif
 			case '\n':
-				*str = 0;
-				cursor(wason);
-				ret = ch;  //@ any value different than ESCAPE or 1 would do.
+				*text = 0;
+				set_cursor_visible(previous_cursor_visibility);
+				result = character;  //@ any value different than ESCAPE or 1 would do.
 				break;
 		}
 	}
 #ifdef ROGUE_DOS_CURSES
-	dmaout(buf, 80, scr_ds, 0);
+	dos_write_memory(buf, 80, scr_ds, 0);
 #endif
-	return ret;
+	return result;
 }
 
 /*@
@@ -2478,10 +2478,10 @@ getinfo(str,size)
 void
 backspace(void)
 {
-	int r, c;
-	getyx(stdscr, r, c);
-	if (c > 0)
-		wmove(stdscr, r, c-1);
+	int row, column;
+	getyx(stdscr, row, column);
+	if (column > 0)
+		wmove(stdscr, row, column-1);
 	wdelch(stdscr);
 	winsch(stdscr, ' ');
 }

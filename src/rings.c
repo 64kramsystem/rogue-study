@@ -7,68 +7,68 @@
 #include "rogue.h"
 #include "curses.h"
 
-static int	gethand(void);
+static int	choose_ring_hand(void);
 
 /*
  * ring_on:
  *	Put a ring on a hand
  */
 void
-ring_on()
+put_on_ring()
 {
-	register THING *obj;
+	register Entity *item;
 	register int ring = -1;
 
-	if ((obj = get_item("put on", RING)) == NULL)
+	if ((item = select_inventory_item("put on", RING)) == NULL)
 		goto no_ring;
 	/*
 	 * Make certain that it is somethings that we want to wear
 	 */
-	if (obj->o_type != RING) {
-		msg("you can't put that on your finger");
+	if (item->item_category != RING) {
+		show_message("you can't put that on your finger");
 		goto no_ring;
 	}
 
 	/*
 	 * find out which hand to put it on
 	 */
-	if (is_current(obj))
+	if (is_equipped(item))
 		goto no_ring;
 
-	if (cur_ring[LEFT] == NULL)
+	if (equipped_rings[LEFT] == NULL)
 		ring = LEFT;
-	if (cur_ring[RIGHT] == NULL)
+	if (equipped_rings[RIGHT] == NULL)
 		ring = RIGHT;
-	if (cur_ring[LEFT] == NULL && cur_ring[RIGHT] == NULL)
-		if ((ring = gethand()) < 0)
+	if (equipped_rings[LEFT] == NULL && equipped_rings[RIGHT] == NULL)
+		if ((ring = choose_ring_hand()) < 0)
 			goto no_ring;
 	if (ring < 0) {
-		msg("you already have a ring on each hand");
+		show_message("you already have a ring on each hand");
 		goto no_ring;
 	}
-	cur_ring[ring] = obj;
+	equipped_rings[ring] = item;
 
 	/*
 	 * Calculate the effect it has on the poor guy.
 	 */
-	switch (obj->o_which) {
-	case R_ADDSTR:
-		chg_str(obj->o_ac);
+	switch (item->item_subtype) {
+	case RING_ADD_STRENGTH:
+		change_player_strength(item->item_modifier);
 		break;
-	case R_SEEINVIS:
-		invis_on();
+	case RING_SEE_INVISIBLE:
+		reveal_invisible_monsters();
 		break;
-	case R_AGGR:
-		aggravate();
+	case RING_AGGRAVATION:
+		aggravate_monsters();
 		break;
 	}
 
-	msg("%swearing %s (%c)", noterse("you are now "),
-		inv_name(obj, TRUE), pack_char(obj));
+	show_message("%swearing %s (%c)", verbose_text("you are now "),
+		describe_item(item, TRUE), inventory_key(item));
 	return ;
 
 no_ring:
-	after = FALSE;
+	turn_consumed = FALSE;
 	return;
 }
 
@@ -77,33 +77,33 @@ no_ring:
  *	Take off a ring
  */
 void
-ring_off(void)
+remove_ring(void)
 {
 	register int ring;
-	register THING *obj;
-	register char packchar;
+	register Entity *item;
+	register char item_key;
 
-	if (cur_ring[LEFT] == NULL && cur_ring[RIGHT] == NULL) {
-		msg("you aren't wearing any rings");
-		after = FALSE;
+	if (equipped_rings[LEFT] == NULL && equipped_rings[RIGHT] == NULL) {
+		show_message("you aren't wearing any rings");
+		turn_consumed = FALSE;
 		return;
-	} else if (cur_ring[LEFT] == NULL)
+	} else if (equipped_rings[LEFT] == NULL)
 		ring = RIGHT;
-	else if (cur_ring[RIGHT] == NULL)
+	else if (equipped_rings[RIGHT] == NULL)
 		ring = LEFT;
 	else
-		if ((ring = gethand()) < 0)
+		if ((ring = choose_ring_hand()) < 0)
 			return;
-	mpos = 0;
-	obj = cur_ring[ring];
-	if (obj == NULL) {
-		msg("not wearing such a ring");
-		after = FALSE;
+	message_column = 0;
+	item = equipped_rings[ring];
+	if (item == NULL) {
+		show_message("not wearing such a ring");
+		turn_consumed = FALSE;
 		return;
 	}
-	packchar = pack_char(obj);
-	if (can_drop(obj))
-		msg("was wearing %s(%c)", inv_name(obj, TRUE), packchar);
+	item_key = inventory_key(item);
+	if (can_drop(item))
+		show_message("was wearing %s(%c)", describe_item(item, TRUE), item_key);
 }
 
 /*
@@ -112,22 +112,22 @@ ring_off(void)
  */
 static
 int
-gethand(void)
+choose_ring_hand(void)
 {
-	register int c;
+	register int column;
 
 	for (;;) {
-		msg("left hand or right hand? ");
-		if ((c = readchar()) == ESCAPE)  {
-			after = FALSE;
+		show_message("left hand or right hand? ");
+		if ((column = read_game_key()) == ESCAPE)  {
+			turn_consumed = FALSE;
 			return -1;
 		}
-		mpos = 0;
-		if (c == 'l' || c == 'L')
+		message_column = 0;
+		if (column == 'l' || column == 'L')
 			return LEFT;
-		else if (c == 'r' || c == 'R')
+		else if (column == 'r' || column == 'R')
 			return RIGHT;
-		msg("please type L or R");
+		show_message("please type L or R");
 	}
 	return -1;
 }
@@ -137,28 +137,28 @@ gethand(void)
  *	How much food does this ring use up?
  */
 int
-ring_eat(int hand)
+ring_food_cost(int hand)
 {
-	if (cur_ring[hand] == NULL)
+	if (equipped_rings[hand] == NULL)
 		return 0;
-	switch (cur_ring[hand]->o_which) {
-	case R_REGEN:
+	switch (equipped_rings[hand]->item_subtype) {
+	case RING_REGENERATION:
 		return 2;
-	case R_SUSTSTR:
-	case R_SUSTARM:
-	case R_PROTECT:
-	case R_ADDSTR:
-	case R_STEALTH:
+	case RING_SUSTAIN_STRENGTH:
+	case RING_MAINTAIN_ARMOR:
+	case RING_PROTECTION:
+	case RING_ADD_STRENGTH:
+	case RING_STEALTH:
 		return 1;
-	case R_SEARCH:
-		return(rnd(5)==0);
-	case R_ADDHIT:
-	case R_ADDDAM:
-		return (rnd(3) == 0);
-	case R_DIGEST:
-		return -rnd(2);
-	case R_SEEINVIS:
-		return (rnd(5) == 0);
+	case RING_SEARCHING:
+		return(random_below(5)==0);
+	case RING_DEXTERITY:
+	case RING_DAMAGE:
+		return (random_below(3) == 0);
+	case RING_SLOW_DIGESTION:
+		return -random_below(2);
+	case RING_SEE_INVISIBLE:
+		return (random_below(5) == 0);
 	default:
 		return 0;
 	}
@@ -169,19 +169,19 @@ ring_eat(int hand)
  *	Print ring bonuses
  */
 char *
-ring_num(THING *obj)
+format_ring_bonus(Entity *item)
 {
-	if (!(obj->o_flags & ISKNOW))
+	if (!(item->item_flags & ITEM_IDENTIFIED))
 		return "";
-	switch (obj->o_which) {
-	when R_PROTECT:
-	case R_ADDSTR:
-	case R_ADDDAM:
-	case R_ADDHIT:
-		ring_buf[0] = ' ';
-		strcpy(&ring_buf[1], num(obj->o_ac, 0, RING));
+	switch (item->item_subtype) {
+	when RING_PROTECTION:
+	case RING_ADD_STRENGTH:
+	case RING_DAMAGE:
+	case RING_DEXTERITY:
+		ring_bonus_buffer[0] = ' ';
+		strcpy(&ring_bonus_buffer[1], format_item_bonus(item->item_modifier, 0, RING));
 	otherwise:
 		return "";
 	}
-	return ring_buf;
+	return ring_bonus_buffer;
 }

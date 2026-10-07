@@ -53,33 +53,33 @@
  * scr_type 7 evaluate as FALSE for both (also mono)
  * See winit()
  */
-#define is_color (scr_type!=7)
-#define is_bw (scr_type==0 || scr_type==2)
+#define is_color (dos_screen_mode!=7)
+#define is_bw (dos_screen_mode==0 || dos_screen_mode==2)
 
 //@ moved from rogue.h
 #ifndef CTRL
 #define CTRL(ch)	((ch) & 037)
 #endif
 
-#define cur_standend() set_attr( 0)  //@ normal white (light gray) on black
-#define green()        set_attr( 1)
-#define cyan()         set_attr( 2)
-#define red()          set_attr( 3)
-#define magenta()      set_attr( 4)
-#define brown()        set_attr( 5)  //@ yellow, made brown by CGA hardware
-#define dgrey()        set_attr( 6)  //@ "bright black". unused
-#define lblue()        set_attr( 7)
-#define lgrey()        set_attr( 8)  //@ bright *green*, not gray. unused
-#define lred()         set_attr( 9)
-#define lmagenta()     set_attr(10)
-#define yellow()       set_attr(11)
-#define uline()        set_attr(12)  //@ bright white on color, underline on bw
-#define blue()         set_attr(13)
-#define cur_standout() set_attr(14)  //@ black on normal white (reverse)
-#define high()         set_attr(15)  //@ bright white on color, normal on bw
-#define bold()         set_attr(16)  //@ black on normal white (reverse)
+#define cur_standend() set_display_attribute( 0)  //@ normal white (light gray) on black
+#define green()        set_display_attribute( 1)
+#define cyan()         set_display_attribute( 2)
+#define red()          set_display_attribute( 3)
+#define magenta()      set_display_attribute( 4)
+#define brown()        set_display_attribute( 5)  //@ yellow, made brown by CGA hardware
+#define dgrey()        set_display_attribute( 6)  //@ "bright black". unused
+#define lblue()        set_display_attribute( 7)
+#define lgrey()        set_display_attribute( 8)  //@ bright *green*, not gray. unused
+#define lred()         set_display_attribute( 9)
+#define lmagenta()     set_display_attribute(10)
+#define yellow()       set_display_attribute(11)
+#define uline()        set_display_attribute(12)  //@ bright white on color, underline on bw
+#define blue()         set_display_attribute(13)
+#define cur_standout() set_display_attribute(14)  //@ black on normal white (reverse)
+#define high()         set_display_attribute(15)  //@ bright white on color, normal on bw
+#define bold()         set_display_attribute(16)  //@ black on normal white (reverse)
 
-#define cur_getch()	cur_getch_timeout(-1)
+#define cur_getch()	screen_read_key(-1)
 
 /*
  * Things that appear on the screens
@@ -152,44 +152,44 @@
  * Function prototypes
  * Names with 'cur_' prefix were renamed to avoid conflict with <curses.h>
  */
-byte	xlate_ch(int ch);
-void	cur_clear(void);
-bool	cursor(bool ison);
-void	getrc(int *rp, int *cp);
-void	cur_refresh(void);
-void	cur_clrtoeol(void);
-void	cur_mvaddstr(int r, int c, char *s);
-void	cur_mvaddch(int r, int c, byte chr);
-byte	cur_mvinch(int r, int c);
-void	cur_addch(byte chr);
-void	cur_addstr(char *s);
-void	set_attr(int bute);
-void	winit(void);
-void	wdump(void);
-void	wrestor(void);
-void	cur_endwin(void);
-void	cur_box(int ul_r, int ul_c, int lr_r, int lr_c);
+byte	translate_key(int character);
+void	screen_clear(void);
+bool	set_cursor_visible(bool visible);
+void	get_cursor_position(int *row, int *column);
+void	screen_refresh(void);
+void	screen_clear_to_eol(void);
+void	screen_write_text_at(int row, int column, char *s);
+void	screen_write_character_at(int row, int column, byte character);
+byte	screen_read_character_at(int row, int column);
+void	screen_write_character(byte character);
+void	screen_write_text(char *s);
+void	set_display_attribute(int attribute_index);
+void	initialize_screen(void);
+void	save_screen(void);
+void	restore_screen(void);
+void	shutdown_screen(void);
+void	screen_draw_box(int top, int left, int bottom, int right);
 void	center(int row, char *string);
-void	cur_printw(const char *msg, ...);
-void	repchr(byte chr, int cnt);
-void	implode(void);
+void	screen_printf(const char *format, ...);
+void	repeat_character(byte character, int count);
+void	animate_level_transition(void);
 void	drop_curtain(void);
 void	raise_curtain(void);
-byte	get_mode(void);
-byte	video_mode(int type);
+byte	get_dos_video_mode(void);
+byte	set_dos_video_mode(int type);
 #ifdef ROGUE_DOS_CURSES
 void	switch_page(int pn);
 void	blot_out(int ul_row, int ul_col, int lr_row, int lr_col);
 #endif
 
 //@ originally in dos.asm
-void	cur_beep(void);
-int 	cur_getch_timeout(int msdelay);
+void	screen_beep(void);
+int 	screen_read_key(int timeout_ms);
 
 //@ originally in zoom.asm
-int	cur_move(int row, int col);
-byte	cur_inch(void);
+int	screen_move(int row, int col);
+byte	screen_read_character(void);
 
 //@ moved from io.c
-int 	getinfo(char *str, int size);
+int 	read_line(char *text, int size);
 void	backspace(void);

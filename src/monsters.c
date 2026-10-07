@@ -7,7 +7,7 @@
 #include "rogue.h"
 #include "curses.h"
 
-static int	exp_add(THING *tp);
+static int	monster_experience_bonus(Entity *monster);
 
 /*
  * List of monsters in rough order of vorpalness
@@ -26,9 +26,9 @@ static int	exp_add(THING *tp);
  * intended behavior.
  */
 
-static char *vorp_mons = "KEBHISORZLCAQNYTWFPUGMXVJD";
-static char *lvl_mons =  "K BHISOR LCA NYTWFP GMXVJD";
-static char *wand_mons = "KEBHISORZ CAQ YTW PUGM VJ ";
+static char *vorpal_monster_choices = "KEBHISORZLCAQNYTWFPUGMXVJD";
+static char *level_monster_choices =  "K BHISOR LCA NYTWFP GMXVJD";
+static char *wandering_monster_choices = "KEBHISORZ CAQ YTW PUGM VJ ";
 
 /*
  * randmonster:
@@ -36,22 +36,22 @@ static char *wand_mons = "KEBHISORZ CAQ YTW PUGM VJ ";
  *	the meaner the monster.
  */
 char
-randmonster(bool wander)
+random_monster_species(bool wander)
 {
-	register int d;
-	register char *mons;
+	register int species_index;
+	register char *species_choices;
 
-	mons = wander ? wand_mons : lvl_mons;
+	species_choices = wander ? wandering_monster_choices : level_monster_choices;
 	do {
-		int r10 = rnd(5) + rnd(6);
+		int depth_adjustment = random_below(5) + random_below(6);
 
-		d = level + (r10 - 5);
-		if (d < 1)
-			d = rnd(5) + 1;
-		if (d > 26)
-			d = rnd(5) + 22;
-	} while (mons[--d] == ' ');
-	return mons[d];
+		species_index = dungeon_level + (depth_adjustment - 5);
+		if (species_index < 1)
+			species_index = random_below(5) + 1;
+		if (species_index > 26)
+			species_index = random_below(5) + 22;
+	} while (species_choices[--species_index] == ' ');
+	return species_choices[species_index];
 }
 
 /*
@@ -59,46 +59,46 @@ randmonster(bool wander)
  *	Pick a new monster and add it to the list
  */
 void
-new_monster(THING *tp, byte type, coord *cp)
+new_monster(Entity *monster, byte type, Position *spawn_position)
 {
-	register struct monster *mp;
-	register int lev_add;
+	register struct monster_definition *definition;
+	register int depth_bonus;
 
-	if ((lev_add = level - AMULETLEVEL) < 0)
-		lev_add = 0;
-	attach(mlist, tp);
-	tp->t_type = type;
-	tp->t_disguise = type;
-	bcopy(tp->t_pos,*cp);
-	tp->t_oldch = '@';
-	tp->t_room = roomin(cp);
-	mp = &monsters[tp->t_type-'A'];
-	tp->t_stats.s_lvl = mp->m_stats.s_lvl + lev_add;
-	tp->t_stats.s_maxhp = tp->t_stats.s_hpt = roll(tp->t_stats.s_lvl, 8);
-	tp->t_stats.s_arm = mp->m_stats.s_arm - lev_add;
-	tp->t_stats.s_dmg = mp->m_stats.s_dmg;
-	tp->t_stats.s_str = mp->m_stats.s_str;
-	tp->t_stats.s_exp = mp->m_stats.s_exp + lev_add * 10 + exp_add(tp);
-	tp->t_flags = mp->m_flags;
-	tp->t_turn = TRUE;
-	tp->t_pack = NULL;
-	if (ISWEARING(R_AGGR))
-		start_run(cp);
+	if ((depth_bonus = dungeon_level - AMULETLEVEL) < 0)
+		depth_bonus = 0;
+	attach(level_monsters, monster);
+	monster->actor_species = type;
+	monster->actor_disguise = type;
+	copy_value(monster->actor_position,*spawn_position);
+	monster->actor_previous_tile = '@';
+	monster->actor_room = room_at(spawn_position);
+	definition = &monster_definitions[monster->actor_species-'A'];
+	monster->actor_stats.experience_level = definition->stats.experience_level + depth_bonus;
+	monster->actor_stats.max_hit_points = monster->actor_stats.hit_points = roll_dice(monster->actor_stats.experience_level, 8);
+	monster->actor_stats.armor_class = definition->stats.armor_class - depth_bonus;
+	monster->actor_stats.damage_dice = definition->stats.damage_dice;
+	monster->actor_stats.strength = definition->stats.strength;
+	monster->actor_stats.experience = definition->stats.experience + depth_bonus * 10 + monster_experience_bonus(monster);
+	monster->actor_flags = definition->flags;
+	monster->actor_move_this_turn = TRUE;
+	monster->actor_inventory = NULL;
+	if (wearing_ring(RING_AGGRAVATION))
+		start_monster_chase(spawn_position);
 	if (type == 'F')
-		tp->t_stats.s_dmg = f_damage;
+		monster->actor_stats.damage_dice = flytrap_damage_dice;
 	if (type == 'X')
 	{
-		switch (rnd(level > 25 ? 9 : 8))
+		switch (random_below(dungeon_level > 25 ? 9 : 8))
 		{
-		when 0: tp->t_disguise = GOLD;
-		when 1: tp->t_disguise = POTION;
-		when 2: tp->t_disguise = SCROLL;
-		when 3: tp->t_disguise = STAIRS;
-		when 4: tp->t_disguise = WEAPON;
-		when 5: tp->t_disguise = ARMOR;
-		when 6: tp->t_disguise = RING;
-		when 7: tp->t_disguise = STICK;
-		when 8: tp->t_disguise = AMULET;
+		when 0: monster->actor_disguise = GOLD;
+		when 1: monster->actor_disguise = POTION;
+		when 2: monster->actor_disguise = SCROLL;
+		when 3: monster->actor_disguise = STAIRS;
+		when 4: monster->actor_disguise = WEAPON;
+		when 5: monster->actor_disguise = ARMOR;
+		when 6: monster->actor_disguise = RING;
+		when 7: monster->actor_disguise = STICK;
+		when 8: monster->actor_disguise = AMULET;
 		break;
 		}
 	}
@@ -108,12 +108,12 @@ new_monster(THING *tp, byte type, coord *cp)
  *  f_restor(): restor initial damage string for flytraps
  */
 void
-f_restor(void)
+reset_flytrap_damage(void)
 {
-	register struct monster *mp = &monsters['F'-'A'];
+	register struct monster_definition *definition = &monster_definitions['F'-'A'];
 
-	fung_hit = 0;
-	strcpy(f_damage, mp->m_stats.s_dmg);
+	flytrap_damage = 0;
+	strcpy(flytrap_damage_dice, definition->stats.damage_dice);
 }
 
 /*
@@ -122,19 +122,19 @@ f_restor(void)
  */
 static
 int
-exp_add(THING *tp)
+monster_experience_bonus(Entity *monster)
 {
-	register int mod;
+	register int experience_bonus;
 
-	if (tp->t_stats.s_lvl == 1)
-		mod = tp->t_stats.s_maxhp / 8;
+	if (monster->actor_stats.experience_level == 1)
+		experience_bonus = monster->actor_stats.max_hit_points / 8;
 	else
-		mod = tp->t_stats.s_maxhp / 6;
-	if (tp->t_stats.s_lvl > 9)
-		mod *= 20;
-	else if (tp->t_stats.s_lvl > 6)
-		mod *= 4;
-	return mod;
+		experience_bonus = monster->actor_stats.max_hit_points / 6;
+	if (monster->actor_stats.experience_level > 9)
+		experience_bonus *= 20;
+	else if (monster->actor_stats.experience_level > 6)
+		experience_bonus *= 4;
+	return experience_bonus;
 }
 
 /*
@@ -142,89 +142,89 @@ exp_add(THING *tp)
  *	Create a new wandering monster and aim it at the player
  */
 void
-wanderer(void)
+spawn_wandering_monster(void)
 {
 	int i;
-	register struct room *rp;
-	register THING *tp;
-	coord cp;
+	register struct room *room;
+	register Entity *monster;
+	Position spawn_position;
 
 	/*
 	 * can we allocate a new monster
 	 */
-	if ((tp = new_item()) == NULL)
+	if ((monster = allocate_entity()) == NULL)
 		return;
 	do {
-		i = rnd_room();
-		if ((rp = &rooms[i]) == proom)
+		i = random_room_index();
+		if ((room = &rooms[i]) == player_room)
 			continue;
-		rnd_pos(rp, &cp);
-	} while (!(rp != proom && step_ok(winat(cp.y, cp.x))));
-	new_monster(tp, randmonster(TRUE), &cp);
+		random_room_position(room, &spawn_position);
+	} while (!(room != player_room && is_walkable_symbol(visible_entity_at(spawn_position.y, spawn_position.x))));
+	new_monster(monster, random_monster_species(TRUE), &spawn_position);
 #ifdef TEST
-	if (bailout && me())
-		msg("wanderer bailout");
+	if (pending_trapdoor_fall && me())
+		show_message("wanderer bailout");
 #endif //TEST
 #ifdef WIZARD
 	if (wizard)
-		msg("started a wandering %s", monsters[tp->t_type-'A'].m_name);
+		show_message("started a wandering %s", monster_definitions[monster->actor_species-'A'].name);
 #endif
-	start_run(&tp->t_pos);
+	start_monster_chase(&monster->actor_position);
 }
 
 /*
  * wake_monster:
  *	What to do when the hero steps next to a monster
  */
-THING *
+Entity *
 wake_monster(y, x)
 	int y, x;
 {
-	register THING *tp;
-	register struct room *rp;
-	register byte ch;
-	register int dst;
+	register Entity *monster;
+	register struct room *room;
+	register byte character;
+	register int gold_distance;
 
-	if ((tp = moat(y, x)) == NULL)
-		return tp;
-	ch = tp->t_type;
+	if ((monster = monster_at(y, x)) == NULL)
+		return monster;
+	character = monster->actor_species;
 	/*
 	 * Every time he sees mean monster, it might start chasing him
 	 */
-	if (!on(*tp, ISRUN) && rnd(3) != 0 && on(*tp, ISMEAN) && !on(*tp, ISHELD)
-		&& !ISWEARING(R_STEALTH))
+	if (!has_actor_flag(*monster, ACTOR_CHASING) && random_below(3) != 0 && has_actor_flag(*monster, ACTOR_AGGRESSIVE) && !has_actor_flag(*monster, ACTOR_HELD)
+		&& !wearing_ring(RING_STEALTH))
 	{
-		tp->t_dest = &hero;
-		tp->t_flags |= ISRUN;
+		monster->actor_destination = &player_position;
+		monster->actor_flags |= ACTOR_CHASING;
 	}
-	if (ch == 'M' && !on(player, ISBLIND) && !on(*tp, ISFOUND)
-		&& !on(*tp, ISCANC) && on(*tp, ISRUN))
+	if (character == 'M' && !has_actor_flag(player, ACTOR_BLIND) && !has_actor_flag(*monster, ACTOR_FOUND)
+		&& !has_actor_flag(*monster, ACTOR_CANCELLED) && has_actor_flag(*monster, ACTOR_CHASING))
 	{
-		rp = proom;
-		dst = DISTANCE(y, x, hero.y, hero.x);
-		if ((rp != NULL && !(rp->r_flags & ISDARK)) || dst < LAMPDIST) {
-			tp->t_flags |= ISFOUND;
-			if (!save(VS_MAGIC)) {
-				if (on(player, ISHUH))
-					lengthen(unconfuse, rnd(20) + HUHDURATION);
+		room = player_room;
+		gold_distance = distance_squared(y, x, player_position.y, player_position.x);
+		if ((room != NULL && !(room->flags & ROOM_DARK)) || gold_distance < LAMPDIST) {
+			monster->actor_flags |= ACTOR_FOUND;
+			if (!player_saving_throw(VS_MAGIC)) {
+				if (has_actor_flag(player, ACTOR_CONFUSED))
+					extend_delayed_action(end_confusion, random_below(20) + HUHDURATION);
 				else
-					fuse(unconfuse, rnd(20) + HUHDURATION);
-				player.t_flags |= ISHUH;
-				msg("the medusa's gaze has confused you");
+					schedule_delayed_action(end_confusion, random_below(20) + HUHDURATION);
+				player.actor_flags |= ACTOR_CONFUSED;
+				show_message("the medusa's gaze has confused you");
 			}
 		}
 	}
 	/*
 	 * Let greedy ones guard gold
 	 */
-	if (on(*tp, ISGREED) && !on(*tp, ISRUN)) {
-		tp->t_flags = tp->t_flags | ISRUN;
-		if (proom->r_goldval)
-			tp->t_dest = &proom->r_gold;
+	if (has_actor_flag(*monster, ACTOR_GREEDY) && !has_actor_flag(*monster, ACTOR_CHASING)) {
+		monster->actor_flags = monster->actor_flags | ACTOR_CHASING;
+		if (player_room->gold_amount)
+			monster->actor_destination = &player_room->gold_position;
 		else
-			tp->t_dest = &hero;
+			monster->actor_destination = &player_position;
 	}
-	return tp;
+	return monster;
 }
 
 /*
@@ -232,14 +232,14 @@ wake_monster(y, x)
  *	Give a pack to a monster if it deserves one
  */
 void
-give_pack(tp)
-	THING *tp;
+give_monster_item(monster)
+	Entity *monster;
 {
 	/*
 	 * check if we can allocate a new item
 	 */
-	if (total < MAXITEMS && rnd(100) < monsters[tp->t_type-'A'].m_carry)
-		attach(tp->t_pack, new_thing());
+	if (allocated_entity_count < MAXITEMS && random_below(100) < monster_definitions[monster->actor_species-'A'].carry_probability)
+		attach(monster->actor_inventory, generate_item());
 }
 
 /*
@@ -250,15 +250,15 @@ give_pack(tp)
  *	  returning space characters.  See comment for vorp_mons above.
  */
 char
-pick_mons(void)
+random_vorpal_enemy(void)
 {
-	register char *cp = vorp_mons + strlen(vorp_mons);
+	register char *text_cursor = vorpal_monster_choices + strlen(vorpal_monster_choices);
 
-	while (--cp >= vorp_mons && rnd(10))
+	while (--text_cursor >= vorpal_monster_choices && random_below(10))
 		;
-	if (cp < vorp_mons)
+	if (text_cursor < vorpal_monster_choices)
 		return 'M';
-	return *cp;
+	return *text_cursor;
 }
 
 
@@ -268,14 +268,14 @@ pick_mons(void)
  *	  if no monster there return NULL
  */
 
-THING *
-moat(my,mx)
-	int my, mx;
+Entity *
+monster_at(y,x)
+	int y, x;
 {
-	register THING *tp;
+	register Entity *monster;
 
-	for (tp = mlist ; tp != NULL ; tp = next(tp))
-		if (tp->t_pos.x == mx  && tp->t_pos.y == my)
-			return(tp);
+	for (monster = level_monsters ; monster != NULL ; monster = next(monster))
+		if (monster->actor_position.x == x  && monster->actor_position.y == y)
+			return(monster);
 	return(NULL);
 }

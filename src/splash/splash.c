@@ -19,16 +19,16 @@ void usage(FILE* stream)
 
 
 // explain_output_error_and_die() using stdlib only
-_Noreturn void fatal(const char *fmt, ...)
+_Noreturn void fatal(const char *format, ...)
 {
-	char msg[1000];
+	char message_text[1000];
 
-	va_list argp;
-	va_start(argp, fmt);
-	vsnprintf(msg, sizeof(msg), fmt, argp);
-	va_end(argp);
+	va_list arguments;
+	va_start(arguments, format);
+	vsnprintf(message_text, sizeof(message_text), format, arguments);
+	va_end(arguments);
 
-	fprintf(stderr, "%s: %s\n", PROGNAME, msg);
+	fprintf(stderr, "%s: %s\n", PROGNAME, message_text);
 
 	usage(stderr);
 	exit(EXIT_FAILURE);
@@ -84,6 +84,6 @@ int main(int argc, char* argv[])
 	if (debug)
 		fprintf(stderr, "%s\n", path);
 
-	if (!epyx_yeah(path))
+	if (!show_sdl_splash(path))
 		exit(EXIT_FAILURE);
 }

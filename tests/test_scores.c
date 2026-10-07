@@ -2,109 +2,109 @@
 #include <assert.h>
 #include <limits.h>
 
-int COLS = 80, LINES = 25, is_saved, scr_type;
-char s_score[64] = "rogue.scr", whoami[] = "Tester";
+int COLS = 80, LINES = 25, screen_updates_suspended, dos_screen_mode;
+char score_filename[64] = "rogue.scr", player_name[] = "Tester";
 static char print_buffer[1024];
-char *prbuf = print_buffer;
+char *description_buffer = print_buffer;
 static char output[8192];
 static const char *input;
 
-void cur_printw(const char *fmt, ...)
+void screen_printf(const char *format, ...)
 {
 	va_list args;
-	va_start(args, fmt);
-	vsnprintf(output + strlen(output), sizeof(output) - strlen(output), fmt, args);
+	va_start(args, format);
+	vsnprintf(output + strlen(output), sizeof(output) - strlen(output), format, args);
 	va_end(args);
 }
 
-void cur_addstr(char *s) { cur_printw("%s", s); }
-void cur_mvaddstr(int r, int c, char *s) { (void)r; (void)c; cur_addstr(s); }
-int cur_move(int r, int c) { (void)r; (void)c; return 0; }
-void cur_clear(void) { output[0] = 0; }
-void set_attr(int attr) { (void)attr; }
-void str_attr(char *s) { cur_addstr(s); }
-void wait_msg(const char *s) { (void)s; }
-byte readchar(void) { assert(input && *input); return *input++; }
+void screen_write_text(char *s) { screen_printf("%s", s); }
+void screen_write_text_at(int row, int column, char *s) { (void)row; (void)column; screen_write_text(s); }
+int screen_move(int row, int column) { (void)row; (void)column; return 0; }
+void screen_clear(void) { output[0] = 0; }
+void set_display_attribute(int attr) { (void)attr; }
+void print_highlighted_text(char *s) { screen_write_text(s); }
+void wait_for_enter(const char *s) { (void)s; }
+byte read_game_key(void) { assert(input && *input); return *input++; }
 
-static void check_record(struct sc_ent entry, bool valid, size_t bytes)
+static void check_record(struct score_entry entry, bool valid, size_t bytes)
 {
-	struct sc_ent scores[TOPSCORES];
-	file = tmpfile();
-	assert(file);
-	assert(fwrite(&entry, 1, bytes, file) == bytes);
-	rewind(file);
-	get_scores(scores);
-	fclose(file);
-	assert(scores[0].sc_gold == (valid ? entry.sc_gold : 0));
-	for (int i = 1; i < TOPSCORES; i++)
-		assert(scores[i].sc_gold == 0);
-	pr_scores(0, scores);
+	struct score_entry scores[MAX_HIGH_SCORES];
+	score_file = tmpfile();
+	assert(score_file);
+	assert(fwrite(&entry, 1, bytes, score_file) == bytes);
+	rewind(score_file);
+	read_scores(scores);
+	fclose(score_file);
+	assert(scores[0].gold == (valid ? entry.gold : 0));
+	for (int i = 1; i < MAX_HIGH_SCORES; i++)
+		assert(scores[i].gold == 0);
+	display_scores(0, scores);
 }
 
 int main(void)
 {
-	struct sc_ent entry = {"Tester", 2, 100, 'A', 1};
-	struct sc_ent scores[TOPSCORES] = {0}, restored[TOPSCORES];
+	struct score_entry entry = {"Tester", 2, 100, 'A', 1};
+	struct score_entry scores[MAX_HIGH_SCORES] = {0}, restored[MAX_HIGH_SCORES];
 	check_record(entry, TRUE, sizeof(entry));
 	for (size_t n = 0; n < sizeof(entry); n++)
 		check_record(entry, FALSE, n);
-	int bad_ranks[] = {INT_MIN, -1, 0, (int)he_man_count + 1, INT_MAX};
+	int bad_ranks[] = {INT_MIN, -1, 0, (int)rank_name_count + 1, INT_MAX};
 	for (size_t i = 0; i < sizeof(bad_ranks) / sizeof(*bad_ranks); i++) {
-		entry.sc_rank = bad_ranks[i];
+		entry.experience_level = bad_ranks[i];
 		check_record(entry, FALSE, sizeof(entry));
 	}
-	entry.sc_rank = (int)he_man_count;
+	entry.experience_level = (int)rank_name_count;
 	check_record(entry, TRUE, sizeof(entry));
-	entry.sc_level = 0;
+	entry.dungeon_level = 0;
 	check_record(entry, FALSE, sizeof(entry));
-	entry.sc_level = 1;
-	entry.sc_gold = -1;
+	entry.dungeon_level = 1;
+	entry.gold = -1;
 	check_record(entry, FALSE, sizeof(entry));
-	entry.sc_gold = 100;
-	memset(entry.sc_name, 'X', sizeof(entry.sc_name));
+	entry.gold = 100;
+	memset(entry.player_name, 'X', sizeof(entry.player_name));
 	check_record(entry, FALSE, sizeof(entry));
-	strcpy(entry.sc_name, "Tester");
+	strcpy(entry.player_name, "Tester");
 
 	for (int gold = 10; gold <= 110; gold += 10) {
-		entry.sc_gold = gold;
-		assert(add_scores(&entry, scores) == 1);
+		entry.gold = gold;
+		assert(insert_score(&entry, scores) == 1);
 	}
-	for (int i = 0; i < TOPSCORES; i++)
-		assert(scores[i].sc_gold == 110 - i * 10);
-	entry.sc_gold = 1;
-	assert(add_scores(&entry, scores) == 0);
-	entry.sc_gold = 100;
-	assert(add_scores(&entry, scores) == 3);
-	file = tmpfile();
-	assert(file && put_scores(scores));
-	rewind(file);
-	get_scores(restored);
-	fclose(file);
+	for (int i = 0; i < MAX_HIGH_SCORES; i++)
+		assert(scores[i].gold == 110 - i * 10);
+	entry.gold = 1;
+	assert(insert_score(&entry, scores) == 0);
+	entry.gold = 100;
+	assert(insert_score(&entry, scores) == 3);
+	score_file = tmpfile();
+	assert(score_file && write_scores(scores));
+	rewind(score_file);
+	read_scores(restored);
+	fclose(score_file);
 	assert(memcmp(scores, restored, sizeof(scores)) == 0);
 
 	/* A missing parent directory reliably makes creation fail, even as root. */
-	strcpy(s_score, "missing/rogue.scr");
+	strcpy(score_filename, "missing/rogue.scr");
 	input = "ca";
-	score(100, 1, 0);
+	update_high_scores(100, 1, 0);
 	assert(strstr(output, "Could not create scorefile"));
 	assert(*input == 0);
 
-	strcpy(s_score, "rogue.scr");
+	strcpy(score_filename, "rogue.scr");
 	input = "c";
-	pstats.s_lvl = 2;
-	max_level = 1;
-	score(100, 1, 0);
+	player_stats.experience_level = 2;
+	deepest_level = 1;
+	update_high_scores(100, 1, 0);
 	assert(strstr(output, "Tester"));
-	file = fopen(s_score, "rb");
-	assert(file);
-	get_scores(restored);
-	fclose(file);
-	assert(restored[0].sc_gold == 100);
-	assert(restored[0].sc_rank == 2);
+	score_file = fopen(score_filename, "rb");
+	assert(score_file);
+	read_scores(restored);
+	fclose(score_file);
+	assert(restored[0].gold == 100);
+	assert(restored[0].experience_level == 2);
 #ifdef __linux__
-	strcpy(s_score, "full.scr");
-	assert(symlink("/dev/full", s_score) == 0);
-	score(100, 1, 0);
+	strcpy(score_filename, "full.scr");
+	assert(symlink("/dev/full", score_filename) == 0);
+	update_high_scores(100, 1, 0);
 	assert(strstr(output, "Could not write scorefile"));
 #endif
 	puts("score tests passed");

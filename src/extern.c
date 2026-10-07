@@ -17,14 +17,14 @@ int is_com;
  * revno: current revision level
  * verno: current version of a particular rev
  */
-int revno = REV;
-int verno = VER;
+int version_major = REV;
+int version_minor = VER;
 
 /*
  * All this should be low as possible in memory so that
  * we can save the min
  */
-char *w_names[MAXWEAPONS + 1] = {	/* Names of the various weapons */
+char *weapon_names[MAXWEAPONS + 1] = {	/* Names of the various weapons */
 	"mace",
 	"long sword",
 	"short bow",
@@ -37,7 +37,7 @@ char *w_names[MAXWEAPONS + 1] = {	/* Names of the various weapons */
 	"spear",
 	NULL				/* fake entry for dragon's breath */
 };
-char *a_names[MAXARMORS] = {		/* Names of armor types */
+char *armor_names[MAXARMORS] = {		/* Names of armor types */
 	"leather armor",
 	"ring mail",
 	"studded leather armor",
@@ -48,7 +48,7 @@ char *a_names[MAXARMORS] = {		/* Names of armor types */
 	"plate mail"
 };
 
-int a_chances[MAXARMORS] = {		/* Chance for each armor type */
+int armor_probabilities[MAXARMORS] = {		/* Chance for each armor type */
 	20,
 	35,
 	50,
@@ -58,7 +58,7 @@ int a_chances[MAXARMORS] = {		/* Chance for each armor type */
 	95,
 	100
 };
-int a_class[MAXARMORS] = {		/* Armor class for each armor type */
+int armor_classes[MAXARMORS] = {		/* Armor class for each armor type */
 	8,
 	7,
 	7,
@@ -69,7 +69,7 @@ int a_class[MAXARMORS] = {		/* Armor class for each armor type */
 	3
 };
 
-struct magic_item s_magic[MAXSCROLLS] = {
+struct item_definition scroll_definitions[MAXSCROLLS] = {
 	{ "monster confusion",	 8, 140 },
 	{ "magic mapping",		 5, 150 },
 	{ "hold monster",		 3, 180 },
@@ -87,7 +87,7 @@ struct magic_item s_magic[MAXSCROLLS] = {
 	{ "vorpalize weapon",	 1, 300 }
 };
 
-struct magic_item p_magic[MAXPOTIONS] = {
+struct item_definition potion_definitions[MAXPOTIONS] = {
 	{ "confusion",		 8,   5 },
 	{ "paralysis",		10,   5 },
 	{ "poison",			 8,   5 },
@@ -108,7 +108,7 @@ struct magic_item p_magic[MAXPOTIONS] = {
 	{ "thirst quenching",	 1,   5 }
 };
 
-struct magic_item r_magic[MAXRINGS] = {
+struct item_definition ring_definitions[MAXRINGS] = {
 	{ "protection",		 9, 400 },
 	{ "add strength",		 9, 400 },
 	{ "sustain strength",	 5, 280 },
@@ -125,7 +125,7 @@ struct magic_item r_magic[MAXRINGS] = {
 	{ "maintain armor",		 5, 380 }
 };
 
-struct magic_item ws_magic[MAXSTICKS] = {
+struct item_definition wand_definitions[MAXSTICKS] = {
 	{ "light",			12, 250 },
 	{ "striking",		 9,  75 },
 	{ "lightning",		 3, 330 },
@@ -157,7 +157,7 @@ struct magic_item ws_magic[MAXSTICKS] = {
 #define H_CHSTR(ch, str)	{{ch, ':', ' ', '\0'}, str}
 #define H_CH2STR(ch1, ch2, sep, str)	{{ch1, sep, ch2, ':', ' ', '\0'}, str}
 #define H_END	{"", ""}
-struct h_list helpcoms[] = {
+struct help_entry command_help[] = {
 	H_STR("F1     list of commands"),
 	H_STR("F2     list of symbols"),
 	H_STR("F3     repeat command"),
@@ -225,7 +225,7 @@ struct h_list helpcoms[] = {
 	H_END
 };
 
-struct h_list helpobjs[] = {
+struct help_entry symbol_help[] = {
 	H_CHSTR(FLOOR,   "the floor"),
 	H_CHSTR(PLAYER,  "the hero"),
 	H_CHSTR(FOOD,    "some food"),
@@ -258,7 +258,7 @@ struct h_list helpobjs[] = {
  * Names of the various experience levels
  */
 
-char *he_man[] = {
+char *rank_names[] = {
 	"",
 	"Guild Novice",
 	"Apprentice",
@@ -281,34 +281,34 @@ char *he_man[] = {
 	"Time Waster",
 	"Bug Chaser"
 };
-const size_t he_man_count = sizeof(he_man) / sizeof(*he_man);
+const size_t rank_name_count = sizeof(rank_names) / sizeof(*rank_names);
 
 /*
  * Lattice C compiler funnies
  */
-int maxitems = 0;
-int reinit = FALSE;
+int peak_entity_count = 0;
+int status_layout_dirty = FALSE;
 
-bool after;				/* True if we want after daemons */
-bool noscore;				/* Was a wizard sometime */
-bool again;			/* The last command is repeated */
-bool s_know[MAXSCROLLS];		/* Does he know what a scroll does */
-bool p_know[MAXPOTIONS];		/* Does he know what a potion does */
-bool r_know[MAXRINGS];			/* Does he know what a ring does */
-bool ws_know[MAXSTICKS];		/* Does he know what a stick does */
-bool amulet = FALSE;			/* He has the amulet */
+bool turn_consumed;				/* True if we want after daemons */
+bool score_disabled;				/* Was a wizard sometime */
+bool repeating_command;			/* The last command is repeated */
+bool scroll_identified[MAXSCROLLS];		/* Does he know what a scroll does */
+bool potion_identified[MAXPOTIONS];		/* Does he know what a potion does */
+bool ring_identified[MAXRINGS];			/* Does he know what a ring does */
+bool wand_identified[MAXSTICKS];		/* Does he know what a stick does */
+bool carrying_amulet = FALSE;			/* He has the amulet */
 bool saw_amulet = FALSE;	    /* He has seen the amulet */
 /* bool askme = TRUE; */			/* Ask about unidentified things */
 bool door_stop = FALSE;			/* Stop running when we pass a door */
-bool fastmode = FALSE;			/* Run until you see something */
-bool faststate = FALSE;			/* Toggle for find (see above) */
+bool auto_run_enabled = FALSE;			/* Run until you see something */
+bool scroll_lock_run_enabled = FALSE;			/* Toggle for find (see above) */
 /* bool fight_flush = TRUE;	*/	/* True if toilet input */
-bool firstmove = FALSE;			/* First move after setting door_stop */
+bool first_run_step = FALSE;			/* First move after setting door_stop */
 /* bool jump = FALSE;	*/		/* Show running as series of jumps */
 /* bool passgo = TRUE;	*/		/* Follow passages */
 bool playing = TRUE;			/* True until he quits */
 bool running = FALSE;			/* True if player is running */
-bool save_msg = TRUE;			/* Remember last msg */
+bool remember_message = TRUE;			/* Remember last msg */
 /* bool slow_invent = FALSE; */		/* Inventory one line at a time */
 bool terse = FALSE;
 bool expert = FALSE;
@@ -320,84 +320,84 @@ int is_me;
  * unsigned char. As it is used in ++ increment and > test, I've reverted it
  * to its original (real) type. See be_trapped() in move.c and look() in misc.c
  */
-unsigned char was_trapped = FALSE;		/* Was a trap sprung */
+unsigned char trap_display_state = FALSE;		/* Was a trap sprung */
 #ifdef WIZARD
 bool wizard = FALSE;			/* True if allows wizard commands */
 #endif
-bool bailout = FALSE;
-char take;				/* Thing the rogue is taking */
-char runch;				/* Direction player is running */
+bool pending_trapdoor_fall = FALSE;
+char pickup_symbol;				/* Thing the rogue is taking */
+char run_direction;				/* Direction player is running */
 /* now names are associated with fixed pointers */
-struct array s_names[MAXSCROLLS];			/* Names of the scrolls */
-char *p_colors[MAXPOTIONS];		/* Colors of the potions */
-char *r_stones[MAXRINGS];		/* Stone settings of the rings */
-char *ws_made[MAXSTICKS];		/* What sticks are made of */
+struct item_label scroll_titles[MAXSCROLLS];			/* Names of the scrolls */
+char *potion_colors[MAXPOTIONS];		/* Colors of the potions */
+char *ring_gemstones[MAXRINGS];		/* Stone settings of the rings */
+char *wand_materials[MAXSTICKS];		/* What sticks are made of */
 /* char *release;	*/			/* Release number of rogue */
-char huh[BUFSIZE];				/* The last message printed */
-char *s_guess[MAXSCROLLS];		/* Players guess at what scroll is */
-char *p_guess[MAXPOTIONS];		/* Players guess at what potion is */
-char *r_guess[MAXRINGS];		/* Players guess at what ring is */
-char *ws_guess[MAXSTICKS];		/* Players guess at what wand is */
+char previous_message[BUFSIZE];				/* The last message printed */
+char *scroll_labels[MAXSCROLLS];		/* Players guess at what scroll is */
+char *potion_labels[MAXPOTIONS];		/* Players guess at what potion is */
+char *ring_labels[MAXRINGS];		/* Players guess at what ring is */
+char *wand_labels[MAXSTICKS];		/* Players guess at what wand is */
 /* storage array for guesses */
-struct array _guesses[MAXSCROLLS+MAXPOTIONS+MAXRINGS+MAXSTICKS];
-int iguess = 0;
-char *ws_type[MAXSTICKS];		/* Is it a wand or a staff */
+struct item_label item_label_storage[MAXSCROLLS+MAXPOTIONS+MAXRINGS+MAXSTICKS];
+int next_item_label = 0;
+char *wand_kinds[MAXSTICKS];		/* Is it a wand or a staff */
 
-int maxrow;			/* Last Line used for map  */
-int max_level;				/* Deepest player has gone */
-int ntraps;				/* Number of traps on this level */
-int dnum;				/* Dungeon number */
-int level = 1;				/* What level rogue is on */
-int purse = 0;				/* How much gold the rogue has */
-int mpos = 0;				/* Where cursor is on top line */
-int no_move = 0;			/* Number of turns held in place */
-int no_command = 0;			/* Number of turns asleep */
-int inpack = 0;				/* Number of things in pack */
-int total = 0;				/* Total dynamic memory bytes */
-int no_food = 0;			/* Number of levels without food */
-int count = 0;				/* Number of times to repeat command */
-int fung_hit = 0;			/* Number of time fungi has hit */
-int quiet = 0;				/* Number of quiet turns */
-int food_left;				/* Amount of food in hero's stomach */
-int group = 2;				/* Current group number */
-int hungry_state = 0;			/* How hungry is he */
-int cksum = CSUM;
-long seed;				/* Random number seed */
+int dungeon_bottom_row;			/* Last Line used for map  */
+int deepest_level;				/* Deepest player has gone */
+int trap_count;				/* Number of traps on this level */
+int initial_random_seed;				/* Dungeon number */
+int dungeon_level = 1;				/* What level rogue is on */
+int player_gold = 0;				/* How much gold the rogue has */
+int message_column = 0;				/* Where cursor is on top line */
+int immobile_turns = 0;			/* Number of turns held in place */
+int incapacitated_turns = 0;			/* Number of turns asleep */
+int inventory_count = 0;				/* Number of things in pack */
+int allocated_entity_count = 0;				/* Total dynamic memory bytes */
+int levels_without_food = 0;			/* Number of levels without food */
+int command_repeat_count = 0;				/* Number of times to repeat command */
+int flytrap_damage = 0;			/* Number of time fungi has hit */
+int healing_turns = 0;				/* Number of quiet turns */
+int food_remaining;				/* Amount of food in hero's stomach */
+int next_stack_group = 2;				/* Current group number */
+int hunger_state = 0;			/* How hungry is he */
+int expected_code_checksum = EXPECTED_CODE_CHECKSUM;
+long random_state;				/* Random number seed */
 
-int hit_mul = P_DAMAGE;
-int goodchk = 1;
-char *your_na = "Software Pirate";
-char *kild_by = "Copy Protection Mafia";
-char *_whoami;
+int incoming_damage_multiplier = UNAUTHENTICATED_DAMAGE_MULTIPLIER;
+int disk_authentication_marker = 1;
+char *tombstone_player_name = "Software Pirate";
+char *tombstone_death_cause = "Copy Protection Mafia";
+char *unused_player_name;
 
 /* WINDOW *hw;				 Used as a scratch window */
 
-coord oldpos;				/* Position before last look() call */
-coord delta;				/* Change indicated to get_dir() */
+Position previous_player_position;				/* Position before last look() call */
+Position action_direction;				/* Change indicated to get_dir() */
 
-THING *cur_armor;			/* What a well dresssed rogue wears */
-THING *cur_ring[2];			/* Which rings are being worn */
-THING *cur_weapon;			/* Which weapon he is weilding */
+Entity *equipped_armor;			/* What a well dresssed rogue wears */
+Entity *equipped_rings[2];			/* Which rings are being worn */
+Entity *equipped_weapon;			/* Which weapon he is weilding */
 
-struct room *oldrp;			/* Roomin(&oldpos) */
+struct room *previous_player_room;			/* Roomin(&oldpos) */
 struct room rooms[MAXROOMS];		/* One for each room -- A level */
 
 #define XX  {0, 0}
 #define ___ {XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX} //@ 12 exits
 struct room passages[MAXPASS] =		/* One for each passage */
 {
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ },
-	{ {0, 0}, {0, 0}, {0, 0}, 0, ISGONE|ISDARK, 0, ___ }
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ },
+	{ {0, 0}, {0, 0}, {0, 0}, 0, ROOM_ABSENT|ROOM_DARK, 0, ___ }
 };
 #undef ___
 #undef XX
@@ -405,11 +405,11 @@ struct room passages[MAXPASS] =		/* One for each passage */
 
 #define INIT_STATS { 16, 0, 1, 10, 12, "1d4", 12 }
 
-struct stats max_stats = INIT_STATS;	/* The maximum for the player */
+struct combat_stats maximum_player_stats = INIT_STATS;	/* The maximum for the player */
 
-THING player;				/* The rogue */
-THING *lvl_obj = NULL;			/* List of objects on this level */
-THING *mlist = NULL;			/* List of monsters on the level */
+Entity player;				/* The rogue */
+Entity *level_items = NULL;			/* List of objects on this level */
+Entity *level_monsters = NULL;			/* List of monsters on the level */
 
 /*@
  * Original code did not define a value for s_maxhp member of stats struct.
@@ -420,39 +420,39 @@ THING *mlist = NULL;			/* List of monsters on the level */
  */
 #define ___ 1
 #define XX 10
-struct monster monsters[26] =
+struct monster_definition monster_definitions[26] =
 {
 	/* Name		 CARRY	FLAG    str, exp, lvl, amr, hpt, dmg, maxhp */
-	{ "aquator",	0,	ISMEAN,	{ XX, 20,   5,   2, ___, "0d0/0d0", ___ } },
-	{ "bat",	 	0,	ISFLY,	{ XX,  1,   1,   3, ___, "1d2", ___ } },
+	{ "aquator",	0,	ACTOR_AGGRESSIVE,	{ XX, 20,   5,   2, ___, "0d0/0d0", ___ } },
+	{ "bat",	 	0,	ACTOR_FLIES,	{ XX,  1,   1,   3, ___, "1d2", ___ } },
 	{ "centaur",	 15,	0,	{ XX, 25,   4,   4, ___, "1d6/1d6", ___ } },
-	{ "dragon",	 100,	ISMEAN,	{ XX,6800, 10,  -1, ___, "1d8/1d8/3d10", ___ } },
-	{ "emu",	 0,	ISMEAN,	{ XX,  2,   1,   7, ___, "1d2", ___ } },
+	{ "dragon",	 100,	ACTOR_AGGRESSIVE,	{ XX,6800, 10,  -1, ___, "1d8/1d8/3d10", ___ } },
+	{ "emu",	 0,	ACTOR_AGGRESSIVE,	{ XX,  2,   1,   7, ___, "1d2", ___ } },
 		/* NOTE: the damage is %%% so that xstr won't merge this */
 		/* string with others, since it is written on in the program */
-	{ "venus flytrap",0,	ISMEAN,	{ XX, 80,   8,   3, ___, "%%%d0", ___ } },
-	{ "griffin",	 20,	ISMEAN|ISFLY|ISREGEN,	{XX,2000, 13, 2,___, "4d3/3d5/4d3", ___ } },
-	{ "hobgoblin",	 0,	ISMEAN,	{ XX,  3,   1,   5, ___, "1d8", ___ } },
-	{ "ice monster", 0,	ISMEAN,	{ XX,  15,   1,   9, ___, "1d2", ___ } },
+	{ "venus flytrap",0,	ACTOR_AGGRESSIVE,	{ XX, 80,   8,   3, ___, "%%%d0", ___ } },
+	{ "griffin",	 20,	ACTOR_AGGRESSIVE|ACTOR_FLIES|ACTOR_REGENERATES,	{XX,2000, 13, 2,___, "4d3/3d5/4d3", ___ } },
+	{ "hobgoblin",	 0,	ACTOR_AGGRESSIVE,	{ XX,  3,   1,   5, ___, "1d8", ___ } },
+	{ "ice monster", 0,	ACTOR_AGGRESSIVE,	{ XX,  15,   1,   9, ___, "1d2", ___ } },
 	{ "jabberwock",  70,	0,	{ XX,4000, 15,   6, ___, "2d12/2d4", ___ } },
-	{ "kestral",	 0,	ISMEAN|ISFLY, { XX,  1,   1,   7, ___, "1d4", ___ } },
-	{ "leprechaun",	 ISGREED,	0,	{ XX, 10,   3,   8, ___, "1d2", ___ } },
-	{ "medusa",	 40,	ISMEAN,	{ XX,200,   8,   2, ___, "3d4/3d4/2d5", ___ } },
+	{ "kestral",	 0,	ACTOR_AGGRESSIVE|ACTOR_FLIES, { XX,  1,   1,   7, ___, "1d4", ___ } },
+	{ "leprechaun",	 ACTOR_GREEDY,	0,	{ XX, 10,   3,   8, ___, "1d2", ___ } },
+	{ "medusa",	 40,	ACTOR_AGGRESSIVE,	{ XX,200,   8,   2, ___, "3d4/3d4/2d5", ___ } },
 	{ "nymph",	 100,	0,	{ XX, 37,   3,   9, ___, "0d0", ___ } },
-	{ "orc",	 15,	ISGREED,{ XX,  5,   1,   6, ___, "1d8", ___ } },
-	{ "phantom",	 0,ISINVIS,{ XX,120,   8,   3, ___, "4d4", ___ } },
-	{ "quagga",	 30,	ISMEAN,	{ XX, 32,   3,   2, ___, "1d2/1d2/1d4", ___ } },
-	{ "rattlesnake", 0,	ISMEAN,	{ XX,  9,   2,   3, ___, "1d6", ___ } },
-	{ "slime",	 	 0,	ISMEAN,	{ XX,  1,   2,   8, ___, "1d3", ___ } },
-	{ "troll",	 50,	ISREGEN|ISMEAN,{ XX, 120, 6, 4, ___, "1d8/1d8/2d6", ___ } },
-	{ "ur-vile",	 0,	ISMEAN,	{ XX,190,   7,  -2, ___, "1d3/1d3/1d3/4d6", ___ } },
-	{ "vampire",	 20,	ISREGEN|ISMEAN,{ XX,350,   8,   1, ___, "1d10", ___ } },
+	{ "orc",	 15,	ACTOR_GREEDY,{ XX,  5,   1,   6, ___, "1d8", ___ } },
+	{ "phantom",	 0,ACTOR_INVISIBLE,{ XX,120,   8,   3, ___, "4d4", ___ } },
+	{ "quagga",	 30,	ACTOR_AGGRESSIVE,	{ XX, 32,   3,   2, ___, "1d2/1d2/1d4", ___ } },
+	{ "rattlesnake", 0,	ACTOR_AGGRESSIVE,	{ XX,  9,   2,   3, ___, "1d6", ___ } },
+	{ "slime",	 	 0,	ACTOR_AGGRESSIVE,	{ XX,  1,   2,   8, ___, "1d3", ___ } },
+	{ "troll",	 50,	ACTOR_REGENERATES|ACTOR_AGGRESSIVE,{ XX, 120, 6, 4, ___, "1d8/1d8/2d6", ___ } },
+	{ "ur-vile",	 0,	ACTOR_AGGRESSIVE,	{ XX,190,   7,  -2, ___, "1d3/1d3/1d3/4d6", ___ } },
+	{ "vampire",	 20,	ACTOR_REGENERATES|ACTOR_AGGRESSIVE,{ XX,350,   8,   1, ___, "1d10", ___ } },
 	{ "wraith",	 0,	0,	{ XX, 55,   5,   4, ___, "1d6", ___ } },
 	{ "xeroc",30,	0,	{ XX,100,   7,   7, ___, "3d4", ___ } },
 	{ "yeti",	 30,	0,	{ XX, 50,   4,   6, ___, "1d6/1d6", ___ } },
-	{ "zombie",	 0,	ISMEAN,	{ XX,  6,   2,   8, ___, "1d8", ___ } }
+	{ "zombie",	 0,	ACTOR_AGGRESSIVE,	{ XX,  6,   2,   8, ___, "1d8", ___ } }
 };
-char f_damage[10];
+char flytrap_damage_dice[10];
 #undef ___
 #undef XX
 
@@ -464,7 +464,7 @@ char f_damage[10];
  * original code convention.
  */
 #define ___ 1
-struct magic_item things[NUMTHINGS] = {
+struct item_definition item_category_probabilities[NUMTHINGS] = {
 	{ 0,			27, ___ },	/* potion */
 	{ 0,			30, ___ },	/* scroll */
 	{ 0,			17, ___ },	/* food */
@@ -478,12 +478,12 @@ struct magic_item things[NUMTHINGS] = {
 /*
  * Common strings
  */
-char nullstr[] = "";
-char *typebuf = nullstr;
+char empty_string[] = "";
+char *pending_macro_input = empty_string;
 
-char *intense = " of intense white light";
-char *flashmsg = "your %s gives off a flash%s";
-char *it = "it";
-char *you = "you";
-char *no_mem = "Not enough Memory";
+char *vorpal_flash_intensity = " of intense white light";
+char *vorpal_flash_message = "your %s gives off a flash%s";
+char *pronoun_it = "it";
+char *pronoun_you = "you";
+char *out_of_memory_message = "Not enough Memory";
 //@ char *smsg = "\r\n*** Stack Overflow ***\r\n$"; //only used in csav.asm

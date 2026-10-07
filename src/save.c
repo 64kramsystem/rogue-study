@@ -19,9 +19,9 @@
  * Changed from char to actual pointers, so we can set to a dummy address
  * Originally externs set by begin.asm
  */
-char dummy[1234];  //@ look how tiny Rogue data space is! :)
-char * _lowmem = dummy;  /* Adresss of first save-able memory */
-char * _Uend = dummy + sizeof(dummy);  /* Address of end of user data space */
+char legacy_static_placeholder[1234];  //@ look how tiny Rogue data space is! :)
+char * legacy_static_start = legacy_static_placeholder;  /* Adresss of first save-able memory */
+char * legacy_static_end = legacy_static_placeholder + sizeof(legacy_static_placeholder);  /* Address of end of user data space */
 
 /*@
  * Addresses used to save and restore dynamically allocated vars in heap,
@@ -37,22 +37,22 @@ char * _Uend = dummy + sizeof(dummy);  /* Address of end of user data space */
  * 16-bit real mode segmented memory, DS, heap and stack. Cos I surely don't ;)
  * See notes on restore()
  */
-char dummier[4321];  //@ Also tiny :)
-char *end_sb = dummier;  /* Pointer to the end of static base */
-char *startmem = dummier + sizeof(dummier);  /* Pointer to the start of static memory */
+char legacy_heap_placeholder[4321];  //@ Also tiny :)
+char *legacy_heap_start = legacy_heap_placeholder;  /* Pointer to the end of static base */
+char *legacy_heap_end = legacy_heap_placeholder + sizeof(legacy_heap_placeholder);  /* Pointer to the start of static memory */
 
 
-#define MIDSIZE 10
-static char *msaveid = "AI Design";
+#define SAVE_SIGNATURE_SIZE 10
+static char *save_signature = "AI Design";
 
 /*
  * BLKSZ: size of block read/written on each io operation
  *        Has to be less than 4096 and a factor of 4096
  *        so the screen can be read in exactly.
  */
-#define BLKSZ 512
+#define SAVE_BLOCK_SIZE 512
 
-static int	save_ds(char *savename);
+static int	write_legacy_memory_dump(char *filename);
 
 /*
  * save_game:
@@ -62,19 +62,19 @@ void
 save_game()
 {
 #ifndef DEMO
-	int retcode;
-	char savename[20];
+	int result;
+	char filename[20];
 
-	msg("Sorry, saving games is disabled. Patches are welcome!");
+	show_message("Sorry, saving games is disabled. Patches are welcome!");
 	return;
 
-	msg("");
-	mpos = 0;
+	show_message("");
+	message_column = 0;
 	if (terse)
 		addstr("Save file ? ");
 	else
 		printw("Save file (press enter (\x11\xd9) to default to \"%s\") ? ",
-				s_save );
+				save_filename );
 	/*@
 	 * FIXME
 	 * Previous message length + 19 input chars > 80 columns, message will
@@ -87,22 +87,22 @@ save_game()
 	 * Possible approach: save 2nd line, use it for input (80/40 char limit
 	 * is acceptable), then restore line on errors.
 	 */
-	retcode = getinfo(savename,19);
-	if (*savename == 0)
-		strcpy(savename,s_save);
-	msg("");
-	mpos = 0;
-	if (retcode != ESCAPE)
+	result = read_line(filename,19);
+	if (*filename == 0)
+		strcpy(filename,save_filename);
+	show_message("");
+	message_column = 0;
+	if (result != ESCAPE)
 	{
-		if ((retcode = save_ds(savename)) == -1)
+		if ((result = write_legacy_memory_dump(filename)) == -1)
 		{
-			if (remove(savename) == 0)
-				ifterse1("out of space?","out of space, can not write %s",savename);
-			msg("Sorry, you can't save the game just now");
+			if (remove(filename) == 0)
+				message_by_verbosity1("out of space?","out of space, can not write %s",filename);
+			show_message("Sorry, you can't save the game just now");
 			//@ is_saved = FALSE;  //@ wrestor() did that already
 		}
-		else if (retcode > 0)
-			fatal("\nGame saved as %s.", savename);
+		else if (result > 0)
+			fatal("\nGame saved as %s.", filename);
 	}
 #endif
 }
@@ -117,49 +117,49 @@ save_game()
  */
 static
 int
-save_ds(savename)
-	char *savename;
+write_legacy_memory_dump(filename)
+	char *filename;
 {
 	register FILE *file;
 	register char answer;
 
-	if ((file = fopen(savename, "r")) != NULL)
+	if ((file = fopen(filename, "r")) != NULL)
 	{
 		fclose(file);
-		msg("%s %sexists, overwrite (y/n) ?",savename,noterse("already "));
-		answer = readchar();
-		msg("");
+		show_message("%s %sexists, overwrite (y/n) ?",filename,verbose_text("already "));
+		answer = read_game_key();
+		show_message("");
 		if ((answer != 'y') && (answer != 'Y'))
 			return(-2);
 	}
 
-	if ((file = fopen(savename, "w")) == NULL)
+	if ((file = fopen(filename, "w")) == NULL)
 	{
-		msg("Could not create %s",savename);
+		show_message("Could not create %s",filename);
 		return (-2);
 	}
 	//@ is_saved = TRUE;  //@ wdump() will do that
-	mpos = 0;
+	message_column = 0;
 
 	errno = 1;
-	if ( ! fwrite(msaveid, MIDSIZE, 1, file)
-		|| ! fwrite(&_lowmem , &_Uend - &_lowmem, 1, file)
-			|| ! fwrite(end_sb, startmem - end_sb, 1, file))
+	if ( ! fwrite(save_signature, SAVE_SIGNATURE_SIZE, 1, file)
+		|| ! fwrite(&legacy_static_start , &legacy_static_end - &legacy_static_start, 1, file)
+			|| ! fwrite(legacy_heap_start, legacy_heap_end - legacy_heap_start, 1, file))
 			goto wr_err;
 	/*
 	 * save the screen (have to bring it into current data segment first)
 	 */
-	wdump();
-	if (fwrite(savewin, 4000, 1, file))
+	save_screen();
+	if (fwrite(saved_screen, 4000, 1, file))
 		errno = 0;
-	wrestor();
+	restore_screen();
 
 wr_err:
 	fclose(file);
 	switch (errno)
 	{
 		default:
-			msg("Could not write savefile to disk!");
+			show_message("Could not write savefile to disk!");
 			return -1;
 		case 0:
 			move(24,0);
@@ -182,7 +182,7 @@ wr_err:
  *		dump into memory all saved data.
  */
 void
-restore(char *savefile)
+restore_game(char *savefile)
 {
 	fatal("Sorry, restoring games is disabled. Patches are welcome!\n");
 
@@ -193,33 +193,33 @@ restore(char *savefile)
  *  will be missing. This can't be good...
  */
 #ifndef DEMO
-	int oldrev, oldver; //@, old_check;
-	register int oldcols;
+	int saved_major_version, saved_minor_version; //@, old_check;
+	register int saved_columns;
 	register FILE *file;
-	char errbuf[11], save_name[MAXSTR];
+	char error_text[11], save_name[MAXSTR];
 	char *read_error = "Read Error";
-	struct sw_regs *oregs;
-	unsigned nbytes;
-	char idbuf[MIDSIZE];
+	struct dos_registers *saved_registers;
+	unsigned byte_count;
+	char signature[SAVE_SIGNATURE_SIZE];
 
-	oregs = regs;
-	winit();
+	saved_registers = dos_regs;
+	initialize_screen();
 	//@ old_check = no_check;  //@ no_check is now inside winit()
-	strcpy(errbuf,read_error);
+	strcpy(error_text,read_error);
 	/*
 	 * save things that will be bombed on when the
 	 * restor takes place
 	 */
-	oldrev = revno;
-	oldver = verno;
+	saved_major_version = version_major;
+	saved_minor_version = version_minor;
 
-	if (!strcmp(s_drive,"?"))
+	if (!strcmp(copy_protection_drive,"?"))
 	{
-		int ot = scr_type;
+		int saved_video_mode = dos_screen_mode;
 		printw("Press space to restart game");
-		scr_type = -1;
-		wait_for(' ');
-		scr_type = ot;
+		dos_screen_mode = -1;
+		wait_for_key(' ');
+		dos_screen_mode = saved_video_mode;
 		addstr("\n");
 	}
 	if ((file = fopen(savefile, "r")) == NULL)
@@ -227,31 +227,31 @@ restore(char *savefile)
 	else
 		printw("Restoring %s",savefile);
 	strcpy(save_name, savefile);
-	nbytes = &_Uend - &_lowmem;
-	if (fread(idbuf, MIDSIZE, 1, file) || strcmp(idbuf,msaveid) )
+	byte_count = &legacy_static_end - &legacy_static_start;
+	if (fread(signature, SAVE_SIGNATURE_SIZE, 1, file) || strcmp(signature,save_signature) )
 		addstr("\nNot a savefile\n");
 	else
 	{
-		if (fread(&_lowmem, nbytes, 1, file))
-			if (fread(end_sb, startmem - end_sb, 1, file))
+		if (fread(&legacy_static_start, byte_count, 1, file))
+			if (fread(legacy_heap_start, legacy_heap_end - legacy_heap_start, 1, file))
 				goto rok;
-		addstr(errbuf);
+		addstr(error_text);
 	}
 	fclose(file);
-	md_exit(EXIT_FAILURE);
+	exit_game(EXIT_FAILURE);
 
 rok:
-	regs = oregs;
-	if (revno != oldrev || verno != oldver)
+	dos_regs = saved_registers;
+	if (version_major != saved_major_version || version_minor != saved_minor_version)
 	{
 		fclose(file);
-		md_exit(EXIT_FAILURE);
+		exit_game(EXIT_FAILURE);
 	}
 
-	oldcols = COLS;
+	saved_columns = COLS;
 	//@ no longer needed, memory is now managed via malloc()
 	//@ brk(end_sb);					/* Restore heap to empty state */
-	init_ds();
+	allocate_game_state();
 	/*@
 	 * There is a very clever trick going on here: by resetting the heap with
 	 * brk(end_sb) and immediately calling init_ds() it guarantees that
@@ -264,26 +264,26 @@ rok:
 	 * Ah, the wonders of real mode :)
 	 */
 	endwin();
-	winit();
-	if (oldcols != COLS)
+	initialize_screen();
+	if (saved_columns != COLS)
 	{
 		fclose(file);
 		fatal("Restore Error: new screen size\n");
 	}
 
-	wdump();
-	if (!fread(savewin, 4000, 1, file))
+	save_screen();
+	if (!fread(saved_screen, 4000, 1, file))
 	{
 		fclose(file);
 		fatal("Serious restore error");
 	}
-	wrestor();
+	restore_screen();
 
 	fclose(file);
 	//@ no_check = old_check;  //@ no longer your concern
-	mpos = 0;
-	ifterse1("%s, Welcome back!","Hello %s, Welcome back to the Dungeons of Doom!",whoami);
-	dnum = srand();     /* make it a little tougher on cheaters */
+	message_column = 0;
+	message_by_verbosity1("%s, Welcome back!","Hello %s, Welcome back to the Dungeons of Doom!",player_name);
+	initial_random_seed = random_seed_from_clock();     /* make it a little tougher on cheaters */
 	remove(save_name);
 #endif //DEMO
 }

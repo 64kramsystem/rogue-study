@@ -13,12 +13,12 @@
 /*@
  * Pointer to X display, if running under X.  Used to query keyboard LED status.
  */
-Display *xdisplay = NULL;
+Display *x11_display = NULL;
 #endif
 
 #ifdef ROGUE_DOS_CLOCK
-#define TICK_ADDR 0x70  //@ RTC Interrupt handler. See clock_on()
-static dosptr clk_vec[2];
+#define TIMER_VECTOR_OFFSET 0x70  //@ RTC Interrupt handler. See clock_on()
+static DosOffset saved_timer_vector[2];
 /*@
  * Global tick counter
  * Automatically incremented by clock() 18.2 times per second
@@ -26,14 +26,14 @@ static dosptr clk_vec[2];
  */
 unsigned int tick = 0;
 #endif
-static int ocb;
+static int saved_break_check;
 
 /*
  * Permanent stack data
  * @ originally defined in main.c
  */
-static struct sw_regs _treg;
-struct sw_regs *regs = &_treg;
+static struct dos_registers dos_register_storage;
+struct dos_registers *dos_regs = &dos_register_storage;
 
 #ifdef ROGUE_DEBUG
 /*
@@ -58,28 +58,28 @@ int last_drive = ROGUE_LAST_DRIVE;  //@ last available drive
 
 byte swap_bits(
 	byte data,
-	unsigned i,      // positions of bit sequences to swap
-	unsigned j,
+	unsigned first_bit,      // positions of bit sequences to swap
+	unsigned second_bit,
 	unsigned length  // number of consecutive bits in each sequence
 )
 {
-	byte x = ((data >> i) ^ (data >> j)) & ((1U << length) - 1);
-	return data ^ ((x << i) | (x << j));
+	byte differing_bits = ((data >> first_bit) ^ (data >> second_bit)) & ((1U << length) - 1);
+	return data ^ ((differing_bits << first_bit) | (differing_bits << second_bit));
 }
 
 
-int md_keyboard_leds(void)
+int keyboard_lock_flags(void)
 {
 	int state = 0;
 	int fd;
 #ifndef ROGUE_NO_X11
-	XKeyboardState kbstate;
+	XKeyboardState keyboard_state;
 
-	if (xdisplay)
+	if (x11_display)
 	{
 		//@ terminal emulator under X, such as xterm / gnome-terminal
-		XGetKeyboardControl(xdisplay, &kbstate);
-		state = swap_bits(kbstate.led_mask, 0, 2, 1);
+		XGetKeyboardControl(x11_display, &keyboard_state);
+		state = swap_bits(keyboard_state.led_mask, 0, 2, 1);
 	}
 	else
 #endif
@@ -135,7 +135,7 @@ int md_keyboard_leds(void)
  * changing the source code, just compile with a different CSUM #defined
  */
 int
-csum()
+code_checksum()
 {
 	return -1632;
 }
@@ -156,7 +156,7 @@ csum()
  * value is typed as byte to make clear that the high byte is ignored.
  */
 void
-pokeb(offset, segment, value)
+dos_write_byte(offset, segment, value)
 	int UNUSED(offset);
 	int UNUSED(segment);
 	byte UNUSED(value);
@@ -175,7 +175,7 @@ pokeb(offset, segment, value)
  * Only used in load.c to read CGA (0xB800) and BIOS (0x40) data
  */
 byte
-peekb(offset, segment)
+dos_read_byte(offset, segment)
 	int UNUSED(offset);
 	int UNUSED(segment);
 {
@@ -195,7 +195,7 @@ peekb(offset, segment)
  * written to DX, so a type uint16_t could be used enforce this.
  */
 void
-out(port, value)
+dos_write_port(port, value)
 	int UNUSED(port);
 	byte UNUSED(value);
 {
@@ -209,7 +209,7 @@ out(port, value)
  * A dummy wrapper to the x86 IN instruction. Return 0
  */
 byte
-in(port)
+dos_read_port(port)
 	int UNUSED(port);
 {
 	return 0;  // maybe it's not connected :P
@@ -233,7 +233,7 @@ in(port)
  */
 #if defined(ROGUE_DOS_CURSES) && defined(ROGUE_DEBUG)
 void
-dmaout(data, wordlength, segment, offset)
+dos_write_memory(data, wordlength, segment, offset)
 	void * data;
 	unsigned int wordlength;
 	unsigned int segment;
@@ -244,7 +244,7 @@ dmaout(data, wordlength, segment, offset)
 }
 #else
 void
-dmaout(data, wordlength, segment, offset)
+dos_write_memory(data, wordlength, segment, offset)
 	void UNUSED(*data);
 	unsigned int UNUSED(wordlength);
 	unsigned int UNUSED(segment);
@@ -265,7 +265,7 @@ dmaout(data, wordlength, segment, offset)
  * Originally in dos.asm. See notes on dmaout()
  */
 void
-dmain(buffer, wordlength, segment, offset)
+dos_read_memory(buffer, wordlength, segment, offset)
 	void UNUSED(*buffer);
 	unsigned int UNUSED(wordlength);
 	unsigned int UNUSED(segment);
@@ -284,9 +284,9 @@ dmain(buffer, wordlength, segment, offset)
  * hanging the PC. Now it uses a harmless pause()
  */
 void
-_halt()
+halt_game()
 {
-	cur_endwin();
+	shutdown_screen();
 	printf("HALT!\n");
 	pause();
 }
@@ -307,13 +307,13 @@ _halt()
  * code anyway. See notes on clock().
  */
 void
-COFF()
+install_dos_break_handler()
 {
-	struct sw_regs reg;
+	struct dos_registers reg;
 	reg.ax = 0x2523;  //@ hooking to INT 23h
 	reg.ds = 0x33;  //@ dummy value for dos.asm's CS register
-	reg.dx = (dosptr)(intptr)quit;  //@ see clock_on() for note on casting
-	swint(SW_DOS, &reg);
+	reg.dx = (DosOffset)(PointerBits)quit;  //@ see clock_on() for note on casting
+	call_dos_interrupt(SW_DOS, &reg);
 }
 
 
@@ -322,23 +322,23 @@ COFF()
  *	Get starting setup for all games
  */
 void
-setup()
+setup_game_io()
 {
 	terse = FALSE;
-	maxrow = 23;
+	dungeon_bottom_row = 23;
 	if (COLS == 40) {
-		maxrow = 22;
+		dungeon_bottom_row = 22;
 		terse = TRUE;
 	}
 	expert = terse;
 	/*
 	 * Vector CTRL-BREAK to call quit()
 	 */
-	COFF();
-	ocb = set_ctrlb(0);
+	install_dos_break_handler();
+	saved_break_check = set_dos_break_check(0);
 #ifndef ROGUE_NO_X11
 	if (getenv("DISPLAY"))
-		xdisplay = XOpenDisplay(NULL);
+		x11_display = XOpenDisplay(NULL);
 #endif
 }
 
@@ -349,12 +349,12 @@ setup()
  * moved from croot.c
  */
 void
-noper()
+no_timer_cleanup()
 {
 	return;
 }
 
-void (*cls_)() = noper;
+void (*restore_timer_hook)() = no_timer_cleanup;
 
 
 /*@
@@ -379,13 +379,13 @@ void (*cls_)() = noper;
  * ancient real mode ISR/IVT model.
  */
 void
-clock_on()
+install_dos_timer_hook()
 {
 	/*@
 	 * CS register value. Originally an extern set by begin.asm
 	 * Set to dummy value of a "Hello World!" program as reported by gdb
 	 */
-	dosptr _csval = 0x33;
+	DosOffset _csval = 0x33;
 
 	/*@
 	 * Craft the 4-byte CS:offset function pointer for clock()
@@ -395,18 +395,18 @@ clock_on()
 	 * DOS real mode 16-bit offset makes the compiler happy and produce a legit
 	 * dmaout() call. But obviously the values in new_vec are completely bogus.
 	 */
-	dosptr new_vec[2];  //@ type must match clk_vec
+	DosOffset new_vec[2];  //@ type must match clk_vec
 
-	new_vec[0] = (dosptr)(intptr)clock;
+	new_vec[0] = (DosOffset)(PointerBits)update_protection_state;
 	new_vec[1] = _csval;
 
 	/*@
 	 * I wonder why using IVT directly instead of the safer DOS INT 21h/25h,35h
 	 * calls like the well behaved COFF() does?
 	 */
-	dmain(clk_vec, 2, 0, TICK_ADDR);
-	dmaout(new_vec, 2, 0, TICK_ADDR);
-	cls_ = no_clock;
+	dos_read_memory(saved_timer_vector, 2, 0, TIMER_VECTOR_OFFSET);
+	dos_write_memory(new_vec, 2, 0, TIMER_VECTOR_OFFSET);
+	restore_timer_hook = restore_dos_timer_hook;
 }
 
 
@@ -415,9 +415,9 @@ clock_on()
  * clock() would no longer be called, and thus tick will not be updated.
  */
 void
-no_clock()
+restore_dos_timer_hook()
 {
-	dmaout(clk_vec, 2, 0, TICK_ADDR);
+	dos_write_memory(saved_timer_vector, 2, 0, TIMER_VECTOR_OFFSET);
 }
 #endif  // ROGUE_DOS_CLOCK
 
@@ -443,7 +443,7 @@ no_clock()
  * unlock the copy protection on one_tick().
  */
 void
-md_clock()
+update_protection_state()
 {
 #ifdef ROGUE_DOS_CLOCK
 	//@ tick the old clock
@@ -451,8 +451,8 @@ md_clock()
 #endif
 
 	//@ anti debugging: halt after 20 ticks if no_step is set
-	if (no_step && ++no_step > 20)
-		_halt();
+	if (protection_watchdog_ticks && ++protection_watchdog_ticks > 20)
+		halt_game();
 
 	/*@
 	 * Unlock copy protection if floppy check succeeded: set tombstone strings
@@ -460,11 +460,11 @@ md_clock()
 	 * hit multiplier. Only a single tick is required to unlock.
 	 * See death()
 	 */
-	if (hit_mul != 1 && goodchk == 0xD0D)
+	if (incoming_damage_multiplier != 1 && disk_authentication_marker == 0xD0D)
 	{
-		kild_by = prbuf;
-		your_na = whoami;
-		hit_mul = 1;
+		tombstone_death_cause = description_buffer;
+		tombstone_player_name = player_name;
+		incoming_damage_multiplier = 1;
 	}
 }
 
@@ -473,7 +473,7 @@ md_clock()
  * Simple wrapper to <time.h> time()
  */
 long
-md_time(void)
+epoch_seconds(void)
 {
 	return (long)time(NULL);
 }
@@ -482,19 +482,19 @@ md_time(void)
 /*@
  * Return current local time as a pointer to a struct
  */
-TM *
-md_localtime()
+LocalTime *
+current_local_time()
 {
-	static TM md_local;
-	time_t secs = time(NULL);
-	struct tm *local = localtime(&secs);
-	md_local.second = local->tm_sec;
-	md_local.minute = local->tm_min;
-	md_local.hour   = local->tm_hour;
-	md_local.day    = local->tm_mday;
-	md_local.month  = local->tm_mon;
-	md_local.year   = local->tm_year + 1900;
-	return &md_local;
+	static LocalTime result;
+	time_t now = time(NULL);
+	struct tm *system_time = localtime(&now);
+	result.second = system_time->tm_sec;
+	result.minute = system_time->tm_min;
+	result.hour   = system_time->tm_hour;
+	result.day    = system_time->tm_mday;
+	result.month  = system_time->tm_mon;
+	result.year   = system_time->tm_year + 1900;
+	return &result;
 }
 
 
@@ -502,7 +502,7 @@ md_localtime()
  * Sleep for nanoseconds
  */
 void
-md_nanosleep(long nanoseconds)
+sleep_nanoseconds(long nanoseconds)
 {
 	struct timespec ts = {0, nanoseconds};
 	nanosleep(&ts, NULL);
@@ -528,19 +528,19 @@ md_nanosleep(long nanoseconds)
  * returns a seed for a random number generator
  */
 int
-md_srand()
+random_seed_from_clock()
 {
 #ifdef DEBUG
-	return ++dnum;
+	return ++initial_random_seed;
 #else
 	/*
 	 * Get Time
 	 */
 #ifdef ROGUE_DOS_CLOCK
-	bdos(0x2C);
-	return(regs->cx + regs->dx);
+	dos_service(0x2C);
+	return(dos_regs->cx + dos_regs->dx);
 #else
-	return (int)md_time();
+	return (int)epoch_seconds();
 #endif  // ROGUE_DOS_CLOCK
 #endif  // DEMO
 }
@@ -551,14 +551,14 @@ md_srand()
  *	Flush typebuf for traps, etc.
  */
 void
-flush_type()
+clear_macro_input()
 {
 #ifdef CRASH_MACHINE
-	regs->ax = 0xc06;		/* clear keyboard input */
-	regs->dx = 0xff;		/* set input flag */
-	swint(SW_DOS, regs);
+	dos_regs->ax = 0xc06;		/* clear keyboard input */
+	dos_regs->dx = 0xff;		/* set input flag */
+	call_dos_interrupt(SW_DOS, dos_regs);
 #endif //CRASH_MACHINE
-	typebuf = "";
+	pending_macro_input = "";
 }
 
 /*@
@@ -566,13 +566,13 @@ flush_type()
  * Granted, the staff and companies to credit vary by platform, but still...
  */
 void
-credits()
+show_credits()
 {
 	#define ULINE() if(is_color) lmagenta();else uline();
 
-	char tname[25];
+	char entered_name[25];
 
-	cursor(FALSE);
+	set_cursor_visible(FALSE);
 	clear();
 	if (is_color)
 		brown();
@@ -617,16 +617,16 @@ credits()
 		brown();
 	move(22, 0);
 	addch(DVRIGHT);
-	repchr(DHLINE, COLS-2);
+	repeat_character(DHLINE, COLS-2);
 	addch(DVLEFT);
 	standend();
 	mvaddstr(23,2,"Rogue's Name? ");
-	is_saved = TRUE;		/*  status line hack @ to disable updates */
+	screen_updates_suspended = TRUE;		/*  status line hack @ to disable updates */
 	high();
-	getinfo(tname,23);
-	if (*tname && *tname != ESCAPE)
-		strcpy(whoami, tname);
-	is_saved = FALSE;  //@ re-enable status line updates
+	read_line(entered_name,23);
+	if (*entered_name && *entered_name != ESCAPE)
+		strcpy(player_name, entered_name);
+	screen_updates_suspended = FALSE;  //@ re-enable status line updates
 #ifdef ROGUE_DOS_CURSES
 	blot_out(23,0,24,COLS-1);
 #else
@@ -680,15 +680,15 @@ no_char()
  *	Return the next input character, from the macro or from the keyboard.
  */
 byte
-readchar()
+read_game_key()
 {
-	int xch;
-	byte ch;
+	int terminal_key;
+	byte character;
 
-	if (*typebuf) {
-		SIG2();
-		cur_refresh();  //@ macros
-		return(*typebuf++);
+	if (*pending_macro_input) {
+		update_keyboard_and_clock();
+		screen_refresh();  //@ macros
+		return(*pending_macro_input++);
 	}
 	/*
 	 * while there are no characters in the type ahead buffer
@@ -696,30 +696,30 @@ readchar()
 	 */
 	do
 	{
-		SIG2();  /* Rogue spends a lot of time here @ you bet! */
-		cur_refresh();  //@ command input
+		update_keyboard_and_clock();  /* Rogue spends a lot of time here @ you bet! */
+		screen_refresh();  //@ command input
 	}
-	while ((xch = getch_timeout(250)) == NOCHAR);
-	ch = xlate_ch(xch);
-	if (ch == ESCAPE)
-		count = 0;
-	return ch;
+	while ((terminal_key = getch_timeout(250)) == NOCHAR);
+	character = translate_key(terminal_key);
+	if (character == ESCAPE)
+		command_repeat_count = 0;
+	return character;
 }
 
 
 int
-bdos(fnum, dxval)
-	int fnum, dxval;
+dos_service(function_number, argument)
+	int function_number, argument;
 {
-	register struct sw_regs *saveptr;
+	register struct dos_registers *saved_registers;
 
-	regs->ax = fnum << 8;
-	regs->bx = regs->cx = 0;
-	regs->dx = dxval;
-	saveptr = regs;
-	swint(SW_DOS,regs);
-	regs = saveptr;
-	return(0xff & regs->ax);
+	dos_regs->ax = function_number << 8;
+	dos_regs->bx = dos_regs->cx = 0;
+	dos_regs->dx = argument;
+	saved_registers = dos_regs;
+	call_dos_interrupt(SW_DOS,dos_regs);
+	dos_regs = saved_registers;
+	return(0xff & dos_regs->ax);
 }
 
 /*
@@ -751,27 +751,27 @@ newmem(nbytes,clrflag)
  * Clients should call free() for allocated objects
  */
 char *
-newmem(nbytes)
-	unsigned int nbytes;
+allocate_memory(byte_count)
+	unsigned int byte_count;
 {
-	void * newaddr;
-	if ((newaddr = (char *) malloc(nbytes)) == NULL)
+	void * memory;
+	if ((memory = (char *) malloc(byte_count)) == NULL)
 		fatal("No Memory");
-	return (char *)newaddr;
+	return (char *)memory;
 }
 
 
 int
-swint(intno, rp)
-	int intno;
-	struct sw_regs *rp;
+call_dos_interrupt(interrupt_number, registers)
+	int interrupt_number;
+	struct dos_registers *registers;
 {
 	//@ DS register value. Originally an extern set by begin.asm, now a dummy
-	int _dsval = 0x00;
+	int data_segment = 0x00;
 
-	rp->ds = rp->es = _dsval;
-	sysint(intno, rp, rp);
-	return rp->ax;
+	registers->ds = registers->es = data_segment;
+	simulate_dos_interrupt(interrupt_number, registers, registers);
+	return registers->ax;
 }
 
 /*@
@@ -782,13 +782,13 @@ swint(intno, rp)
  * Return FLAGS register, or rather a dummy with reasonable values
  */
 int
-sysint(intno, inregs, outregs)
+simulate_dos_interrupt(interrupt_number, input_registers, output_registers)
 #if defined(ROGUE_DOS_CURSES) && defined(ROGUE_DEBUG)
-	int intno;
+	int interrupt_number;
 #else
-	int UNUSED(intno);
+	int UNUSED(interrupt_number);
 #endif
-	struct sw_regs *inregs, *outregs;
+	struct dos_registers *input_registers, *output_registers;
 {
 #if defined(ROGUE_DOS_CURSES) && defined(ROGUE_DEBUG)
 	if(print_int_calls)
@@ -801,57 +801,57 @@ sysint(intno, inregs, outregs)
 				"di=%4X\t"
 				"ds=%4X\t"
 				"es=%4X\n",
-				intno,
-				HI(inregs->ax),
-				LOW(inregs->ax),
-				inregs->bx,
-				inregs->cx,
-				inregs->dx,
-				inregs->si,
-				inregs->di,
-				inregs->ds,
-				inregs->es);
+				interrupt_number,
+				HI(input_registers->ax),
+				LOW(input_registers->ax),
+				input_registers->bx,
+				input_registers->cx,
+				input_registers->dx,
+				input_registers->si,
+				input_registers->di,
+				input_registers->ds,
+				input_registers->es);
 #endif
-	outregs->ax = 0;
-	outregs->bx = 0;
-	outregs->cx = 0;
-	outregs->dx = 0;
-	outregs->si = inregs->si;
-	outregs->di = inregs->di;
-	outregs->ds = inregs->ds;
-	outregs->es = inregs->es;
+	output_registers->ax = 0;
+	output_registers->bx = 0;
+	output_registers->cx = 0;
+	output_registers->dx = 0;
+	output_registers->si = input_registers->si;
+	output_registers->di = input_registers->di;
+	output_registers->ds = input_registers->ds;
+	output_registers->es = input_registers->es;
 
 	// reserved flags and IF set, all others unset
 	return 0xF22A;
 }
 
 bool
-set_ctrlb(state)
+set_dos_break_check(state)
 	bool state;
 {
-	struct sw_regs rg;
-	int retcode;
+	struct dos_registers registers;
+	int previous_state;
 
-	rg.ax = 0x3300;
-	swint(SW_DOS,&rg);
-	retcode = rg.dx &0xFF;
+	registers.ax = 0x3300;
+	call_dos_interrupt(SW_DOS,&registers);
+	previous_state = registers.dx &0xFF;
 
-	rg.ax = 0x3300;  //@ shouldn't this be 0x3301? As it is it just reads again
-	rg.dx = state;
-	swint(SW_DOS,&rg);
+	registers.ax = 0x3300;  //@ shouldn't this be 0x3301? As it is it just reads again
+	registers.dx = state;
+	call_dos_interrupt(SW_DOS,&registers);
 
-	return retcode;
+	return previous_state;
 }
 
 void
-unsetup()
+restore_game_io()
 {
-	set_ctrlb(ocb);
+	set_dos_break_check(saved_break_check);
 #ifndef ROGUE_NO_X11
-	if (xdisplay)
+	if (x11_display)
 	{
-		XCloseDisplay(xdisplay);
-		xdisplay = NULL;
+		XCloseDisplay(x11_display);
+		x11_display = NULL;
 	}
 #endif
 }
@@ -884,7 +884,7 @@ unsetup()
  * tick is no longer used or extern'ed.
  */
 void
-one_tick()
+protection_tick()
 {
 /*@
 	int otick = tick;
@@ -900,7 +900,7 @@ one_tick()
 	}
 */
 	msleep(27);
-	md_clock();
+	update_protection_state();
 }
 
 
@@ -914,16 +914,16 @@ one_tick()
  *  @ moved from main.c, changed to use varargs and actually print the message
  */
 void
-fatal(const char *msg, ...)
+fatal(const char *message_text, ...)
 {
-	va_list argp;
+	va_list arguments;
 
-	cur_endwin();
+	shutdown_screen();
 
-	va_start(argp, msg);
-	vprintf(msg, argp);
-	va_end(argp);
-	md_exit(EXIT_SUCCESS);
+	va_start(arguments, message_text);
+	vprintf(message_text, arguments);
+	va_end(arguments);
+	exit_game(EXIT_SUCCESS);
 }
 
 
@@ -932,17 +932,17 @@ fatal(const char *msg, ...)
  * renamed from exit() to avoid conflict with <stdlib.h>
  * moved from croot.c
  */
-void md_exit(int status)
+void exit_game(int update_status_line)
 {
 #ifdef ROGUE_DOS_CLOCK
 	//@ restore the clock, it if was ever set
-	(*cls_)();
+	(*restore_timer_hook)();
 #endif
-	cur_endwin();
-	unsetup();
-	free_ds();
+	shutdown_screen();
+	restore_game_io();
+	free_game_state();
 #ifdef ROGUE_DEBUG
 	printf("Exited normally\n");
 #endif
-	exit(status);
+	exit(update_status_line);
 }

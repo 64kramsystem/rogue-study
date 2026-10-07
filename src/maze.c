@@ -8,97 +8,97 @@
 #include "rogue.h"
 #include "curses.h"
 
-#define MAXFRNT 100
+#define MAX_MAZE_FRONTIER 100
 
 #define FRONTIER 'F'
 #define NOTHING ' '
 
-static shint frcnt, ny, nx, topy, topx;
-static shint maxx, maxy;
-static shint *fr_y, *fr_x;
+static shint frontier_count, selected_frontier_y, selected_frontier_x, maze_top, maze_left;
+static shint maze_right, maze_bottom;
+static shint *frontier_rows, *frontier_columns;
 
 void
-draw_maze(rp)
-	struct room *rp;
+draw_maze(room)
+	struct room *room;
 {
 	register int y, x;
-	shint fy[MAXFRNT], fx[MAXFRNT];
-	int psgcnt;
-	coord spos;
+	shint frontier_y_storage[MAX_MAZE_FRONTIER], frontier_x_storage[MAX_MAZE_FRONTIER];
+	int neighbor_mask;
+	Position loop_position;
 
-	fr_y = fy;
-	fr_x = fx;
-	maxx = maxy = 0;
-	topy = rp->r_pos.y;
-	if (topy == 0)
-		topy = ++rp->r_pos.y;
-	topx = rp->r_pos.x;
+	frontier_rows = frontier_y_storage;
+	frontier_columns = frontier_x_storage;
+	maze_right = maze_bottom = 0;
+	maze_top = room->origin.y;
+	if (maze_top == 0)
+		maze_top = ++room->origin.y;
+	maze_left = room->origin.x;
 	/*
 	 * Choose a random spot in the maze and initialize the frontier
 	 * to be the immediate neighbors of this random spot.
 	 */
-	y = topy;
-	x = topx;
-	splat(y,x);
-	new_frontier(y, x);
+	y = maze_top;
+	x = maze_left;
+	carve_maze_cell(y,x);
+	expand_maze_frontier(y, x);
 	/*
 	 * While there are new frontiers, connect them to the path and
 	 * possibly expand the frontier even more.
 	 */
-	while(frcnt)
+	while(frontier_count)
 	{
-		con_frnt();
-		new_frontier(ny, nx);
+		connect_maze_frontier();
+		expand_maze_frontier(selected_frontier_y, selected_frontier_x);
 	}
 	/*
 	 * According to the Grand Beeking, every maze should have a loop
 	 * Don't worry if you don't understand this.
 	 */
-	rp->r_max.x = maxx - rp->r_pos.x + 1;
-	rp->r_max.y = maxy - rp->r_pos.y + 1;
+	room->size.x = maze_right - room->origin.x + 1;
+	room->size.y = maze_bottom - room->origin.y + 1;
 	do {
-		static coord ld[4] = {
+		static Position neighbor_directions[4] = {
 			{-1,  0},
 			{ 0,  1},
 			{ 1,  0},
 			{ 0, -1}
 		};
-		coord *cp;
-		int sh;
+		Position *direction;
+		int direction_bit;
 
-		rnd_pos(rp, &spos);
-		for (psgcnt = 0,cp = ld,sh = 1; cp < &ld[4]; sh <<= 1,cp++) {
-			y = cp->y + spos.y; x = cp->x + spos.x;
-			if (!offmap(y, x) && chat(y, x) == PASSAGE)
-				psgcnt += sh;
+		random_room_position(room, &loop_position);
+		for (neighbor_mask = 0,direction = neighbor_directions,direction_bit = 1; direction < &neighbor_directions[4]; direction_bit <<= 1,direction++) {
+			y = direction->y + loop_position.y; x = direction->x + loop_position.x;
+			if (!outside_dungeon(y, x) && terrain_at(y, x) == PASSAGE)
+				neighbor_mask += direction_bit;
 		}
-	} while (chat(spos.y, spos.x) == PASSAGE || psgcnt % 5);
-	splat(spos.y, spos.x);
+	} while (terrain_at(loop_position.y, loop_position.x) == PASSAGE || neighbor_mask % 5);
+	carve_maze_cell(loop_position.y, loop_position.x);
 }
 
 void
-new_frontier(y, x)
+expand_maze_frontier(y, x)
 	int y, x;
 {
-	add_frnt(y-2, x);
-	add_frnt(y+2, x);
-	add_frnt(y, x-2);
-	add_frnt(y, x+2);
+	add_maze_frontier(y-2, x);
+	add_maze_frontier(y+2, x);
+	add_maze_frontier(y, x-2);
+	add_maze_frontier(y, x+2);
 }
 
 void
-add_frnt(y, x)
+add_maze_frontier(y, x)
 	int y, x;
 {
 #ifdef DEBUG
-	if (frcnt == MAXFRNT - 1)
+	if (frontier_count == MAX_MAZE_FRONTIER - 1)
 		debug("MAZE DRAWING ERROR #3\n");
 #endif
-	if (inrange(y, x) && chat(y, x) == NOTHING)
+	if (inside_maze_bounds(y, x) && terrain_at(y, x) == NOTHING)
 	{
-		chat(y, x) = FRONTIER;
-		fr_y[frcnt] = y;
-		fr_x[frcnt++] = x;
+		terrain_at(y, x) = FRONTIER;
+		frontier_rows[frontier_count] = y;
+		frontier_columns[frontier_count++] = x;
 	}
 }
 
@@ -106,78 +106,78 @@ add_frnt(y, x)
  * Connect randomly to one of the adjacent points in the spanning tree
  */
 void
-con_frnt()
+connect_maze_frontier()
 {
-	register int n, which, ydelt = 0, xdelt = 0;
-	int choice[4];
-	int cnt = 0, y, x;
+	register int frontier_index, direction_index, y_step = 0, x_step = 0;
+	int available_directions[4];
+	int direction_count = 0, y, x;
 
 
 	/*
 	 * Choose a random frontier
 	 */
-	n = rnd(frcnt);
-	ny = fr_y[n];
-	nx = fr_x[n];
-	fr_y[n] = fr_y[frcnt-1];
-	fr_x[n] = fr_x[--frcnt];
+	frontier_index = random_below(frontier_count);
+	selected_frontier_y = frontier_rows[frontier_index];
+	selected_frontier_x = frontier_columns[frontier_index];
+	frontier_rows[frontier_index] = frontier_rows[frontier_count-1];
+	frontier_columns[frontier_index] = frontier_columns[--frontier_count];
 
 	/*
 	 * Count and collect the adjacent points we can connect to
 	 */
-	if (maze_at(ny-2, nx))
-		choice[cnt++] = 0;
-	if (maze_at(ny+2, nx))
-		choice[cnt++] = 1;
-	if (maze_at(ny, nx-2))
-		choice[cnt++] = 2;
-	if (maze_at(ny, nx+2))
-		choice[cnt++] = 3;
+	if (is_maze_passage(selected_frontier_y-2, selected_frontier_x))
+		available_directions[direction_count++] = 0;
+	if (is_maze_passage(selected_frontier_y+2, selected_frontier_x))
+		available_directions[direction_count++] = 1;
+	if (is_maze_passage(selected_frontier_y, selected_frontier_x-2))
+		available_directions[direction_count++] = 2;
+	if (is_maze_passage(selected_frontier_y, selected_frontier_x+2))
+		available_directions[direction_count++] = 3;
 	/*
 	 * Choose one of the open places, connect to it and
 	 * then the task is complete
 	 */
-	which = choice[rnd(cnt)];
-	splat(ny, nx);
-	switch(which)
+	direction_index = available_directions[random_below(direction_count)];
+	carve_maze_cell(selected_frontier_y, selected_frontier_x);
+	switch(direction_index)
 	{
-		when 0: which = 1; ydelt = -1;
-		when 1: which = 0; ydelt = 1;
-		when 2: which = 3; xdelt = -1;
-		when 3: which = 2; xdelt = 1;
+		when 0: direction_index = 1; y_step = -1;
+		when 1: direction_index = 0; y_step = 1;
+		when 2: direction_index = 3; x_step = -1;
+		when 3: direction_index = 2; x_step = 1;
 		break;
 	}
-	y = ny + ydelt;
-	x = nx + xdelt;
-	if (inrange(y, x))
-		splat(y, x);
+	y = selected_frontier_y + y_step;
+	x = selected_frontier_x + x_step;
+	if (inside_maze_bounds(y, x))
+		carve_maze_cell(y, x);
 }
 
 bool
-maze_at(y, x)
+is_maze_passage(y, x)
 	int y, x;
 {
-	return (inrange(y, x) && chat(y, x) == PASSAGE);
+	return (inside_maze_bounds(y, x) && terrain_at(y, x) == PASSAGE);
 }
 
 void
-splat(y, x)
+carve_maze_cell(y, x)
 	int y, x;
 {
-	chat(y, x) = PASSAGE;
-	flat(y, x) = F_MAZE|F_REAL;
-	if (x > maxx)
-		maxx = x;
-	if (y > maxy)
-		maxy = y;
+	terrain_at(y, x) = PASSAGE;
+	cell_flags_at(y, x) = CELL_MAZE|CELL_REVEALED;
+	if (x > maze_right)
+		maze_right = x;
+	if (y > maze_bottom)
+		maze_bottom = y;
 }
 
-#define MAXY (topy+((maxrow+1)/3))
-#define MAXX (topx+COLS/3)
+#define MAZE_Y_LIMIT (maze_top+((dungeon_bottom_row+1)/3))
+#define MAZE_X_LIMIT (maze_left+COLS/3)
 
 bool
-inrange(y, x)
+inside_maze_bounds(y, x)
 	int x, y;
 {
-	return(y >= topy && y < MAXY && x >= topx && x < MAXX);
+	return(y >= maze_top && y < MAZE_Y_LIMIT && x >= maze_left && x < MAZE_X_LIMIT);
 }

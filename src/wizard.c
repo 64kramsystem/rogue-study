@@ -19,51 +19,51 @@ static int	get_num(int *place);
  *	What a certin object is
  */
 void
-whatis(void)
+identify_item(void)
 {
-	register THING *obj;
+	register Entity *item;
 
-	if (pack == NULL) {
-		msg("You don't have anything in your pack to identify");
+	if (player_inventory == NULL) {
+		show_message("You don't have anything in your pack to identify");
 		return;
 	}
 
 	for (;;) {
-		if ((obj = get_item("identify", 0)) == NULL) {
-			msg("You must identify something");
-			msg(" ");
-			mpos = 0;
+		if ((item = select_inventory_item("identify", 0)) == NULL) {
+			show_message("You must identify something");
+			show_message(" ");
+			message_column = 0;
 		} else
 			break;
 	}
 
-	switch (obj->o_type) {
+	switch (item->item_category) {
 	when SCROLL:
-		s_know[obj->o_which] = TRUE;
-		*s_guess[obj->o_which] = '\0';
+		scroll_identified[item->item_subtype] = TRUE;
+		*scroll_labels[item->item_subtype] = '\0';
 	when POTION:
-		p_know[obj->o_which] = TRUE;
-		*p_guess[obj->o_which] = '\0';
+		potion_identified[item->item_subtype] = TRUE;
+		*potion_labels[item->item_subtype] = '\0';
 	when STICK:
-		ws_know[obj->o_which] = TRUE;
-		obj->o_flags |= ISKNOW;
-		*ws_guess[obj->o_which] = '\0';
+		wand_identified[item->item_subtype] = TRUE;
+		item->item_flags |= ITEM_IDENTIFIED;
+		*wand_labels[item->item_subtype] = '\0';
 	when WEAPON:
 	case ARMOR:
-		obj->o_flags |= ISKNOW;
+		item->item_flags |= ITEM_IDENTIFIED;
 	when RING:
-		r_know[obj->o_which] = TRUE;
-		obj->o_flags |= ISKNOW;
-		*r_guess[obj->o_which] = '\0';
+		ring_identified[item->item_subtype] = TRUE;
+		item->item_flags |= ITEM_IDENTIFIED;
+		*ring_labels[item->item_subtype] = '\0';
 		break;
 	}
 	/*
 	 * If it is vorpally enchanted, then reveal what type of monster it is
 	 * vorpally enchanted against
 	 */
-	if (obj->o_enemy)
-		obj->o_flags |= ISREVEAL;
-	msg(inv_name(obj, FALSE));
+	if (item->item_slays_species)
+		item->item_flags |= ITEM_SLAYER_REVEALED;
+	show_message(describe_item(item, FALSE));
 }
 
 #ifdef WIZARD
@@ -74,83 +74,83 @@ whatis(void)
 void
 create_obj(void)
 {
-	THING *obj;
+	Entity *obj;
 	byte ch, bless;
 
-	if ((obj = new_item()) == NULL)
+	if ((obj = allocate_entity()) == NULL)
 	{
-		msg("can't create anything now");
+		show_message("can't create anything now");
 		return;
 	}
-	msg("type of item: ");
-	switch (readchar()) {
-		when '!': obj->o_type = POTION;
-		when '?': obj->o_type = SCROLL;
-		when '/': obj->o_type = STICK;
-		when '=': obj->o_type = RING;
-		when ')': obj->o_type = WEAPON;
-		when ']': obj->o_type = ARMOR;
-		when ',': obj->o_type = AMULET;
+	show_message("type of item: ");
+	switch (read_game_key()) {
+		when '!': obj->item_category = POTION;
+		when '?': obj->item_category = SCROLL;
+		when '/': obj->item_category = STICK;
+		when '=': obj->item_category = RING;
+		when ')': obj->item_category = WEAPON;
+		when ']': obj->item_category = ARMOR;
+		when ',': obj->item_category = AMULET;
 		otherwise:
-			obj->o_type = FOOD;
+			obj->item_category = FOOD;
 	}
-	mpos = 0;
-	msg("which %c do you want? (0-f)", obj->o_type);
-	obj->o_which = (is_digit((ch = readchar())) ? ch - '0' : ch - 'a' + 10);
-	obj->o_group = 0;
-	obj->o_count = 1;
-	obj->o_damage = obj->o_hurldmg = "0d0";
-	mpos = 0;
-	if (obj->o_type == WEAPON || obj->o_type == ARMOR)
+	message_column = 0;
+	show_message("which %c do you want? (0-f)", obj->item_category);
+	obj->item_subtype = (is_digit((ch = read_game_key())) ? ch - '0' : ch - 'a' + 10);
+	obj->item_stack_group = 0;
+	obj->item_quantity = 1;
+	obj->item_melee_damage = obj->item_thrown_damage = "0d0";
+	message_column = 0;
+	if (obj->item_category == WEAPON || obj->item_category == ARMOR)
 	{
-		msg("blessing? (+,-,n)");
-		bless = readchar();
-		mpos = 0;
+		show_message("blessing? (+,-,n)");
+		bless = read_game_key();
+		message_column = 0;
 		if (bless == '-')
-			obj->o_flags |= ISCURSED;
-		if (obj->o_type == WEAPON)
+			obj->item_flags |= ITEM_CURSED;
+		if (obj->item_category == WEAPON)
 		{
-			init_weapon(obj, obj->o_which);
+			init_weapon(obj, obj->item_subtype);
 			if (bless == '-')
-				obj->o_hplus -= rnd(3)+1;
+				obj->item_hit_bonus -= random_below(3)+1;
 			if (bless == '+')
-				obj->o_hplus += rnd(3)+1;
+				obj->item_hit_bonus += random_below(3)+1;
 		}
 		else
 		{
-			obj->o_ac = a_class[obj->o_which];
+			obj->item_modifier = armor_classes[obj->item_subtype];
 			if (bless == '-')
-				obj->o_ac += rnd(3)+1;
+				obj->item_modifier += random_below(3)+1;
 			if (bless == '+')
-				obj->o_ac -= rnd(3)+1;
+				obj->item_modifier -= random_below(3)+1;
 		}
 	}
-	else if (obj->o_type == RING)
-		switch (obj->o_which)
+	else if (obj->item_category == RING)
+		switch (obj->item_subtype)
 		{
-		case R_PROTECT:
-		case R_ADDSTR:
-		case R_ADDHIT:
-		case R_ADDDAM:
-			msg("blessing? (+,-,n)");
-			bless = readchar();
-			mpos = 0;
+		case RING_PROTECTION:
+		case RING_ADD_STRENGTH:
+		case RING_DEXTERITY:
+		case RING_DAMAGE:
+			show_message("blessing? (+,-,n)");
+			bless = read_game_key();
+			message_column = 0;
 			if (bless == '-')
-				obj->o_flags |= ISCURSED;
-			obj->o_ac = (bless == '-' ? -1 : rnd(2) + 1);
-		when R_AGGR:
-		case R_TELEPORT:
-			obj->o_flags |= ISCURSED;
+				obj->item_flags |= ITEM_CURSED;
+			obj->item_modifier = (bless == '-' ? -1 : random_below(2) + 1);
+		when RING_AGGRAVATION:
+		case RING_TELEPORTATION:
+			obj->item_flags |= ITEM_CURSED;
 			/* fallthrough */
 		}
-	else if (obj->o_type == STICK)
-		fix_stick(obj);
-	else if (obj->o_type == GOLD)
+	else if (obj->item_category == STICK)
+		initialize_wand(obj);
+	else if (obj->item_category == GOLD)
 	{
-		msg("how much?");
-		get_num(&obj->o_goldval, stdscr);
+		show_message("how much?");
+		get_num(&obj->item_gold_amount, stdscr);
 	}
-	add_pack(obj, FALSE);
+	add_to_inventory(obj, FALSE);
 }
 #endif
 
@@ -162,38 +162,38 @@ int
 teleport(void)
 {
 	register int rm;
-	coord c;
+	Position column;
 
-	mvaddch(hero.y, hero.x, chat(hero.y, hero.x));
+	mvaddch(player_position.y, player_position.x, terrain_at(player_position.y, player_position.x));
 	do
 	{
-		rm = rnd_room();
-		rnd_pos(&rooms[rm], &c);
-	} while (!(step_ok(winat(c.y, c.x))));
-	if (&rooms[rm] != proom)
+		rm = random_room_index();
+		random_room_position(&rooms[rm], &column);
+	} while (!(is_walkable_symbol(visible_entity_at(column.y, column.x))));
+	if (&rooms[rm] != player_room)
 	{
-		leave_room(&hero);
-		bcopy(hero,c);
-		enter_room(&hero);
+		leave_room(&player_position);
+		copy_value(player_position,column);
+		enter_room(&player_position);
 	}
 	else
 	{
-		bcopy(hero,c);
-		look(TRUE);
+		copy_value(player_position,column);
+		update_player_view(TRUE);
 	}
-	mvaddch(hero.y, hero.x, PLAYER);
+	mvaddch(player_position.y, player_position.x, PLAYER);
 	/*
 	 * turn off ISHELD in case teleportation was done while fighting
 	 * a Fungi
 	 */
-	if (on(player, ISHELD)) {
-		player.t_flags &= ~ISHELD;
-		f_restor();
+	if (has_actor_flag(player, ACTOR_HELD)) {
+		player.actor_flags &= ~ACTOR_HELD;
+		reset_flytrap_damage();
 	}
-	no_move = 0;
-	count = 0;
+	immobile_turns = 0;
+	command_repeat_count = 0;
 	running = FALSE;
-	flush_type();
+	clear_macro_input();
 	/*
 	 * Teleportation can be a confusing experience
 	 * (unless you really are a wizard)
@@ -202,11 +202,11 @@ teleport(void)
 	if (!wizard)
 	{
 #endif //WIZARD
-	if (on(player, ISHUH))
-		lengthen(unconfuse, rnd(4)+2);
+	if (has_actor_flag(player, ACTOR_CONFUSED))
+		extend_delayed_action(end_confusion, random_below(4)+2);
 	else
-		fuse(unconfuse, rnd(4)+2);
-	player.t_flags |= ISHUH;
+		schedule_delayed_action(end_confusion, random_below(4)+2);
+	player.actor_flags |= ACTOR_CONFUSED;
 #ifdef WIZARD
 	}
 #endif //WIZARD
@@ -227,8 +227,8 @@ passwd(void)
 	register char *sp, c;
 	char buf[MAXSTR], *crypt();
 
-	msg("wizard's Password:");
-	mpos = 0;
+	show_message("wizard's Password:");
+	message_column = 0;
 	sp = buf;
 	while ((c = getchar()) != '\n' && c != '\r' && c != ESCAPE)
 		if (c == _tty.sg_kill)
@@ -255,19 +255,19 @@ show_map(void)
 {
 	register int y, x, real;
 
-	wdump();
+	save_screen();
 	clear();
-	for (y = 1; y < maxrow; y++)
+	for (y = 1; y < dungeon_bottom_row; y++)
 	for (x = 0; x < COLS; x++)
 	{
-		if (!(real = flat(y, x) & F_REAL))
+		if (!(real = cell_flags_at(y, x) & CELL_REVEALED))
 		standout();
-		mvaddch(y, x, chat(y, x));
+		mvaddch(y, x, terrain_at(y, x));
 		if (!real)
 		standend();
 	}
-	show_win("---More (level map)---");
-	wrestor();
+	show_overlay_message("---More (level map)---");
+	restore_screen();
 }
 
 static
@@ -276,7 +276,7 @@ get_num(int *place)
 {
 	char numbuf[12];
 
-	getinfo(numbuf,10);
+	read_line(numbuf,10);
 	*place = atoi(numbuf);
 	return(*place);
 }

@@ -26,9 +26,9 @@
  * ** When in 320x200 mode, Bit 2 acts as "burst color" bit that activates
  *    an undocumented 3d palette (Default/Cyan/Red/Magenta)
  */
-#define MODEREG    0x3d8  //@ CGA Select Mode port address
-#define BWENABLE   0x004  //@ Bit 2 mask, for BW mode / 3rd palette burst bit
-#define MODESAVE   0x065  //@ BIOS Data Area 40:65: current value of 3D8h port
+#define CGA_MODE_PORT    0x3d8  //@ CGA Select Mode port address
+#define CGA_BURST_FLAG   0x004  //@ Bit 2 mask, for BW mode / 3rd palette burst bit
+#define BIOS_CGA_MODE_OFFSET   0x065  //@ BIOS Data Area 40:65: current value of 3D8h port
 
 /*@
  * 3D9h = CGA Select Color port, 6-bits, write only. For mode 4 (320x200x4c):
@@ -41,15 +41,15 @@
  *         Palette 0: 0-Background/Default, 1-Red,  2-Green,   3-Yellow
  *         Palette 1: 0-Background/Default, 1-Cyan, 2-Magenta, 3-White
  */
-#define COLREG     0x3d9  //@ CGA Select Color port address
-#define HIGHENABLE 0x010  //@ Bit 4 mask, for intensified palette
-#define PALETTEBIT 0x020  //@ Bit 5 mask, unused
+#define CGA_COLOR_PORT     0x3d9  //@ CGA Select Color port address
+#define CGA_INTENSITY_FLAG 0x010  //@ Bit 4 mask, for intensified palette
+#define CGA_PALETTE_FLAG 0x020  //@ Bit 5 mask, unused
 
-static void	scr_load(void);
-static void	bload(unsigned int segment);
+static void	load_cga_picture(void);
+static void	read_cga_memory(unsigned int segment);
 
 //@ temp buffer to hold image file bytes
-static char *store;
+static char *picture_buffer;
 
 /*@
  * block size used when reading image file
@@ -57,8 +57,8 @@ static char *store;
  *   16000 total of pixel data + 2 x 192-byte padding
  * Initial requested block size, 0x4000=16384, is enough to read file in 1 pass
  */
-static int blksize = 0x4000;
-static FILE *file;
+static int picture_block_size = 0x4000;
+static FILE *picture_file;
 
 /*@
  * Display the Rogue Enyx title image
@@ -68,22 +68,22 @@ static FILE *file;
  * - Return to previous video mode
  */
 void
-epyx_yuck(void)
+show_dos_splash(void)
 {
-	register int type = get_mode();
+	register int previous_video_mode = get_dos_video_mode();
 
 	//@ 07h = Monochromatic (80x25 text) in MDA, Hercules, EGA, VGA
-	if (type == 7 || (file = fopen("rogue.pic", "r")) == NULL)
+	if (previous_video_mode == 7 || (picture_file = fopen("rogue.pic", "r")) == NULL)
 		return;
 	//@ Allocate the largest possible block size for the store buffer,
 	//@ halving the requested amount in each attempt
-	while ((store = malloc(blksize)) == NULL)
-		blksize /= 2;
+	while ((picture_buffer = malloc(picture_block_size)) == NULL)
+		picture_block_size /= 2;
 	//@ 04h = Graphics mode 320x200 4 colors in CGA,PCjr,EGA,MCGA,VGA
-	video_mode(4);
+	set_dos_video_mode(4);
 
-	scr_load();
-	fclose(file);
+	load_cga_picture();
+	fclose(picture_file);
 #ifdef LOGFILE
 	//@ originally a busy loop of 18 * 10 ticks
 	sleep(10);
@@ -100,8 +100,8 @@ epyx_yuck(void)
 	 */
 	getch_timeout(1000 * 60 * 5);
 #endif  // LOGFILE
-	video_mode(type); //@ restore previous mode
-	free(store);
+	set_dos_video_mode(previous_video_mode); //@ restore previous mode
+	free(picture_buffer);
 }
 
 /*@
@@ -148,25 +148,25 @@ epyx_yuck(void)
 */
 static
 void
-scr_load(void)
+load_cga_picture(void)
 {
 	int palette, background;
 	int mode, burst;
 
 	//@ Write the file. 0xb800 = Video memory address for CGA mode 04h
-	bload(0xb800);
+	read_cga_memory(0xb800);
 
 	/*@
 	 * read image palette and bgcolor from CGA memory that was just written
 	 * with the file data. Offsets 8012 and 8013 are in the first 192-byte
 	 * padding block, right after the 'PCPaint V1.0' signature
 	 */
-	palette = peekb(8012,0xB800);     //@ 5 = CGA palette 1i, see below
-	background = peekb(8013,0xB800);  //@ 0 = Color index 0 (BG) is Black
+	palette = dos_read_byte(8012,0xB800);     //@ 5 = CGA palette 1i, see below
+	background = dos_read_byte(8013,0xB800);  //@ 0 = Color index 0 (BG) is Black
 
 	//@ Intensified palette, enable bit 4 for the COLREG write
 	if (palette >= 3)
-		background |= HIGHENABLE;
+		background |= CGA_INTENSITY_FLAG;
 
 	/*@
 	 * Not sure why all this switch cases and palette remapping
@@ -194,14 +194,14 @@ scr_load(void)
 	}
 
 	//@ Set background color and palette intensity
-	out (COLREG,background);
+	dos_write_port (CGA_COLOR_PORT,background);
 
 	//@ Read current video mode from BIOS Data Area, sans the burst bit
-	mode = peekb(MODESAVE,0x40) & (~BWENABLE);
+	mode = dos_read_byte(BIOS_CGA_MODE_OFFSET,0x40) & (~CGA_BURST_FLAG);
 	if (burst == 1)
-		mode = mode | BWENABLE;  //@ enable burst bit
-	pokeb(MODESAVE,0x40,mode);   //@ write new mode to BIOS Data Area
-	out(MODEREG,mode);           //@ write mode to CGA 6845 controller
+		mode = mode | CGA_BURST_FLAG;  //@ enable burst bit
+	dos_write_byte(BIOS_CGA_MODE_OFFSET,0x40,mode);   //@ write new mode to BIOS Data Area
+	dos_write_port(CGA_MODE_PORT,mode);           //@ write mode to CGA 6845 controller
 }
 
 /*@
@@ -209,15 +209,15 @@ scr_load(void)
  */
 static
 void
-bload(unsigned int segment)
+read_cga_memory(unsigned int segment)
 {
-	register unsigned offset = 0, rdcnt;
+	register unsigned offset = 0, blocks_read;
 
-	if (!fread(store, 7, 1, file))	/* Ignore first seven bytes */
-		fseek(file, 7L, SEEK_SET);
-	while ((rdcnt = fread(store, blksize, 1, file))) {
-		dmaout(store,rdcnt/2,segment,offset);
-		if ((offset += rdcnt) >= 16384)
+	if (!fread(picture_buffer, 7, 1, picture_file))	/* Ignore first seven bytes */
+		fseek(picture_file, 7L, SEEK_SET);
+	while ((blocks_read = fread(picture_buffer, picture_block_size, 1, picture_file))) {
+		dos_write_memory(picture_buffer,blocks_read/2,segment,offset);
+		if ((offset += blocks_read) >= 16384)
 			break;
 	}
 }
@@ -234,25 +234,25 @@ bload(unsigned int segment)
  * Btw... what is this function doing here?
  */
 int
-find_drive(void)
+find_copy_protection_drive(void)
 {
 #ifdef ROGUE_DOS_DRIVE
-	int drive = bdos(0x19);  //@ Get Current Default Drive (0=A, 1=B, etc)
+	int drive = dos_service(0x19);  //@ Get Current Default Drive (0=A, 1=B, etc)
 #else
 	int drive = current_drive;
 #endif
-	char spec = s_drive[0];
+	char configured_drive = copy_protection_drive[0];
 
-	if (is_alpha(spec))
+	if (is_alpha(configured_drive))
 	{
 		/*@
 		 * It looks like this block could be replaced with:
 		 * drive = tolower(spec) - 'a';
 		 */
-		if (is_upper(spec))
-			drive = spec - 'A';
+		if (is_upper(configured_drive))
+			drive = configured_drive - 'A';
 		else
-			drive = spec - 'a';
+			drive = configured_drive - 'a';
 	}
 	/*@
 	 * The following nonsense strongly indicates this is either a partial,

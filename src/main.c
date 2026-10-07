@@ -21,9 +21,9 @@
 #define is_char(c1,c2) ((c1==c2)||((c1+'a'-'A')==c2))
 
 //@ both derived from `screen` in env file and used in curses.c
-int bwflag = FALSE;
+int monochrome_requested = FALSE;
 #ifdef ROGUE_DOS_CURSES
-char do_force = FALSE;
+char skip_retrace_check = FALSE;
 #endif
 #ifdef LOGFILE
 int log_read, log_write;
@@ -38,7 +38,7 @@ main(argc, argv)
 	int argc;
 	char **argv;
 {
-	register char *curarg, *savfile=0;
+	register char *argument, *saved_game_path=0;
 
 	//@ Allow non-ASCII output in <curses.h>
 	setlocale(LC_ALL, "");
@@ -51,97 +51,97 @@ main(argc, argv)
 	 * clock() had some checks on zeroed values on low DS offsets, which I
 	 * guess were set by this call.
 	 */
-	dmaout(&junk,2,0,4);
-	clock_on();
+	dos_write_memory(&junk,2,0,4);
+	install_dos_timer_hook();
 #endif
 #ifdef ROGUE_SPLASH
-	epyx_yeah(getenv("ROGUE_PIC"));
+	show_sdl_splash(getenv("ROGUE_PIC"));
 #else
-	epyx_yuck();
+	show_dos_splash();
 #endif //ROGUE_SPLASH
-	init_ds();
+	allocate_game_state();
 
-	setenv_from_file(ENVFILE);
-	protect(find_drive());
+	load_options_file(ENVFILE);
+	authenticate_game_disk(find_copy_protection_drive());
 	/*
 	 * Parse the screen environment variable.  if the string starts with
 	 * "bw", then we force black and white mode.  If it ends with "fast"
 	 * then we disable retrace checking
 	 * @ do_force is deprecated, so "fast" is useless now
 	 */
-	if (strncmp(s_screen, "bw", 2) == 0)
-		bwflag = TRUE;
+	if (strncmp(screen_option, "bw", 2) == 0)
+		monochrome_requested = TRUE;
 #ifdef ROGUE_DOS_CURSES
 	int sl;
-	if ((sl = strlen(s_screen)) >= 4
-	  && strncmp(&s_screen[sl - 4], "fast", 4) == 0)
-		do_force = TRUE;
+	if ((sl = strlen(screen_option)) >= 4
+	  && strncmp(&screen_option[sl - 4], "fast", 4) == 0)
+		skip_retrace_check = TRUE;
 #endif
-	dnum = 0;
-#ifdef PROTECTED
-	while (--argc && goodchk == 0xD0D) {
+	initial_random_seed = 0;
+#ifdef ENABLE_COPY_PROTECTION_CHECKS
+	while (--argc && disk_authentication_marker == 0xD0D) {
 #else
 	while (--argc) {
 #endif
-		curarg = *(++argv);
-		if (*curarg == '-' || *curarg == '/')
+		argument = *(++argv);
+		if (*argument == '-' || *argument == '/')
 		{
-			switch(curarg[1])
+			switch(argument[1])
 			{
 				case 'R': case 'r':
-					 savfile = s_save;
+					 saved_game_path = save_filename;
 					 break;
 				case 's': case 'S':
-					winit();
-					noscore = TRUE;
-					is_saved = TRUE;
-					score(0,0,0);
+					initialize_screen();
+					score_disabled = TRUE;
+					screen_updates_suspended = TRUE;
+					update_high_scores(0,0,0);
 					fatal("");
 					break;
 #ifdef LOGFILE
 				case 'l':
 					log_write = -1;
-					dnum = 100;
+					initial_random_seed = 100;
 					break;
 				case 'k':
 					log_read = -1;
-					dnum = 100;
+					initial_random_seed = 100;
 					break;
 #endif //LOGFILE
 			}
 		}
-		else if (savfile == 0)
-			savfile = curarg;
+		else if (saved_game_path == 0)
+			saved_game_path = argument;
 	}
-	if (savfile == 0) {
-		savfile = 0;
-		winit();
-		credits();
-		if (dnum == 0)
-			dnum = srand();
-		seed = dnum;
+	if (saved_game_path == 0) {
+		saved_game_path = 0;
+		initialize_screen();
+		show_credits();
+		if (initial_random_seed == 0)
+			initial_random_seed = random_seed_from_clock();
+		random_state = initial_random_seed;
 
 
 		init_player();			/* Set up initial player stats */
-		init_things();			/* Set up probabilities of things */
-		init_names();			/* Set up names of scrolls */
-		init_colors();			/* Set up colors of potions */
-		init_stones();			/* Set up stone settings of rings */
-		init_materials();			/* Set up materials of wands */
-		setup();
+		initialize_item_probabilities();			/* Set up probabilities of things */
+		initialize_scroll_titles();			/* Set up names of scrolls */
+		initialize_potion_colors();			/* Set up colors of potions */
+		initialize_ring_gemstones();			/* Set up stone settings of rings */
+		initialize_wand_materials();			/* Set up materials of wands */
+		setup_game_io();
 		drop_curtain();
-		new_level();			/* Draw current level */
+		generate_level();			/* Draw current level */
 		/*
 		 * Start up daemons and fuses
 		 */
-		start_daemon(doctor);
-		fuse(swander, WANDERTIME);
-		start_daemon(stomach);
-		start_daemon(runners);
-		msg("Hello %s%s.", whoami, noterse(".  Welcome to the Dungeons of Doom"));
+		schedule_recurring_action(regenerate_health);
+		schedule_delayed_action(start_wander_checks, WANDERTIME);
+		schedule_recurring_action(consume_food);
+		schedule_recurring_action(move_monsters);
+		show_message("Hello %s%s.", player_name, verbose_text(".  Welcome to the Dungeons of Doom"));
 		raise_curtain();
 	}
-	playit(savfile);
+	run_game(saved_game_path);
 	return 0;
 }
 
@@ -150,12 +150,12 @@ main(argc, argv)
  *	Exit the program abnormally.
  */
 void
-endit()
+exit_game_message()
 {
 	fatal("Ok, if you want to exit that badly, I'll have to allow it\n");
 }
 
-#define RN		(((seed = seed*11109L+13849L) >> 16) & 0xffff)  //@ unused
+#define RN		(((random_state = random_state*11109L+13849L) >> 16) & 0xffff)  //@ unused
 
 //@ no need to declare in rogue.h
 /*
@@ -165,11 +165,11 @@ endit()
  * by W.J. Cody, Jr and William Waite.
  */
 long
-ran()
+next_random_value()
 {
-	seed *= 125;
-	seed -= (seed/2796203) * 2796203;
-	return seed;
+	random_state *= 125;
+	random_state -= (random_state/2796203) * 2796203;
+	return random_state;
 }
 
 /*
@@ -177,14 +177,14 @@ ran()
  *	Pick a very random number.
  */
 int
-rnd(range)
+random_below(range)
 	/*@
 	 * range size was expected to be 16 bit
 	 * function will return the seed itself if range value is >= 2^31 - 1
 	 */
 	register int range;
 {
-	return range < 1 ? 0 : ((ran() + ran())&0x7fffffffl) % range;
+	return range < 1 ? 0 : ((next_random_value() + next_random_value())&0x7fffffffl) % range;
 }
 
 /*
@@ -192,14 +192,14 @@ rnd(range)
  *	Roll a number of dice
  */
 int
-roll(number, sides)
+roll_dice(number, sides)
 	register int number, sides;
 {
-	register int dtotal = 0;
+	register int dice_total = 0;
 
 	while (number--)
-	dtotal += rnd(sides)+1;
-	return dtotal;
+	dice_total += random_below(sides)+1;
+	return dice_total;
 }
 
 /*
@@ -208,27 +208,27 @@ roll(number, sides)
  *	refreshing things and looking at the proper times.
  */
 void
-playit(sname)
-	char *sname;
+run_game(saved_game_path)
+	char *saved_game_path;
 {
-	if (sname) {
-		restore(sname);
-		setup();
+	if (saved_game_path) {
+		restore_game(saved_game_path);
+		setup_game_io();
 #ifdef ROGUE_DOS_CURSES
 		iscuron = TRUE;  //@ force the following cursor() call to turn it off
 #endif
-		cursor(FALSE);
+		set_cursor_visible(FALSE);
 	} else {
-		oldpos.x = hero.x;
-		oldpos.y = hero.y;
-		oldrp = roomin(&hero);
+		previous_player_position.x = player_position.x;
+		previous_player_position.y = player_position.y;
+		previous_player_room = room_at(&player_position);
 	}
 #ifdef ME
-	is_me = (strcmp(ME, whoami) == 0 || strcmp("Mr. Mctesq", whoami) == 0);
+	is_me = (strcmp(ME, player_name) == 0 || strcmp("Mr. Mctesq", player_name) == 0);
 #endif
 	while (playing)
-		command();			/* Command execution */
-	endit();
+		process_turn();			/* Command execution */
+	exit_game_message();
 }
 
 /*
@@ -238,46 +238,46 @@ playit(sname)
 void
 quit()
 {
-	int oy, ox;
+	int saved_y, saved_x;
 	register byte answer;
-	static bool qstate = FALSE;
+	static bool quit_in_progress = FALSE;
 
 	/*
 	 * if they try to interupt with a control C while in
 	 * this routine blow them away!
 	 */
-	if (qstate == TRUE)
+	if (quit_in_progress == TRUE)
 		leave();
-	qstate = TRUE;
-	mpos = 0;
-	getyx(eatme,oy, ox);  //@ Rogue devs cursing curses!
+	quit_in_progress = TRUE;
+	message_column = 0;
+	getyx(ignored_window,saved_y, saved_x);  //@ Rogue devs cursing curses!
 	move(0,0);
 	clrtoeol();
 	move(0,0);
 	if (!terse)
 		addstr("Do you wish to ");
-	str_attr("end your quest now (%Yes/%No) ?");
-	look(FALSE);
-	answer = readchar();
+	print_highlighted_text("end your quest now (%Yes/%No) ?");
+	update_player_view(FALSE);
+	answer = read_game_key();
 	if (answer == 'y' || answer == 'Y') {
 #ifdef DEMO
 		demo(1);
 #else
 		clear();
 		move(0,0);
-		printw("You quit with %u gold pieces\n", purse);
-		score(purse, 1, 0);
+		printw("You quit with %u gold pieces\n", player_gold);
+		update_high_scores(player_gold, 1, 0);
 		fatal("");
 	} else {
 		move(0, 0);
 		clrtoeol();
-		status();
-		move(oy, ox);
-		mpos = 0;
-		count = 0;
+		update_status_line();
+		move(saved_y, saved_x);
+		message_column = 0;
+		command_repeat_count = 0;
 #endif //DEMO
 	}
-	qstate = FALSE;
+	quit_in_progress = FALSE;
 }
 
 /*
@@ -287,7 +287,7 @@ quit()
 void
 leave()
 {
-	look(FALSE);
+	update_player_view(FALSE);
 	move(LINES - 1, 0);
 	clrtoeol();
 	move(LINES - 2, 0);

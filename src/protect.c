@@ -12,15 +12,15 @@
  * The flag is set all over protect(), and unset only during drive reads. It
  * was also unset whenever exiting the function, successfully or not.
  */
-int no_step;
+int protection_watchdog_ticks;
 
-#ifdef ROGUE_NOGOOD
+#ifdef ROGUE_ORIGINAL_COPY_PROTECTION
 #define UNDEFINED	0
 #define DONTCARE	0
 
 #define	CRC		0x10
 
-static struct sw_regs rom_read = {
+static struct dos_registers rom_read = {
 	0x206,
 	0,
 	0x2701,
@@ -31,7 +31,7 @@ static struct sw_regs rom_read = {
 	0xF800
 } ;
 
-static struct sw_regs sig1_read = {
+static struct dos_registers sig1_read = {
 	0x201,
 	UNDEFINED,
 	0x2707,
@@ -42,7 +42,7 @@ static struct sw_regs sig1_read = {
 	UNDEFINED
 } ;
 
-static struct sw_regs sig2_read = {
+static struct dos_registers sig2_read = {
 	0x201,
 	UNDEFINED,
 	0x27F1,
@@ -65,72 +65,72 @@ getds(void)
 }
 #endif
 
-#ifndef ROGUE_NOGOOD
+#ifndef ROGUE_ORIGINAL_COPY_PROTECTION
 void
-protect(int UNUSED(drive))
+authenticate_game_disk(int UNUSED(drive))
 {
-	goodchk = 0xD0D;  //@ success marker: 0xD0D stands for "Dungeons Of Doom"
-	no_step = 0;
+	disk_authentication_marker = 0xD0D;  //@ success marker: 0xD0D stands for "Dungeons Of Doom"
+	protection_watchdog_ticks = 0;
 }
 #else
 void
-protect(int drive)
+authenticate_game_disk(int drive)
 {
 	int i, flags;
-	struct sw_regs rgs;
+	struct dos_registers rgs;
 	char buf2[512];
 	char buf1[32];
 
-	no_step++;
+	protection_watchdog_ticks++;
 	rom_read.dx = sig1_read.dx = sig2_read.dx = drive;
 	sig1_read.es = sig2_read.es = getds();
-	sig1_read.bx = (dosptr)(intptr)(&buf1[0]);  //@ bogus address to fit bx
-	sig2_read.bx = (dosptr)(intptr)(&buf2[0]);  //@ ditto
+	sig1_read.bx = (DosOffset)(PointerBits)(&buf1[0]);  //@ bogus address to fit bx
+	sig2_read.bx = (DosOffset)(PointerBits)(&buf2[0]);  //@ ditto
 
 	//@ read sectors until first success, try up to 7 times
 	for (i=0,flags=CF;i<7 && (flags&CF);i++)
 	{
 		rgs = rom_read;
-		no_step = 0;
-		flags = sysint(SW_DSK,&rgs,&rgs);
-		no_step++;
+		protection_watchdog_ticks = 0;
+		flags = simulate_dos_interrupt(SW_DSK,&rgs,&rgs);
+		protection_watchdog_ticks++;
 	}
 	//@ return if no success
 	if (CF&flags)
 	{
-		no_step = 0;
+		protection_watchdog_ticks = 0;
 		return;
 	}
 	//@ read sectors until first success, try up to 3 times
 	for (i=0,flags=CF;i<3 && (flags&CF);i++)
 	{
 		rgs = sig1_read;
-		no_step = 0;
-		flags = sysint(SW_DSK,&rgs,&rgs);
-		no_step++;
+		protection_watchdog_ticks = 0;
+		flags = simulate_dos_interrupt(SW_DSK,&rgs,&rgs);
+		protection_watchdog_ticks++;
 	}
 	//@ return if no success
 	if (CF&flags)
 	{
-		no_step = 0;
+		protection_watchdog_ticks = 0;
 		return;
 	}
 	//@ try up to 4 times to get a CRC failure on read
 	for (i=0;i<4;i++)
 	{
 		rgs = sig2_read;
-		no_step = 0;
-		flags = sysint(SW_DSK,&rgs,&rgs);
-		no_step++;
+		protection_watchdog_ticks = 0;
+		flags = simulate_dos_interrupt(SW_DSK,&rgs,&rgs);
+		protection_watchdog_ticks++;
 		//@ failure read by bad CRC is expected and required for validation!
 		if ((flags&CF) && HI(rgs.ax) == CRC)
 		{
 			if (memcmp(&buf1[0],&buf2[0x8c],32) == 0)
-				goodchk = 0xD0D;
-			no_step = 0;
+				disk_authentication_marker = 0xD0D;
+			protection_watchdog_ticks = 0;
 			return;
 		}
 	}
-	no_step = 0;
+	protection_watchdog_ticks = 0;
 }
 #endif

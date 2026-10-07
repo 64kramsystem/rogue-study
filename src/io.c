@@ -13,55 +13,55 @@
  * msg:
  *	Display a message at the top of the screen.
  */
-static int newpos = 0;
+static int message_length = 0;
 
 /* VARARGS1 */
 /*@ nope, it was not vargars. But now it is */
 void
-ifterse(const char *tfmt, const char *fmt, ...)
+message_by_verbosity(const char *tfmt, const char *format, ...)
 {
-	va_list argp;
-	va_start(argp, fmt);
+	va_list arguments;
+	va_start(arguments, format);
 
 	if (expert)
-		vmsg(tfmt, argp);
+		show_message_v(tfmt, arguments);
 	else
-		vmsg(fmt, argp);
+		show_message_v(format, arguments);
 
-	va_end(argp);
+	va_end(arguments);
 }
 
 //@ va_list variant of msg()
 void
-vmsg(const char *fmt, va_list argp)
+show_message_v(const char *format, va_list arguments)
 {
 	/*
 	 * if the string is "", just clear the line
 	 */
-	if (*fmt == '\0')
+	if (*format == '\0')
 	{
 		move(0, 0);
 		clrtoeol();
-		mpos = 0;
+		message_column = 0;
 		return;
 	}
 	/*
 	 * otherwise add to the message and flush it out
 	 */
-	doadd(fmt, argp);
-	endmsg();
+	append_message_v(format, arguments);
+	finish_message();
 }
 
 //@ varargs variant, now a wrapper for vmsg()
 void
-msg(const char *fmt, ...)
+show_message(const char *format, ...)
 {
-	va_list argp;
-	va_start(argp, fmt);
+	va_list arguments;
+	va_start(arguments, format);
 
-	vmsg(fmt, argp);
+	show_message_v(format, arguments);
 
-	va_end(argp);
+	va_end(arguments);
 }
 /* VARARGS1
  * @ now for real
@@ -71,14 +71,14 @@ msg(const char *fmt, ...)
  *	Add things to the current message
  */
 void
-addmsg(const char *fmt, ...)
+append_message(const char *format, ...)
 {
-	va_list argp;
-	va_start(argp, fmt);
+	va_list arguments;
+	va_start(arguments, format);
 
-	doadd(fmt, argp);
+	append_message_v(format, arguments);
 
-	va_end(argp);
+	va_end(arguments);
 }
 
 /*
@@ -87,24 +87,24 @@ addmsg(const char *fmt, ...)
  *	if it is up there with the -More-)
  */
 void
-endmsg(void)
+finish_message(void)
 {
-	if (save_msg)
-		strcpy(huh, msgbuf);
-	if (mpos) {
-		look(FALSE);
-		move(0,mpos);
-		more(" More ");
+	if (remember_message)
+		strcpy(previous_message, message_buffer);
+	if (message_column) {
+		update_player_view(FALSE);
+		move(0,message_column);
+		show_more_prompt(" More ");
 	}
 	/*
 	 * All messages should start with uppercase, except ones that
 	 * start with a pack addressing character
 	 */
-	if (is_lower(msgbuf[0]) && msgbuf[1] != ')')
-		msgbuf[0] = toupper(msgbuf[0]);
-	putmsg(0,msgbuf);
-	mpos = newpos;
-	newpos = 0;
+	if (is_lower(message_buffer[0]) && message_buffer[1] != ')')
+		message_buffer[0] = toupper(message_buffer[0]);
+	display_wrapped_message(0,message_buffer);
+	message_column = message_length;
+	message_length = 0;
 }
 
 
@@ -112,16 +112,16 @@ endmsg(void)
  *  More:  tag the end of a line and wait for a space
  */
 void
-more(msg)
-	char *msg;
+show_more_prompt(message_text)
+	char *message_text;
 {
 	int x, y;
-	register int i, msz;
-	char mbuf[80];
-	int morethere = TRUE;
+	register int i, message_size;
+	char covered_text[80];
+	int prompt_column = TRUE;
 	int covered = FALSE;
 
-	msz = strlen(msg);
+	message_size = strlen(message_text);
 	getxy(&x,&y);
 	/*
 	 * it is reasonable to assume that if the you are no longer
@@ -131,40 +131,40 @@ more(msg)
 		x=0;
 		y=COLS;
 	}
-	if ((y+msz)>COLS) {
-		move(x,y=COLS-msz);
+	if ((y+message_size)>COLS) {
+		move(x,y=COLS-message_size);
 		covered = TRUE;
 	}
 
-	for(i=0;i<msz;i++) {
-		mbuf[i] = inch();
+	for(i=0;i<message_size;i++) {
+		covered_text[i] = inch();
 		if ((i+y) < (COLS-2))
 			move(x,y+i+1);
-		mbuf[i+1] = 0;
+		covered_text[i+1] = 0;
 	}
 
 	move(x,y);
 	standout();
-	addstr(msg);
+	addstr(message_text);
 	standend();
 
-	while (readchar() != ' ') {
-		if (covered && morethere) {
+	while (read_game_key() != ' ') {
+		if (covered && prompt_column) {
 			move(x,y);
-			addstr(mbuf);
-			morethere = FALSE;
+			addstr(covered_text);
+			prompt_column = FALSE;
 		}
 		else if (covered)
 		{
 			move(x,y);
 			standout();
-			addstr(msg);
+			addstr(message_text);
 			standend();
-			morethere = TRUE;
+			prompt_column = TRUE;
 		}
 	}
 	move(x,y);
-	addstr(mbuf);
+	addstr(covered_text);
 }
 
 
@@ -178,11 +178,11 @@ more(msg)
  *	Perform an add onto the message buffer
  */
 void
-doadd(const char *fmt, va_list argp)
+append_message_v(const char *format, va_list arguments)
 {
 
-	vsnprintf(&msgbuf[newpos], BUFSIZE - newpos, fmt, argp);
-	newpos = strlen(msgbuf);
+	vsnprintf(&message_buffer[message_length], BUFSIZE - message_length, format, arguments);
+	message_length = strlen(message_buffer);
 }
 
 /*
@@ -191,35 +191,35 @@ doadd(const char *fmt, va_list argp)
  *  scroll msg sideways until he has read it all
  */
 void
-putmsg(msgline,msg)
-	int msgline;
-	char *msg;
+display_wrapped_message(message_row,message_text)
+	int message_row;
+	char *message_text;
 {
-	register char *curmsg, *lastmsg=0, *tmpmsg;
-	int curlen;
+	register char *current_line, *previous_line=0, *next_line;
+	int line_length;
 
-	curmsg = msg;
+	current_line = message_text;
 	do {
-		scrlmsg(msgline,lastmsg,curmsg);
-		newpos = curlen = strlen(curmsg);
-		if (curlen > COLS) {
-			more(" Cont ");
-			lastmsg = curmsg;
+		display_message_segment(message_row,previous_line,current_line);
+		message_length = line_length = strlen(current_line);
+		if (line_length > COLS) {
+			show_more_prompt(" Cont ");
+			previous_line = current_line;
 			do {
-				tmpmsg = strpbrk(curmsg," ");
+				next_line = strpbrk(current_line," ");
 				/*
 				 * If there are no blanks in line
 				 */
-				if ((tmpmsg==0 || tmpmsg>=&lastmsg[COLS]) && lastmsg==curmsg) {
-					curmsg = &lastmsg[COLS];
+				if ((next_line==0 || next_line>=&previous_line[COLS]) && previous_line==current_line) {
+					current_line = &previous_line[COLS];
 					break;
 				}
-				if ((tmpmsg >= (lastmsg+COLS)) || ((signed)strlen(curmsg) < COLS))
+				if ((next_line >= (previous_line+COLS)) || ((signed)strlen(current_line) < COLS))
 					break;
-				curmsg = tmpmsg + 1;
+				current_line = next_line + 1;
 			} while (1);
 		}
-	} while (curlen > COLS);
+	} while (line_length > COLS);
 }
 
 /*
@@ -228,28 +228,28 @@ putmsg(msgline,msg)
  * @ Purpose is completely unrelated to curses
  */
 void
-scrlmsg(msgline,str1,str2)
-	int msgline;
-	char *str1, *str2;
+display_message_segment(message_row,scroll_start,scroll_end)
+	int message_row;
+	char *scroll_start, *scroll_end;
 {
-	char *fmt;
+	char *format;
 
 	if (COLS > 40)
-		fmt = "%.80s";
+		format = "%.80s";
 	else
-		fmt = "%.40s";
+		format = "%.40s";
 
-	if (str1 == 0) {
-		move(msgline,0);
-		if ((signed)strlen(str2) < COLS)
+	if (scroll_start == 0) {
+		move(message_row,0);
+		if ((signed)strlen(scroll_end) < COLS)
 			clrtoeol();
-		printw(fmt,str2);
+		printw(format,scroll_end);
 	}
 	else
-		while (str1 <= str2) {
-			move(msgline,0);
-			printw(fmt,str1++);
-			if ((signed)strlen(str1) < (COLS-1))
+		while (scroll_start <= scroll_end) {
+			move(message_row,0);
+			printw(format,scroll_start++);
+			if ((signed)strlen(scroll_start) < (COLS-1))
 				clrtoeol();
 		}
 }
@@ -260,23 +260,23 @@ scrlmsg(msgline,str1,str2)
  *	@ same purpose but different behavior, so not using the curses version
  */
 char *
-io_unctrl(byte ch)
+describe_key(byte character)
 {
-	static char chstr[9];		/* Defined in curses library */
+	static char key_text[9];		/* Defined in curses library */
 
-	if (is_space(ch))
-		strcpy(chstr," ");
-	else if (!is_print(ch))
-		if (ch < ' ')
-			sprintf(chstr, "^%c", ch + '@');
+	if (is_space(character))
+		strcpy(key_text," ");
+	else if (!is_print(character))
+		if (character < ' ')
+			sprintf(key_text, "^%c", character + '@');
 		else
-			sprintf(chstr, "\\x%x",ch);
+			sprintf(key_text, "\\x%x",character);
 	else {
-		chstr[0] = ch;
-		chstr[1] = 0;
+		key_text[0] = character;
+		key_text[1] = 0;
 	}
 
-	return chstr;
+	return key_text;
 }
 
 /*
@@ -284,21 +284,21 @@ io_unctrl(byte ch)
  *	Display the important stats line.  Keep the cursor where it was.
  */
 void
-status(void)
+update_status_line(void)
 {
-	int oy, ox;
-	static int s_hungry;
-	static int s_lvl, s_pur = -1, s_hp, s_ac = 0;
-	static str_t s_str;
-	static int s_elvl = 0;
+	int saved_y, saved_x;
+	static int previous_hunger;
+	static int previous_depth, previous_gold = -1, previous_hit_points, previous_armor = 0;
+	static Strength previous_strength;
+	static int previous_experience_level = 0;
 	static char *state_name[] =
 	{
 		"      ", "Hungry", "Weak", "Faint","?"
 	};
 
-	SIG2();
+	update_keyboard_and_clock();
 
-	getyx(stdscr, oy, ox);
+	getyx(stdscr, saved_y, saved_x);
 	if (is_color)
 		yellow();
 
@@ -312,84 +312,84 @@ status(void)
 	/*
 	 * Level:
 	 */
-	if (s_lvl != level)
+	if (previous_depth != dungeon_level)
 	{
-		s_lvl = level;
+		previous_depth = dungeon_level;
 	move(PT(22,23),0);
-	printw("Level:%-4d", level);
+	printw("Level:%-4d", dungeon_level);
 	}
 
 	/*
 	 * Hits:
 	 */
-	if (s_hp != pstats.s_hpt)
+	if (previous_hit_points != player_stats.hit_points)
 	{
-		s_hp = pstats.s_hpt;
+		previous_hit_points = player_stats.hit_points;
 		move(PT(22,23),12);
-		printw("Hits:%d(%d) ", pstats.s_hpt, max_hp);
+		printw("Hits:%d(%d) ", player_stats.hit_points, player_max_hit_points);
 		/* just in case they get wraithed with 3 digit max hits */
-		if (pstats.s_hpt < 100)
+		if (player_stats.hit_points < 100)
 			addch(' ');
 	}
 
 	/*
 	 * Str:
 	 */
-	if (pstats.s_str != s_str)
+	if (player_stats.strength != previous_strength)
 	{
-		s_str = pstats.s_str;
+		previous_strength = player_stats.strength;
 		move(PT(22,23),26);
-		printw("Str:%d(%d) ", pstats.s_str, max_stats.s_str);
+		printw("Str:%d(%d) ", player_stats.strength, maximum_player_stats.strength);
 	}
 
 	/*
 	 * Gold
 	 */
-	if(s_pur != purse)
+	if(previous_gold != player_gold)
 	{
-		s_pur = purse;
+		previous_gold = player_gold;
 		move(23, PT(0,40));
-		printw("Gold:%-5u",purse);
+		printw("Gold:%-5u",player_gold);
 	}
 
 	/*
 	 * Armor:
 	 */
-	if(s_ac != (cur_armor != NULL ? cur_armor->o_ac : pstats.s_arm))
+	if(previous_armor != (equipped_armor != NULL ? equipped_armor->item_modifier : player_stats.armor_class))
 	{
-		s_ac = (cur_armor != NULL ? cur_armor->o_ac : pstats.s_arm);
-		if (ISRING(LEFT,R_PROTECT))
-			s_ac -= cur_ring[LEFT]->o_ac;
-		if (ISRING(RIGHT,R_PROTECT))
-			s_ac -= cur_ring[RIGHT]->o_ac;
+		previous_armor = (equipped_armor != NULL ? equipped_armor->item_modifier : player_stats.armor_class);
+		if (hand_has_ring(LEFT,RING_PROTECTION))
+			previous_armor -= equipped_rings[LEFT]->item_modifier;
+		if (hand_has_ring(RIGHT,RING_PROTECTION))
+			previous_armor -= equipped_rings[RIGHT]->item_modifier;
 		move(23,PT(12,52));
 		printw("Armor:%-2d",
-		AC(cur_armor != NULL ? cur_armor->o_ac : pstats.s_arm));
+		AC(equipped_armor != NULL ? equipped_armor->item_modifier : player_stats.armor_class));
 	}
 
 	/*
 	 * Exp:
 	 */
-	if (s_elvl != pstats.s_lvl)
+	if (previous_experience_level != player_stats.experience_level)
 	{
-		s_elvl = pstats.s_lvl;
+		previous_experience_level = player_stats.experience_level;
 		move(23, PT(22, 62));
-		printw("%-12s", he_man[s_elvl-1]);
+		printw("%-12s", rank_names[previous_experience_level-1]);
 	}
 
 	/*
 	 * Hungry state
 	 */
-	if (s_hungry != hungry_state)
+	if (previous_hunger != hunger_state)
 	{
-		s_hungry = hungry_state;
+		previous_hunger = hunger_state;
 		move(24, PT(28,58));
 		addstr(state_name[0]);
 		move(24, PT(28,58));
-		if (hungry_state)
+		if (hunger_state)
 		{
 			bold();
-			addstr(state_name[hungry_state]);
+			addstr(state_name[hunger_state]);
 			standend();
 		}
 	}
@@ -397,7 +397,7 @@ status(void)
 	if (is_color)
 		standend();
 
-	move(oy, ox);
+	move(saved_y, saved_x);
 }
 
 /*
@@ -405,7 +405,7 @@ status(void)
  *	Sit around until the guy types the right key
  */
 void
-wait_for(byte ch)
+wait_for_key(byte character)
 {
 	/*@
 	 * stdio and ncurses will map all stream line endings to '\n'
@@ -418,7 +418,7 @@ wait_for(byte ch)
 			continue;
 	else
 	 */
-	while (readchar() != ch)
+	while (read_game_key() != character)
 		continue;
 }
 
@@ -427,21 +427,21 @@ wait_for(byte ch)
  * New function, used to block before leaving the game
  */
 void
-wait_msg(const char *msg)
+wait_for_enter(const char *message_text)
 {
 	standend();
 	move(LINES-1,0);
-	cursor(TRUE);
-	if (*msg)
+	set_cursor_visible(TRUE);
+	if (*message_text)
 	{
-		printw("[Press Enter to %s]", msg);
+		printw("[Press Enter to %s]", message_text);
 	}
 	else
 	{
 		printw("[Press Enter]");
 	}
-	flush_type();
-	wait_for('\n');
+	clear_macro_input();
+	wait_for_key('\n');
 	move(LINES-1,0);
 }
 
@@ -451,12 +451,12 @@ wait_msg(const char *msg)
  *	@ a window? looks like a single message to me!
  */
 void
-show_win(message)
+show_overlay_message(message)
 	char *message;
 {
 	mvaddstr(0,0,message);
-	move(hero.y, hero.x);
-	wait_for(' ');
+	move(player_position.y, player_position.x);
+	wait_for_key(' ');
 }
 
 
@@ -480,13 +480,13 @@ show_win(message)
  *     printf certainly '%' isn't a good choice of characters.  jll.
  */
 void
-str_attr(str)
-	char *str;
+print_highlighted_text(text)
+	char *text;
 {
 #ifdef LUXURY
 	register int is_attr_on = FALSE, was_touched = FALSE;
 
-	while(*str)
+	while(*text)
 	{
 		if (was_touched == TRUE)
 		{
@@ -494,50 +494,50 @@ str_attr(str)
 			is_attr_on = FALSE;
 			was_touched = FALSE;
 		}
-	if (*str == '%')
+	if (*text == '%')
 	{
-		str++;
-		switch(*str)
+		text++;
+		switch(*text)
 		{
 		case 'u':
 					was_touched = TRUE;
 				case 'U':
 			uline();
 					is_attr_on = TRUE;
-					str++;
+					text++;
 					break;
 				case 'i':
 					was_touched = TRUE;
 				case 'I':
 					standout();
 					is_attr_on = TRUE;
-					str++;
+					text++;
 					break;
 				case '$':
 					if (is_attr_on)
 						was_touched = TRUE;
-					str++;
+					text++;
 					continue;
 			 }
 		}
-		if ((*str == '\n') || (*str == '\r'))
+		if ((*text == '\n') || (*text == '\r'))
 		{
-			str++;
+			text++;
 			printw("\n");
 		}
-		else if (*str != 0)
-			addch(*str++);
+		else if (*text != 0)
+			addch(*text++);
 	}
 	if (is_attr_on)
 		standend();
 #else
-	while (*str)
+	while (*text)
 	{
-		if (*str == '%') {
-			str++;
+		if (*text == '%') {
+			text++;
 			standout();
 		}
-		addch(*str++);
+		addch(*text++);
 		standend();
 	}
 #endif //LUXURY
@@ -547,14 +547,14 @@ str_attr(str)
  * key_state:
  */
 void
-SIG2(void)
+update_keyboard_and_clock(void)
 {
-	static int key_init = TRUE;
-	static int numl, capsl;
-	static int nspot, cspot, tspot;
-	register int new_numl, new_capsl, new_fmode;
-	static int bighand, littlehand;
-	int showtime = FALSE, spare;
+	static int keyboard_initialized = TRUE;
+	static int num_lock, caps_lock;
+	static int num_lock_column, caps_lock_column, clock_column;
+	register int new_num_lock, new_caps_lock, new_run_mode;
+	static int hour, minute;
+	int clock_changed = FALSE, minutes_since_update;
 	int x, y;
 #ifdef DEMO
 	static int tot_time = 0;
@@ -567,8 +567,8 @@ SIG2(void)
 		return;
 	ntick = tick + 6;
 #else
-	static long cur_time = 0;
-	long new_time = md_time();
+	static long previous_clock_time = 0;
+	long current_time = epoch_seconds();
 #endif
 
 	/*@
@@ -576,18 +576,18 @@ SIG2(void)
 	 * (when the user is in a non-game screen like inventory or discoveries)
 	 * Or if the screen is not yet initialized.
 	 */
-	if (is_saved || scr_type < 0)
+	if (screen_updates_suspended || dos_screen_mode < 0)
 		return;
 #ifndef __linux__
-	regs->ax = 0x200;
-	swint(SW_KEY, regs);
-	new_numl = regs->ax;
+	dos_regs->ax = 0x200;
+	call_dos_interrupt(SW_KEY, dos_regs);
+	new_num_lock = dos_regs->ax;
 #else
-	new_numl = md_keyboard_leds();
+	new_num_lock = keyboard_lock_flags();
 #endif
-	new_capsl = new_numl & 0x40;
-	new_fmode = new_numl & 0x10;  //@ scroll lock
-	new_numl &= 0x20;
+	new_caps_lock = new_num_lock & 0x40;
+	new_run_mode = new_num_lock & 0x10;  //@ scroll lock
+	new_num_lock &= 0x20;
 #ifdef ROGUE_DOS_CLOCK
 	/*
 	 * set up the clock the first time here
@@ -597,12 +597,12 @@ SIG2(void)
 	 * CH = hour (0-23)
 	 * CL = minutes (0-59)
 	 */
-	if (key_init) {
-		regs->ax = 0x2c << 8;
-		swint(SW_DOS, regs);
-		bighand = (regs->cx >> 8) % 12;  //@ force 12-hour display format
-		littlehand = regs->cx & 0xFF;
-		showtime = TRUE;
+	if (keyboard_initialized) {
+		dos_regs->ax = 0x2c << 8;
+		call_dos_interrupt(SW_DOS, dos_regs);
+		hour = (dos_regs->cx >> 8) % 12;  //@ force 12-hour display format
+		minute = dos_regs->cx & 0xFF;
+		clock_changed = TRUE;
 	}
 	//@ 1092 ticks = 1 minute @ 18.2 ticks per second rate
 	if (tick > 1092) {
@@ -610,21 +610,21 @@ SIG2(void)
 		 * time os call kills jr and others we keep track of it
 		 * ourselves
 		 */
-		littlehand = (littlehand + 1) % 60;
-		if (littlehand == 0)
-			bighand = (bighand + 1) % 12;
+		minute = (minute + 1) % 60;
+		if (minute == 0)
+			hour = (hour + 1) % 12;
 		tick = tick - 1092;
 		ntick = tick + 6;
-		showtime = TRUE;
+		clock_changed = TRUE;
 	}
 #else
-	if (new_time - cur_time >= 60)
+	if (current_time - previous_clock_time >= 60)
 	{
-		TM *local = md_localtime();
-		bighand = local->hour % 12;
-		littlehand = local->minute;
-		cur_time = new_time - local->second;
-		showtime = TRUE;
+		LocalTime *local = current_local_time();
+		hour = local->hour % 12;
+		minute = local->minute;
+		previous_clock_time = current_time - local->second;
+		clock_changed = TRUE;
 	}
 #endif
 
@@ -632,41 +632,41 @@ SIG2(void)
 	 * this is built for speed so set up once first time this
 	 * is executed
 	 */
-	if (key_init || reinit)
+	if (keyboard_initialized || status_layout_dirty)
 	{
-		reinit = key_init = FALSE;
+		status_layout_dirty = keyboard_initialized = FALSE;
 		if (COLS == 40)
 		{
-			nspot = 10;
-			cspot = 19;
-			tspot = 35;
+			num_lock_column = 10;
+			caps_lock_column = 19;
+			clock_column = 35;
 		}
 		else
 		{
-			nspot = 20;
-			cspot = 39;
-			tspot = 75;
+			num_lock_column = 20;
+			caps_lock_column = 39;
+			clock_column = 75;
 		}
 		/*
 		 * this will force all fields to be updated first time through
 		 */
-		numl = !new_numl;
-		capsl = !new_capsl;
-		showtime++;
-		faststate = !new_fmode;
+		num_lock = !new_num_lock;
+		caps_lock = !new_caps_lock;
+		clock_changed++;
+		scroll_lock_run_enabled = !new_run_mode;
 	}
 
 	getxy(&x, &y);
 
-	if (faststate != new_fmode)
+	if (scroll_lock_run_enabled != new_run_mode)
 	{
 
-		faststate = new_fmode;
-		count = 0;
-		show_count();
+		scroll_lock_run_enabled = new_run_mode;
+		command_repeat_count = 0;
+		show_repeat_count();
 		running = FALSE;
 		move(LINES-1,0);
-		if (faststate)
+		if (scroll_lock_run_enabled)
 		{
 			bold();
 			addstr("Fast Play");
@@ -678,14 +678,14 @@ SIG2(void)
 		}
 	}
 
-	if (numl != new_numl)
+	if (num_lock != new_num_lock)
 	{
-		numl = new_numl;
-		count = 0;
-		show_count();
+		num_lock = new_num_lock;
+		command_repeat_count = 0;
+		show_repeat_count();
 		running = FALSE;
-		move(24,nspot);
-		if (numl)
+		move(24,num_lock_column);
+		if (num_lock)
 		{
 			bold();
 			addstr("NUM LOCK");
@@ -694,11 +694,11 @@ SIG2(void)
 		else
 			addstr("        ");
 	}
-	if (capsl != new_capsl)
+	if (caps_lock != new_caps_lock)
 	{
-		capsl = new_capsl;
-		move(24,cspot);
-		if (capsl)
+		caps_lock = new_caps_lock;
+		move(24,caps_lock_column);
+		if (caps_lock)
 		{
 			bold();
 			addstr("CAP LOCK");
@@ -707,30 +707,30 @@ SIG2(void)
 		else
 			addstr("        ");
 	}
-	if (showtime)
+	if (clock_changed)
 	{
-		showtime = FALSE;
+		clock_changed = FALSE;
 #ifdef DEMO
 		/*
 		 * Don't let them get by level 10 because they might do something
 		 * nasty like disable the clock
 		 */
-		if (((tot_time++ - max_level) > DEMOTIME) || max_level > 10)
+		if (((tot_time++ - deepest_level) > DEMOTIME) || deepest_level > 10)
 			demo(DEMOTIME);
 #endif //DEMO
 		/* work around the compiler buggie boos */
-		spare = littlehand % 10;
-		move(24,tspot);
+		minutes_since_update = minute % 10;
+		move(24,clock_column);
 		bold();
-		printw("%2d:%1d%1d",bighand?bighand:12,littlehand/10,spare);
+		printw("%2d:%1d%1d",hour?hour:12,minute/10,minutes_since_update);
 		standend();
 	}
 	move(x, y);
 }
 
 char *
-noterse(str)
-	char *str;
+verbose_text(text)
+	char *text;
 {
-	return( terse || expert ? nullstr : str);
+	return( terse || expert ? empty_string : text);
 }

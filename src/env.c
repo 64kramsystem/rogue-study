@@ -12,54 +12,54 @@
 
 #define ERROR   -1
 #define MATCH    0
-#define MAXEP	 8
+#define OPTION_COUNT	 8
 #define FOREVER	 1
 
 //@ made static. could also be hardcoded in struct environment element array
-static char l_name[] = "name";
-static char l_save[] = "savefile";
-static char l_score[] = "scorefile";
-static char l_macro[] = "macro";
-static char l_fruit[] = "fruit";
-static char l_drive[] = "drive";
-static char l_menu [] = "menu";
-static char l_screen[]   = "screen";
+static char name_option_key[] = "name";
+static char save_option_key[] = "savefile";
+static char score_option_key[] = "scorefile";
+static char macro_option_key[] = "macro";
+static char fruit_option_key[] = "fruit";
+static char drive_option_key[] = "drive";
+static char menu_option_key [] = "menu";
+static char screen_option_key[]   = "screen";
 
 //@ public extern'ed vars
-char whoami[] = "Rodney\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-char s_score[]  =  "rogue.scr\0\0\0\0\0";
-char s_save[]   =   "rogue.sav\0\0\0\0\0";
-char macro[]    =   "v\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-char fruit[]    =  "Slime Mold\0\0\0\0\0\0\0\0\0\0\0\0\0";
-char s_drive[]  =  "?";
-char s_menu[]   =  "on\0";
-char s_screen[]    =  "\0w fast";
+char player_name[] = "Rodney\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+char score_filename[]  =  "rogue.scr\0\0\0\0\0";
+char save_filename[]   =   "rogue.sav\0\0\0\0\0";
+char keyboard_macro[]    =   "v\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+char favorite_fruit[]    =  "Slime Mold\0\0\0\0\0\0\0\0\0\0\0\0\0";
+char copy_protection_drive[]  =  "?";
+char menu_option[]   =  "on\0";
+char screen_option[]    =  "\0w fast";
 
 static
-struct environment {
-	char *e_label;
-	char *e_string;
+struct option_entry {
+	char *key;
+	char *value;
 	int  strlen;
-} element[MAXEP] = {
-	{l_name,	whoami,		23},
-	{l_score,	s_score,	14},
-	{l_save,	s_save,		14},
-	{l_macro,	macro,		40},
-	{l_fruit,	fruit,		23},
-	{l_drive,	s_drive,	 1},
-	{l_menu,	s_menu,		 3},
-	{l_screen,	s_screen,	 7},
+} options[OPTION_COUNT] = {
+	{name_option_key,	player_name,		23},
+	{score_option_key,	score_filename,	14},
+	{save_option_key,	save_filename,		14},
+	{macro_option_key,	keyboard_macro,		40},
+	{fruit_option_key,	favorite_fruit,		23},
+	{drive_option_key,	copy_protection_drive,	 1},
+	{menu_option_key,	menu_option,		 3},
+	{screen_option_key,	screen_option,	 7},
 };
 
-static byte	peekc(void);
-static void	putenv_struct(char *label, char *string);
+static byte	read_option_character(void);
+static void	set_option_value(char *label, char *string);
 
 //@ already static in original
-static FILE *file;
-static byte ch;
-static int pstate;
-static char blabel[11], bstring[MACROSZ];
-static char *plabel, *pstring;
+static FILE *options_file;
+static byte option_character;
+static int option_parse_state;
+static char option_key_buffer[11], option_value_buffer[MACROSZ];
+static char *option_key_cursor, *option_value_cursor;
 
 //@ renamed from setenv() to avoid collision with <stdlib.h>
 /*
@@ -72,13 +72,13 @@ static char *plabel, *pstring;
  *                  @@ FALSE on failure to open envfile, TRUE otherwise
  */
 bool
-setenv_from_file(envfile)
-	char *envfile;
+load_options_file(filename)
+	char *filename;
 {
-	register char pc;
+	register char separator;
 
-	one_tick();	/* if he tries to disable the clock */
-	if ((file = fopen(envfile, "r")) == NULL)
+	protection_tick();	/* if he tries to disable the clock */
+	if ((options_file = fopen(filename, "r")) == NULL)
 	{
 		return FALSE;
 	}
@@ -88,70 +88,70 @@ setenv_from_file(envfile)
 		/*
 		 * Look for another label
 		 */
-		pstate = 0;
-		plabel = blabel;
-		pstring = bstring;
+		option_parse_state = 0;
+		option_key_cursor = option_key_buffer;
+		option_value_cursor = option_value_buffer;
 
 		/*
 		 * Skip white space, this is the only state (pstate == 0)
 		 * where eof will not be aborted
 		 */
-		while (is_space(peekc()))
+		while (is_space(read_option_character()))
 			;
-		if (ch == 0)
+		if (option_character == 0)
 			break;
-		pstate = 3;
+		option_parse_state = 3;
 		/*
 		 * Skip comments.
 		 */
-		if (ch == '#') {
-			while (peekc() != '\n')
+		if (option_character == '#') {
+			while (read_option_character() != '\n')
 				;
 			continue;
 		}
-		pstate = 1;
+		option_parse_state = 1;
 		/*
 		 * start of label found
 		 */
-		*plabel = ch;
-		while ((pc = peekc()) != '=' && pc != '-') {
-			if (pc == '\n')
+		*option_key_cursor = option_character;
+		while ((separator = read_option_character()) != '=' && separator != '-') {
+			if (separator == '\n')
 				fatal("rogue.opt: incorrect file format\n");
-			if ((!is_space(*plabel) || !is_space(ch))
-			    && plabel < &blabel[sizeof(blabel) - 2])
-				*(++plabel) = ch;
+			if ((!is_space(*option_key_cursor) || !is_space(option_character))
+			    && option_key_cursor < &option_key_buffer[sizeof(option_key_buffer) - 2])
+				*(++option_key_cursor) = option_character;
 		}
-		if (!is_space(*plabel))
-			plabel++;
-		*plabel = 0;
+		if (!is_space(*option_key_cursor))
+			option_key_cursor++;
+		*option_key_cursor = 0;
 
 		/*
 		 * Looking for corresponding string
 		 */
-		pstate = 2;
-		while (is_space(peekc()) && ch != '\n')
+		option_parse_state = 2;
+		while (is_space(read_option_character()) && option_character != '\n')
 			;
 
 		/*
 		 * Start of string found
 		 */
-		if (ch != '\n') {
-			*pstring = ch;
-			while (peekc() != '\n')
-				if ((!is_space(*pstring) || !is_space(ch))
-				    && pstring < &bstring[sizeof(bstring) - 2])
-					*(++pstring) = ch;
-			if (!is_space(*pstring))
-				pstring++;
+		if (option_character != '\n') {
+			*option_value_cursor = option_character;
+			while (read_option_character() != '\n')
+				if ((!is_space(*option_value_cursor) || !is_space(option_character))
+				    && option_value_cursor < &option_value_buffer[sizeof(option_value_buffer) - 2])
+					*(++option_value_cursor) = option_character;
+			if (!is_space(*option_value_cursor))
+				option_value_cursor++;
 		}
-		*pstring = 0;
-		lcase(blabel);
-		putenv_struct(blabel,bstring);
+		*option_value_cursor = 0;
+		lowercase_string(option_key_buffer);
+		set_option_value(option_key_buffer,option_value_buffer);
 		/* printf("env: found (%s) = (%s)\n",blabel,bstring); */
 	}
-	fclose(file);
-	lcase(s_menu);
-	lcase(s_screen);
+	fclose(options_file);
+	lowercase_string(menu_option);
+	lowercase_string(screen_option);
 	return TRUE;
 }
 
@@ -168,24 +168,24 @@ setenv_from_file(envfile)
  */
 static
 byte
-peekc(void)
+read_option_character(void)
 {
-	ch = 0;
-	if (!fread(&ch, 1, 1, file)) {
-		if (ferror(file))
+	option_character = 0;
+	if (!fread(&option_character, 1, 1, options_file)) {
+		if (ferror(options_file))
 			fatal("rogue.opt: could not read file\n");
 		/*
 		 * When looking for the end of the string,
 		 * Let the eof look like newlines
 		 */
-		if (pstate >= 2)
-			ch = '\n';
-		else if (pstate != 0)
+		if (option_parse_state >= 2)
+			option_character = '\n';
+		else if (option_parse_state != 0)
 			fatal("rogue.opt: incorrect file format\n");
 	}
-	if (ch == 26)  //@ EOF char, common in text files back then.
-		ch = '\n';
-	return(ch);
+	if (option_character == 26)  //@ EOF char, common in text files back then.
+		option_character = '\n';
+	return(option_character);
 }
 
 #ifdef LUXURY
@@ -202,15 +202,15 @@ peekc(void)
  */
 static
 char *
-getenv_struct(label)
+get_option_value(label)
 	char *label;
 {
 	register int i;
 
-	for (i=0 ; i<MAXEP ; i++ )
+	for (i=0 ; i<OPTION_COUNT ; i++ )
 	{
-		if ( strcmp(label,element[i].e_label) == MATCH )
-			return(element[i].e_string);
+		if ( strcmp(label,options[i].key) == MATCH )
+			return(options[i].value);
 	}
 	return(NULL);
 }
@@ -227,15 +227,15 @@ getenv_struct(label)
  *	  Just ingnores strange labels
  */
 void
-putenv_struct(label,string)
+set_option_value(label,string)
 	char *label, *string;
 {
 	register int i;
 
-	for (i=0 ; i<MAXEP ; i++)
+	for (i=0 ; i<OPTION_COUNT ; i++)
 	{
-		if ( strcmp(label,element[i].e_label) == MATCH )
-			stccpy(element[i].e_string, string, element[i].strlen);
+		if ( strcmp(label,options[i].key) == MATCH )
+			copy_string_bounded(options[i].value, string, options[i].strlen);
 	}
 }
 

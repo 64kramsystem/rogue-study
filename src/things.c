@@ -8,11 +8,11 @@
 #include "rogue.h"
 #include "curses.h"
 
-static void	chopmsg(char *s, char *shmsg, char *lnmsg, ...);
-static void	print_disc(byte type);
-static void	set_order(short *order, int numthings);
-static int	pick_one(struct magic_item *magic, int nitems);
-static char	*nothing(byte type);
+static void	format_item_by_verbosity(char *output, char *terse_format, char *verbose_format, ...);
+static void	show_category_discoveries(byte type);
+static void	shuffle_discovery_order(short *order, int type_count);
+static int	choose_item_subtype(struct item_definition *magic, int item_count);
+static char	*undiscovered_message(byte type);
 
 /*
  * inv_name:
@@ -20,147 +20,147 @@ static char	*nothing(byte type);
  *	inventory.
  */
 char *
-inv_name(THING *obj, bool drop)
+describe_item(Entity *item, bool dropped)
 {
-	register int which = obj->o_which;
-	register char *pb;
+	register int subtype = item->item_subtype;
+	register char *text_cursor;
 
-	pb = prbuf;
-	switch (obj->o_type)
+	text_cursor = description_buffer;
+	switch (item->item_category)
 	{
 	when SCROLL:
-		if (obj->o_count == 1) {
-			strcpy(pb, "A scroll ");
-			pb = &prbuf[9];
+		if (item->item_quantity == 1) {
+			strcpy(text_cursor, "A scroll ");
+			text_cursor = &description_buffer[9];
 		} else {
-			sprintf(pb, "%d scrolls ", obj->o_count);
-			pb = &prbuf[strlen(prbuf)];
+			sprintf(text_cursor, "%d scrolls ", item->item_quantity);
+			text_cursor = &description_buffer[strlen(description_buffer)];
 		}
-		if (s_know[which])
-			sprintf(pb, "of %s", s_magic[which].mi_name);
-		else if (*s_guess[which])
-			sprintf(pb, "called %s", s_guess[which]);
+		if (scroll_identified[subtype])
+			sprintf(text_cursor, "of %s", scroll_definitions[subtype].name);
+		else if (*scroll_labels[subtype])
+			sprintf(text_cursor, "called %s", scroll_labels[subtype]);
 		else
-			chopmsg(pb, "titled '%.17s'","titled '%s'", &s_names[which]);
+			format_item_by_verbosity(text_cursor, "titled '%.17s'","titled '%s'", &scroll_titles[subtype]);
 	when POTION:
-		if (obj->o_count == 1)
+		if (item->item_quantity == 1)
 		{
-			strcpy(pb, "A potion ");
-			pb = &prbuf[9];
+			strcpy(text_cursor, "A potion ");
+			text_cursor = &description_buffer[9];
 		}
 		else
 		{
-			sprintf(pb, "%d potions ", obj->o_count);
-			pb = &pb[strlen(prbuf)];
+			sprintf(text_cursor, "%d potions ", item->item_quantity);
+			text_cursor = &text_cursor[strlen(description_buffer)];
 		}
-		if (p_know[which]) {
-			chopmsg(pb, "of %s", "of %s(%s)",
-				p_magic[which].mi_name, p_colors[which]);
+		if (potion_identified[subtype]) {
+			format_item_by_verbosity(text_cursor, "of %s", "of %s(%s)",
+				potion_definitions[subtype].name, potion_colors[subtype]);
 		}
-		else if (*p_guess[which]) {
-			chopmsg(pb, "called %s","called %s(%s)", p_guess[which],
-				p_colors[which]);
+		else if (*potion_labels[subtype]) {
+			format_item_by_verbosity(text_cursor, "called %s","called %s(%s)", potion_labels[subtype],
+				potion_colors[subtype]);
 		}
-		else if (obj->o_count == 1)
-			sprintf(prbuf, "A%s %s potion", vowelstr(p_colors[which]),
-				p_colors[which]);
+		else if (item->item_quantity == 1)
+			sprintf(description_buffer, "A%s %s potion", article_suffix(potion_colors[subtype]),
+				potion_colors[subtype]);
 		else
-			sprintf(prbuf, "%d %s potions", obj->o_count, p_colors[which]);
+			sprintf(description_buffer, "%d %s potions", item->item_quantity, potion_colors[subtype]);
 	when FOOD:
-		if (which == 1)
-			if (obj->o_count == 1)
-				sprintf(pb, "A%s %s", vowelstr(fruit), fruit);
+		if (subtype == 1)
+			if (item->item_quantity == 1)
+				sprintf(text_cursor, "A%s %s", article_suffix(favorite_fruit), favorite_fruit);
 			else
-				sprintf(pb, "%d %ss", obj->o_count, fruit);
+				sprintf(text_cursor, "%d %ss", item->item_quantity, favorite_fruit);
 		else
-			if (obj->o_count == 1)
-				strcpy(pb, "Some food");
+			if (item->item_quantity == 1)
+				strcpy(text_cursor, "Some food");
 			else
-				sprintf(pb, "%d rations of food", obj->o_count);
+				sprintf(text_cursor, "%d rations of food", item->item_quantity);
 	when WEAPON:
-		if (obj->o_count > 1)
-			sprintf(pb, "%d ", obj->o_count);
+		if (item->item_quantity > 1)
+			sprintf(text_cursor, "%d ", item->item_quantity);
 		else
-			sprintf(pb, "A%s ", vowelstr(w_names[which]));
-		pb = &prbuf[strlen(prbuf)];
-		if (obj->o_flags & ISKNOW)
-			sprintf(pb, "%s %s", num(obj->o_hplus, obj->o_dplus, WEAPON),
-				w_names[which]);
+			sprintf(text_cursor, "A%s ", article_suffix(weapon_names[subtype]));
+		text_cursor = &description_buffer[strlen(description_buffer)];
+		if (item->item_flags & ITEM_IDENTIFIED)
+			sprintf(text_cursor, "%s %s", format_item_bonus(item->item_hit_bonus, item->item_damage_bonus, WEAPON),
+				weapon_names[subtype]);
 		else
-			sprintf(pb, "%s", w_names[which]);
-		if (obj->o_count > 1)
-			strcat(pb, "s");
-		if (obj->o_enemy && (obj->o_flags & ISREVEAL))
+			sprintf(text_cursor, "%s", weapon_names[subtype]);
+		if (item->item_quantity > 1)
+			strcat(text_cursor, "s");
+		if (item->item_slays_species && (item->item_flags & ITEM_SLAYER_REVEALED))
 		{
-			strcat(pb, " of ");
-			strcat(pb, monsters[obj->o_enemy-'A'].m_name);
-			strcat(pb, " slaying");
+			strcat(text_cursor, " of ");
+			strcat(text_cursor, monster_definitions[item->item_slays_species-'A'].name);
+			strcat(text_cursor, " slaying");
 		}
 	when ARMOR:
-		if (obj->o_flags & ISKNOW)
-			chopmsg(pb, "%s %s","%s %s [armor class %d]",
-				num(a_class[which] - obj->o_ac, 0, ARMOR),
-				a_names[which], -(obj->o_ac-11));
+		if (item->item_flags & ITEM_IDENTIFIED)
+			format_item_by_verbosity(text_cursor, "%s %s","%s %s [armor class %d]",
+				format_item_bonus(armor_classes[subtype] - item->item_modifier, 0, ARMOR),
+				armor_names[subtype], -(item->item_modifier-11));
 		else
-			sprintf(pb, "%s", a_names[which]);
+			sprintf(text_cursor, "%s", armor_names[subtype]);
 	when AMULET:
-		strcpy(pb, "The Amulet of Yendor");
+		strcpy(text_cursor, "The Amulet of Yendor");
 	when STICK:
-		sprintf(pb, "A%s %s ", vowelstr(ws_type[which]),
-		ws_type[which]);
-		pb = &prbuf[strlen(prbuf)];
-		if (ws_know[which])
-			chopmsg(pb, "of %s%s", "of %s%s(%s)",
-				ws_magic[which].mi_name,
-				charge_str(obj), ws_made[which]);
-		else if (*ws_guess[which])
-			chopmsg(pb, "called %s", "called %s(%s)", ws_guess[which],
-				ws_made[which]);
+		sprintf(text_cursor, "A%s %s ", article_suffix(wand_kinds[subtype]),
+		wand_kinds[subtype]);
+		text_cursor = &description_buffer[strlen(description_buffer)];
+		if (wand_identified[subtype])
+			format_item_by_verbosity(text_cursor, "of %s%s", "of %s%s(%s)",
+				wand_definitions[subtype].name,
+				format_wand_charges(item), wand_materials[subtype]);
+		else if (*wand_labels[subtype])
+			format_item_by_verbosity(text_cursor, "called %s", "called %s(%s)", wand_labels[subtype],
+				wand_materials[subtype]);
 		else
-			sprintf(pb = &prbuf[2], "%s %s", ws_made[which], ws_type[which]);
+			sprintf(text_cursor = &description_buffer[2], "%s %s", wand_materials[subtype], wand_kinds[subtype]);
 	when RING:
-		if (r_know[which])
-			chopmsg(pb, "A%s ring of %s", "A%s ring of %s(%s)", ring_num(obj),
-				r_magic[which].mi_name, r_stones[which]);
-		else if (*r_guess[which])
-			chopmsg(pb, "A ring called %s", "A ring called %s(%s)",
-				r_guess[which], r_stones[which]);
+		if (ring_identified[subtype])
+			format_item_by_verbosity(text_cursor, "A%s ring of %s", "A%s ring of %s(%s)", format_ring_bonus(item),
+				ring_definitions[subtype].name, ring_gemstones[subtype]);
+		else if (*ring_labels[subtype])
+			format_item_by_verbosity(text_cursor, "A ring called %s", "A ring called %s(%s)",
+				ring_labels[subtype], ring_gemstones[subtype]);
 		else
-			sprintf(pb, "A%s %s ring", vowelstr(r_stones[which]),
-				r_stones[which]);
+			sprintf(text_cursor, "A%s %s ring", article_suffix(ring_gemstones[subtype]),
+				ring_gemstones[subtype]);
 #ifdef DEBUG
 	when GOLD:
-		sprintf(pb, "Gold at %d,%d", obj->o_pos.y, obj->o_pos.x);
+		sprintf(text_cursor, "Gold at %d,%d", item->item_position.y, item->item_position.x);
 	otherwise:
-		debug("Picked up someting bizzare %s", io_unctrl(obj->o_type));
-		sprintf(pb, "Something bizarre %c(%d)", obj->o_type, obj->o_type);
+		debug("Picked up someting bizzare %s", describe_key(item->item_category));
+		sprintf(text_cursor, "Something bizarre %c(%d)", item->item_category, item->item_category);
 #endif
 		break;
 	}
-	if (obj == cur_armor)
-		strcat(pb, " (being worn)");
-	if (obj == cur_weapon)
-		strcat(pb, " (weapon in hand)");
-	if (obj == cur_ring[LEFT])
-		strcat(pb, " (on left hand)");
-	else if (obj == cur_ring[RIGHT])
-		strcat(pb, " (on right hand)");
-	if (drop && ismonster(prbuf[0]))
-		prbuf[0] = tolower(prbuf[0]);
-	else if (!drop && is_lower(*prbuf))
-		*prbuf = toupper(*prbuf);
-	return prbuf;
+	if (item == equipped_armor)
+		strcat(text_cursor, " (being worn)");
+	if (item == equipped_weapon)
+		strcat(text_cursor, " (weapon in hand)");
+	if (item == equipped_rings[LEFT])
+		strcat(text_cursor, " (on left hand)");
+	else if (item == equipped_rings[RIGHT])
+		strcat(text_cursor, " (on right hand)");
+	if (dropped && is_monster_symbol(description_buffer[0]))
+		description_buffer[0] = tolower(description_buffer[0]);
+	else if (!dropped && is_lower(*description_buffer))
+		*description_buffer = toupper(*description_buffer);
+	return description_buffer;
 }
 
 //@ changed original signature to use varargs
 static
 void
-chopmsg(char *s, char *shmsg, char *lnmsg, ...)
+format_item_by_verbosity(char *output, char *terse_format, char *verbose_format, ...)
 {
-	va_list argp;
-	va_start(argp, lnmsg);
-	vsnprintf(s, MAXSTR, (terse || expert) ? shmsg : lnmsg, argp);
-	va_end(argp);
+	va_list arguments;
+	va_start(arguments, verbose_format);
+	vsnprintf(output, MAXSTR, (terse || expert) ? terse_format : verbose_format, arguments);
+	va_end(arguments);
 }
 
 /*
@@ -168,51 +168,51 @@ chopmsg(char *s, char *shmsg, char *lnmsg, ...)
  *	Put something down
  */
 void
-drop(void)
+drop_item(void)
 {
-	register byte ch;
-	register THING *nobj, *op;
+	register byte character;
+	register Entity *dropped_item, *item;
 
-	ch = chat(hero.y, hero.x);
-	if (ch != FLOOR && ch != PASSAGE)
+	character = terrain_at(player_position.y, player_position.x);
+	if (character != FLOOR && character != PASSAGE)
 	{
-		msg("there is something there already");
+		show_message("there is something there already");
 		return;
 	}
-	if ((op = get_item("drop", 0)) == NULL)
+	if ((item = select_inventory_item("drop", 0)) == NULL)
 		return;
-	if (!can_drop(op))
+	if (!can_drop(item))
 		return;
 	/*
 	 * Take it out of the pack
 	 */
-	if (op->o_count >= 2 && op->o_type != WEAPON)
+	if (item->item_quantity >= 2 && item->item_category != WEAPON)
 	{
-		if ((nobj = new_item()) == NULL)
+		if ((dropped_item = allocate_entity()) == NULL)
 		{
-			msg("%sit appears to be stuck in your pack!",
-				noterse("can't drop it, "));
+			show_message("%sit appears to be stuck in your pack!",
+				verbose_text("can't drop it, "));
 			return;
 		}
-		op->o_count--;
-		bcopy(*nobj,*op);
-		nobj->o_count = 1;
-		op = nobj;
-		if (op->o_group != 0)
-			inpack++;
+		item->item_quantity--;
+		copy_value(*dropped_item,*item);
+		dropped_item->item_quantity = 1;
+		item = dropped_item;
+		if (item->item_stack_group != 0)
+			inventory_count++;
 	}
 	else
-		detach(pack, op);
-	inpack--;
+		detach(player_inventory, item);
+	inventory_count--;
 	/*
 	 * Link it into the level object list
 	 */
-	attach(lvl_obj, op);
-	chat(hero.y, hero.x) = op->o_type;
-	bcopy(op->o_pos,hero);
-	if (op->o_type == AMULET)
-		amulet = FALSE;
-	msg("dropped %s", inv_name(op, TRUE));
+	attach(level_items, item);
+	terrain_at(player_position.y, player_position.x) = item->item_category;
+	copy_value(item->item_position,player_position);
+	if (item->item_category == AMULET)
+		carrying_amulet = FALSE;
+	show_message("dropped %s", describe_item(item, TRUE));
 }
 
 /*
@@ -220,40 +220,40 @@ drop(void)
  *	Do special checks for dropping or unweilding|unwearing|unringing
  */
 bool
-can_drop(THING *op)
+can_drop(Entity *item)
 {
-	if (op == NULL)
+	if (item == NULL)
 		return TRUE;
-	if (op != cur_armor && op != cur_weapon
-		&& op != cur_ring[LEFT] && op != cur_ring[RIGHT])
+	if (item != equipped_armor && item != equipped_weapon
+		&& item != equipped_rings[LEFT] && item != equipped_rings[RIGHT])
 		return TRUE;
-	if (op->o_flags & ISCURSED) {
-		msg("you can't.  It appears to be cursed");
+	if (item->item_flags & ITEM_CURSED) {
+		show_message("you can't.  It appears to be cursed");
 		return FALSE;
 	}
-	if (op == cur_weapon)
-		cur_weapon = NULL;
-	else if (op == cur_armor) {
-		waste_time();
-		cur_armor = NULL;
+	if (item == equipped_weapon)
+		equipped_weapon = NULL;
+	else if (item == equipped_armor) {
+		advance_turn();
+		equipped_armor = NULL;
 	} else {
 		register int hand;
 
-		if (op != cur_ring[hand = LEFT])
-			if (op != cur_ring[hand = RIGHT]) {
+		if (item != equipped_rings[hand = LEFT])
+			if (item != equipped_rings[hand = RIGHT]) {
 #ifdef DEBUG
 				debug("Candrop called with funny thing");
 #endif
 				return TRUE;
 			}
-		cur_ring[hand] = NULL;
-		switch (op->o_which) {
-		case R_ADDSTR:
-			chg_str(-op->o_ac);
+		equipped_rings[hand] = NULL;
+		switch (item->item_subtype) {
+		case RING_ADD_STRENGTH:
+			change_player_strength(-item->item_modifier);
 			break;
-		case R_SEEINVIS:
-			unsee();
-			extinguish(unsee);
+		case RING_SEE_INVISIBLE:
+			end_monster_detection();
+			cancel_delayed_action(end_monster_detection);
 			break;
 		}
 	}
@@ -264,55 +264,55 @@ can_drop(THING *op)
  * new_thing:
  *	Return a new thing
  */
-THING *
-new_thing(void)
+Entity *
+generate_item(void)
 {
-	register THING *cur;
+	register Entity *item;
 	register int j, k;
 
-	if ((cur = new_item()) == NULL)
+	if ((item = allocate_entity()) == NULL)
 		return NULL;
-	cur->o_hplus = cur->o_dplus = 0;
-	cur->o_damage = cur->o_hurldmg = "0d0";
-	cur->o_ac = 11;
-	cur->o_count = 1;
-	cur->o_group = 0;
-	cur->o_flags = 0;
-	cur->o_enemy = 0;
+	item->item_hit_bonus = item->item_damage_bonus = 0;
+	item->item_melee_damage = item->item_thrown_damage = "0d0";
+	item->item_modifier = 11;
+	item->item_quantity = 1;
+	item->item_stack_group = 0;
+	item->item_flags = 0;
+	item->item_slays_species = 0;
 	/*
 	 * Decide what kind of object it will be
 	 * If we haven't had food for a while, let it be food.
 	 */
-	switch (no_food > 3 ? 2 : pick_one(things, NUMTHINGS))
+	switch (levels_without_food > 3 ? 2 : choose_item_subtype(item_category_probabilities, NUMTHINGS))
 	{
 	when 0:
-		cur->o_type = POTION;
-		cur->o_which = pick_one(p_magic, MAXPOTIONS);
+		item->item_category = POTION;
+		item->item_subtype = choose_item_subtype(potion_definitions, MAXPOTIONS);
 	when 1:
-		cur->o_type = SCROLL;
-		cur->o_which = pick_one(s_magic, MAXSCROLLS);
+		item->item_category = SCROLL;
+		item->item_subtype = choose_item_subtype(scroll_definitions, MAXSCROLLS);
 	when 2:
-		no_food = 0;
-		cur->o_type = FOOD;
-		if (rnd(10) != 0)
-			cur->o_which = 0;
+		levels_without_food = 0;
+		item->item_category = FOOD;
+		if (random_below(10) != 0)
+			item->item_subtype = 0;
 		else
-			cur->o_which = 1;
+			item->item_subtype = 1;
 	when 3:
-		cur->o_type = WEAPON;
-		cur->o_which = rnd(MAXWEAPONS);
-		init_weapon(cur, cur->o_which);
-		if ((k = rnd(100)) < 10)
+		item->item_category = WEAPON;
+		item->item_subtype = random_below(MAXWEAPONS);
+		init_weapon(item, item->item_subtype);
+		if ((k = random_below(100)) < 10)
 		{
-			cur->o_flags |= ISCURSED;
-			cur->o_hplus -= rnd(3) + 1;
+			item->item_flags |= ITEM_CURSED;
+			item->item_hit_bonus -= random_below(3) + 1;
 		}
 		else if (k < 15)
-			cur->o_hplus += rnd(3) + 1;
+			item->item_hit_bonus += random_below(3) + 1;
 	when 4:
-		cur->o_type = ARMOR;
-		for (j = 0, k = rnd(100); j < MAXARMORS; j++)
-			if (k < a_chances[j])
+		item->item_category = ARMOR;
+		for (j = 0, k = random_below(100); j < MAXARMORS; j++)
+			if (k < armor_probabilities[j])
 				break;
 #ifdef DEBUG
 		if (j == MAXARMORS)
@@ -321,46 +321,46 @@ new_thing(void)
 		j = 0;
 		}
 #endif
-		cur->o_which = j;
-		cur->o_ac = a_class[j];
-		if ((k = rnd(100)) < 20)
+		item->item_subtype = j;
+		item->item_modifier = armor_classes[j];
+		if ((k = random_below(100)) < 20)
 		{
-			cur->o_flags |= ISCURSED;
-			cur->o_ac += rnd(3) + 1;
+			item->item_flags |= ITEM_CURSED;
+			item->item_modifier += random_below(3) + 1;
 		}
 		else if (k < 28)
-			cur->o_ac -= rnd(3) + 1;
+			item->item_modifier -= random_below(3) + 1;
 	when 5:
-		cur->o_type = RING;
-		cur->o_which = pick_one(r_magic, MAXRINGS);
-		switch (cur->o_which)
+		item->item_category = RING;
+		item->item_subtype = choose_item_subtype(ring_definitions, MAXRINGS);
+		switch (item->item_subtype)
 		{
-		when R_ADDSTR:
-		case R_PROTECT:
-		case R_ADDHIT:
-		case R_ADDDAM:
-			if ((cur->o_ac = rnd(3)) == 0)
+		when RING_ADD_STRENGTH:
+		case RING_PROTECTION:
+		case RING_DEXTERITY:
+		case RING_DAMAGE:
+			if ((item->item_modifier = random_below(3)) == 0)
 			{
-				cur->o_ac = -1;
-				cur->o_flags |= ISCURSED;
+				item->item_modifier = -1;
+				item->item_flags |= ITEM_CURSED;
 			}
-		when R_AGGR:
-		case R_TELEPORT:
-			cur->o_flags |= ISCURSED;
+		when RING_AGGRAVATION:
+		case RING_TELEPORTATION:
+			item->item_flags |= ITEM_CURSED;
 			break;
 		}
 	when 6:
-		cur->o_type = STICK;
-		cur->o_which = pick_one(ws_magic, MAXSTICKS);
-		fix_stick(cur);
+		item->item_category = STICK;
+		item->item_subtype = choose_item_subtype(wand_definitions, MAXSTICKS);
+		initialize_wand(item);
 #ifdef DEBUG
 	otherwise:
 		debug("Picked a bad kind of object");
-		wait_for(' ');
+		wait_for_key(' ');
 #endif
 		break;
 	}
-	return cur;
+	return item;
 }
 
 /*
@@ -369,24 +369,24 @@ new_thing(void)
  */
 static
 shint  //@ actually an offset, the element index in the array
-pick_one(struct magic_item *magic, int nitems)
+choose_item_subtype(struct item_definition *magic, int item_count)
 {
-	register struct magic_item *end;
+	register struct item_definition *end;
 	register int i;
-	register struct magic_item *start;
+	register struct item_definition *start;
 
 	start = magic;
-	for (end = &magic[nitems], i = rnd(100); magic < end; magic++)
-		if (i < magic->mi_prob)
+	for (end = &magic[item_count], i = random_below(100); magic < end; magic++)
+		if (i < magic->probability)
 			break;
 	if (magic == end)
 	{
 #ifdef DEBUG
 		if (wizard)
 		{
-			msg("bad pick_one: %d from %d items", i, nitems);
+			show_message("bad pick_one: %d from %d items", i, item_count);
 			for (magic = start; magic < end; magic++)
-				msg("%s: %d%%", magic->mi_name, magic->mi_prob);
+				show_message("%s: %d%%", magic->name, magic->probability);
 		}
 #endif
 		magic = start;
@@ -398,23 +398,23 @@ pick_one(struct magic_item *magic, int nitems)
  * discovered:
  *	list what the player has discovered in this game of a certain type
  */
-static int line_cnt = 0;
+static int inventory_line_count = 0;
 
-static bool newpage = FALSE;
+static bool inventory_new_page = FALSE;
 
-static char *lastfmt, *lastarg;
+static char *inventory_line_format, *inventory_line_argument;
 
 void
-discovered(void)
+show_discoveries(void)
 {
-	print_disc(POTION);
-	add_line(nullstr, " ", "");
-	print_disc(SCROLL);
-	add_line(nullstr, " ", "");
-	print_disc(RING);
-	add_line(nullstr, " ", "");
-	print_disc(STICK);
-	end_line(nullstr);
+	show_category_discoveries(POTION);
+	add_line(empty_string, " ", "");
+	show_category_discoveries(SCROLL);
+	add_line(empty_string, " ", "");
+	show_category_discoveries(RING);
+	add_line(empty_string, " ", "");
+	show_category_discoveries(STICK);
+	end_line(empty_string);
 }
 
 /*
@@ -426,51 +426,51 @@ discovered(void)
 
 static
 void
-print_disc(byte type)
+show_category_discoveries(byte type)
 {
-	register bool *know = NULL;
-	register char **guess = NULL;
-	register int i, maxnum = 0, num_found;
-	static THING obj;
+	register bool *identified_types = NULL;
+	register char **labels = NULL;
+	register int i, type_count = 0, num_found;
+	static Entity item;
 	static short order[MAX(MAXSCROLLS, MAXPOTIONS, MAXRINGS, MAXSTICKS)];
 
 	switch (type)
 	{
 	case SCROLL:
-		maxnum = MAXSCROLLS;
-		know = s_know;
-		guess = s_guess;
+		type_count = MAXSCROLLS;
+		identified_types = scroll_identified;
+		labels = scroll_labels;
 		break;
 	case POTION:
-		maxnum = MAXPOTIONS;
-		know = p_know;
-		guess = p_guess;
+		type_count = MAXPOTIONS;
+		identified_types = potion_identified;
+		labels = potion_labels;
 		break;
 	case RING:
-		maxnum = MAXRINGS;
-		know = r_know;
-		guess = r_guess;
+		type_count = MAXRINGS;
+		identified_types = ring_identified;
+		labels = ring_labels;
 		break;
 	case STICK:
-		maxnum = MAXSTICKS;
-		know = ws_know;
-		guess = ws_guess;
+		type_count = MAXSTICKS;
+		identified_types = wand_identified;
+		labels = wand_labels;
 		break;
 	}
-	set_order(order, maxnum);
-	obj.o_count = 1;
-	obj.o_flags = 0;
+	shuffle_discovery_order(order, type_count);
+	item.item_quantity = 1;
+	item.item_flags = 0;
 	num_found = 0;
-	for (i = 0; i < maxnum; i++)
-		if (know[order[i]] || *guess[order[i]])
+	for (i = 0; i < type_count; i++)
+		if (identified_types[order[i]] || *labels[order[i]])
 		{
-			obj.o_type = type;
-			obj.o_which = order[i];
-			add_line(nullstr, "%s", inv_name(&obj, FALSE));
+			item.item_category = type;
+			item.item_subtype = order[i];
+			add_line(empty_string, "%s", describe_item(&item, FALSE));
 			num_found++;
 		}
 	if (num_found == 0)
-		add_line(nullstr, nothing(type), "");
+		add_line(empty_string, undiscovered_message(type), "");
 }
 
 /*
@@ -479,19 +479,19 @@ print_disc(byte type)
  */
 static
 void
-set_order(short *order, int numthings)
+shuffle_discovery_order(short *order, int type_count)
 {
-	register int i, r, t;
+	register int i, random_index, swap_value;
 
-	for (i = 0; i< numthings; i++)
+	for (i = 0; i< type_count; i++)
 		order[i] = i;
 
-	for (i = numthings; i > 0; i--)
+	for (i = type_count; i > 0; i--)
 	{
-		r = rnd(i);
-		t = order[i - 1];
-		order[i - 1] = order[r];
-		order[r] = t;
+		random_index = random_below(i);
+		swap_value = order[i - 1];
+		order[i - 1] = order[random_index];
+		order[random_index] = swap_value;
 	}
 }
 
@@ -502,16 +502,16 @@ set_order(short *order, int numthings)
  * VARARGS1
  */
 byte
-add_line(char *use, char *fmt, char *arg)
+add_line(char *use, char *format, char *arg)
 {
 	int x, y;
 	register byte retchar = ' ';
-	if (line_cnt == 0)
+	if (inventory_line_count == 0)
 	{
-		wdump();
+		save_screen();
 		clear();
 	}
-	if (line_cnt >= LINES - 1 || fmt == NULL)
+	if (inventory_line_count >= LINES - 1 || format == NULL)
 	{
 		move(LINES-1, 0);
 		if (*use)
@@ -519,25 +519,25 @@ add_line(char *use, char *fmt, char *arg)
 		else
 			addstr("-Press space to continue-");
 		do
-			retchar = readchar();
+			retchar = read_game_key();
 		while (retchar != ESCAPE && retchar != ' ' && (!is_lower(retchar)));
 		clear();
-		newpage = TRUE;
-		line_cnt = 0;
+		inventory_new_page = TRUE;
+		inventory_line_count = 0;
 	}
-	if (fmt != NULL && !(line_cnt == 0 && *fmt == '\0'))
+	if (format != NULL && !(inventory_line_count == 0 && *format == '\0'))
 	{
-		move(line_cnt, 0);
-		printw(fmt, arg);
+		move(inventory_line_count, 0);
+		printw(format, arg);
 		getxy(&x,&y);
 		/*
 		 * if the line wrapped but nothing was printed on this
 		 * line you might as well use it for the next item
 		 */
 		if (y!=0)
-			line_cnt = x + 1;
-		lastfmt = fmt;
-		lastarg = arg;
+			inventory_line_count = x + 1;
+		inventory_line_format = format;
+		inventory_line_argument = arg;
 	}
 	return(retchar);
 }
@@ -552,9 +552,9 @@ end_line(char *use)
 	register int retchar;
 
 	retchar = add_line(use, NULL, "");
-	wrestor();
-	line_cnt = 0;
-	newpage = FALSE;
+	restore_screen();
+	inventory_line_count = 0;
+	inventory_new_page = FALSE;
 	return(retchar);
 }
 
@@ -564,23 +564,23 @@ end_line(char *use)
  */
 static
 char *
-nothing(byte type)
+undiscovered_message(byte type)
 {
-	register char *sp, *tystr;
+	register char *output_cursor, *category_name;
 
-	sprintf(prbuf, "Haven't discovered anything");
+	sprintf(description_buffer, "Haven't discovered anything");
 	if (terse)
-		sprintf(prbuf,"Nothing");
-	sp = &prbuf[strlen(prbuf)];
+		sprintf(description_buffer,"Nothing");
+	output_cursor = &description_buffer[strlen(description_buffer)];
 	switch (type)
 	{
-		when POTION: tystr = "potion";
-		when SCROLL: tystr = "scroll";
-		when RING: tystr = "ring";
-		when STICK: tystr = "stick";
+		when POTION: category_name = "potion";
+		when SCROLL: category_name = "scroll";
+		when RING: category_name = "ring";
+		when STICK: category_name = "stick";
 		//@ not in original, avoid possibly uninitialized use of tystr
-		otherwise: tystr = "item";
+		otherwise: category_name = "item";
 	}
-	sprintf(sp, " about any %ss", tystr);
-	return prbuf;
+	sprintf(output_cursor, " about any %ss", category_name);
+	return description_buffer;
 }

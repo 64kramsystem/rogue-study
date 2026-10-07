@@ -10,20 +10,20 @@
 /*
  * Used to hold the new hero position
  */
-static coord nh;
+static Position next_player_position;
 
-static byte	be_trapped(coord *tc);
+static byte	trigger_trap(Position *trap_position);
 
 /*
  * do_run:
  *	Start the hero running
  */
 void
-do_run(byte ch)
+start_player_run(byte character)
 {
 	running = TRUE;
-	after = FALSE;
-	runch = ch;
+	turn_consumed = FALSE;
+	run_direction = character;
 }
 
 /*
@@ -32,33 +32,33 @@ do_run(byte ch)
  * consequences (fighting, picking up, etc.)
  */
 void
-do_move(dy, dx)
+move_player(dy, dx)
 	int dy, dx;
 {
-	register byte ch;
-	register int fl;
+	register byte character;
+	register int destination_flags;
 
-	firstmove = FALSE;
-	if (bailout) {
-		bailout = FALSE;
-		msg("the crack widens ... ");
-		descend("");
+	first_run_step = FALSE;
+	if (pending_trapdoor_fall) {
+		pending_trapdoor_fall = FALSE;
+		show_message("the crack widens ... ");
+		fall_to_next_level("");
 		return ;
 	}
-	if (no_move) {
-		no_move--;
-		msg("you are still stuck in the bear trap");
+	if (immobile_turns) {
+		immobile_turns--;
+		show_message("you are still stuck in the bear trap");
 		return;
 	}
 	/*
 	 * Do a confused move (maybe)
 	 */
-	if (on(player, ISHUH) && rnd(5) != 0)
-		rndmove(&player,&nh);
+	if (has_actor_flag(player, ACTOR_CONFUSED) && random_below(5) != 0)
+		random_move(&player,&next_player_position);
 	else {
 over:
-		nh.y = hero.y + dy;
-		nh.x = hero.x + dx;
+		next_player_position.y = player_position.y + dy;
+		next_player_position.x = player_position.x + dx;
 	}
 
 	/*
@@ -66,10 +66,10 @@ over:
 	 * diagonal move, and stop him if he did.
 	 * fudge it for 40/80 jll -- 2/7/84
 	 */
-	if (offmap(nh.y, nh.x))
+	if (outside_dungeon(next_player_position.y, next_player_position.x))
 		goto hit_bound;
-	if (!diag_ok(&hero, &nh)) {
-		after = FALSE;
+	if (!diagonal_move_allowed(&player_position, &next_player_position)) {
+		turn_consumed = FALSE;
 		running = FALSE;
 		return;
 	}
@@ -77,25 +77,25 @@ over:
 	 * If you are running and the move does
 	 * not get you anywhere stop running
 	 */
-	if (running && ce(hero, nh))
-		after = running = FALSE;
-	fl = flat(nh.y, nh.x);
-	ch = winat(nh.y, nh.x);
+	if (running && positions_equal(player_position, next_player_position))
+		turn_consumed = running = FALSE;
+	destination_flags = cell_flags_at(next_player_position.y, next_player_position.x);
+	character = visible_entity_at(next_player_position.y, next_player_position.x);
 	/*
 	 * When the hero is on the door do not allow him
 	 * to run until he enters the room all the way
 	 */
-	if ((chat(hero.y,hero.x) == DOOR) && (ch == FLOOR))
+	if ((terrain_at(player_position.y,player_position.x) == DOOR) && (character == FLOOR))
 		running = FALSE;
-	if (!(fl & F_REAL) && ch == FLOOR) {
-		chat(nh.y, nh.x) = ch = TRAP;
-		flat(nh.y, nh.x) |= F_REAL;
+	if (!(destination_flags & CELL_REVEALED) && character == FLOOR) {
+		terrain_at(next_player_position.y, next_player_position.x) = character = TRAP;
+		cell_flags_at(next_player_position.y, next_player_position.x) |= CELL_REVEALED;
 	}
-	else if (on(player, ISHELD) && ch != 'F') {
-		msg("you are being held");
+	else if (has_actor_flag(player, ACTOR_HELD) && character != 'F') {
+		show_message("you are being held");
 		return;
 	}
-	switch (ch) {
+	switch (character) {
 	case ' ':
 	case VWALL:
 	case HWALL:
@@ -104,85 +104,85 @@ over:
 	case LLWALL:
 	case LRWALL:
 hit_bound:
-		if (running && isgone(proom) && !on(player, ISBLIND)) {
-			register bool	b1, b2;
+		if (running && is_passage_room(player_room) && !has_actor_flag(player, ACTOR_BLIND)) {
+			register bool	can_turn_negative, can_turn_positive;
 
-			switch (runch)
+			switch (run_direction)
 			{
 			case 'h':
 			case 'l':
-				b1 = (hero.y > 1 &&
-					((flat(hero.y - 1, hero.x) & F_PASS) ||
-					  chat(hero.y - 1, hero.x) == DOOR));
-				b2 = (hero.y < maxrow - 1 &&
-					((flat(hero.y + 1, hero.x) & F_PASS) ||
-					  chat(hero.y + 1, hero.x) == DOOR));
-				if (!(b1 ^ b2))
+				can_turn_negative = (player_position.y > 1 &&
+					((cell_flags_at(player_position.y - 1, player_position.x) & CELL_PASSAGE) ||
+					  terrain_at(player_position.y - 1, player_position.x) == DOOR));
+				can_turn_positive = (player_position.y < dungeon_bottom_row - 1 &&
+					((cell_flags_at(player_position.y + 1, player_position.x) & CELL_PASSAGE) ||
+					  terrain_at(player_position.y + 1, player_position.x) == DOOR));
+				if (!(can_turn_negative ^ can_turn_positive))
 					break;
-				if (b1) {
-					runch = 'k';
+				if (can_turn_negative) {
+					run_direction = 'k';
 					dy = -1;
 				} else {
-					runch = 'j';
+					run_direction = 'j';
 					dy = 1;
 				}
 				dx = 0;
 				goto over;
 			case 'j':
 			case 'k':
-				b1 = (hero.x > 1 &&
-					((flat(hero.y, hero.x - 1) & F_PASS)
-					|| chat(hero.y, hero.x - 1) == DOOR));
-				b2 = (hero.x < COLS-2 &&
-					((flat(hero.y, hero.x + 1) & F_PASS)
-					|| chat(hero.y, hero.x + 1) == DOOR));
-				if (!(b1 ^ b2))
+				can_turn_negative = (player_position.x > 1 &&
+					((cell_flags_at(player_position.y, player_position.x - 1) & CELL_PASSAGE)
+					|| terrain_at(player_position.y, player_position.x - 1) == DOOR));
+				can_turn_positive = (player_position.x < COLS-2 &&
+					((cell_flags_at(player_position.y, player_position.x + 1) & CELL_PASSAGE)
+					|| terrain_at(player_position.y, player_position.x + 1) == DOOR));
+				if (!(can_turn_negative ^ can_turn_positive))
 					break;
-				if (b1) {
-					runch = 'h';
+				if (can_turn_negative) {
+					run_direction = 'h';
 					dx = -1;
 				} else {
-					runch = 'l';
+					run_direction = 'l';
 					dx = 1;
 				}
 				dy = 0;
 				goto over;
 			}
 		}
-		after = running = FALSE;
+		turn_consumed = running = FALSE;
 		break;
 	case DOOR:
 		running = FALSE;
-		if (flat(hero.y, hero.x) & F_PASS)
-			enter_room(&nh);
+		if (cell_flags_at(player_position.y, player_position.x) & CELL_PASSAGE)
+			enter_room(&next_player_position);
 		goto move_stuff;
 	case TRAP:
-		ch = be_trapped(&nh);
-		if (ch == T_DOOR || ch == T_TELEP)
+		character = trigger_trap(&next_player_position);
+		if (character == TRAP_TRAPDOOR || character == TRAP_TELEPORT)
 			return;
 		/* fallthrough */
 	case PASSAGE:
 		goto move_stuff;
 	case FLOOR:
-		if (!(fl & F_REAL))
-			be_trapped(&hero);
+		if (!(destination_flags & CELL_REVEALED))
+			trigger_trap(&player_position);
 		goto move_stuff;
 	default:
 		running = FALSE;
-		if (ismonster(ch) || moat(nh.y, nh.x))
-			fight(&nh, ch, cur_weapon, FALSE);
+		if (is_monster_symbol(character) || monster_at(next_player_position.y, next_player_position.x))
+			player_attack(&next_player_position, character, equipped_weapon, FALSE);
 		else {
 			running = FALSE;
-			if (ch != STAIRS)
-				take = ch;
+			if (character != STAIRS)
+				pickup_symbol = character;
 move_stuff:
-			mvaddch(hero.y, hero.x, chat(hero.y, hero.x));
-			if ((fl & F_PASS) && (chat(oldpos.y, oldpos.x) == DOOR
-					|| (flat(oldpos.y, oldpos.x) & F_MAZE)))
-				leave_room(&nh);
-			if ((fl & F_MAZE) && (flat(oldpos.y, oldpos.x) & F_MAZE) == 0)
-				enter_room(&nh);
-			bcopy(hero,nh);
+			mvaddch(player_position.y, player_position.x, terrain_at(player_position.y, player_position.x));
+			if ((destination_flags & CELL_PASSAGE) && (terrain_at(previous_player_position.y, previous_player_position.x) == DOOR
+					|| (cell_flags_at(previous_player_position.y, previous_player_position.x) & CELL_MAZE)))
+				leave_room(&next_player_position);
+			if ((destination_flags & CELL_MAZE) && (cell_flags_at(previous_player_position.y, previous_player_position.x) & CELL_MAZE) == 0)
+				enter_room(&next_player_position);
+			copy_value(player_position,next_player_position);
 		}
 		break;
 	}
@@ -194,28 +194,28 @@ move_stuff:
  *	that might move.
  */
 void
-door_open(rp)
-	struct room *rp;
+wake_room_monsters(room)
+	struct room *room;
 {
-	register int j, k;
-	register byte ch;
-	register THING *item;
+	register int y, x;
+	register byte character;
+	register Entity *monster;
 
-	if (!(rp->r_flags & ISGONE) && !on(player, ISBLIND))
-		for (j = rp->r_pos.y; j < rp->r_pos.y + rp->r_max.y; j++)
-			for (k = rp->r_pos.x; k < rp->r_pos.x + rp->r_max.x; k++) {
-				ch = winat(j, k);
+	if (!(room->flags & ROOM_ABSENT) && !has_actor_flag(player, ACTOR_BLIND))
+		for (y = room->origin.y; y < room->origin.y + room->size.y; y++)
+			for (x = room->origin.x; x < room->origin.x + room->size.x; x++) {
+				character = visible_entity_at(y, x);
 				/* move(j, k); Why do this,?????? */
-				if (ismonster(ch)) {
-					item = wake_monster(j, k);
+				if (is_monster_symbol(character)) {
+					monster = wake_monster(y, x);
 					//@ this sanity check was not in original
-					if (item == NULL)
+					if (monster == NULL)
 					{
 						continue;
 					}
-					if (item->t_oldch == ' ' && !(rp->r_flags & ISDARK)
-						&& !on(player, ISBLIND))
-							item->t_oldch = chat(j, k);
+					if (monster->actor_previous_tile == ' ' && !(room->flags & ROOM_DARK)
+						&& !has_actor_flag(player, ACTOR_BLIND))
+							monster->actor_previous_tile = terrain_at(y, x);
 				}
 			}
 }
@@ -226,52 +226,52 @@ door_open(rp)
  */
 static
 byte
-be_trapped(coord *tc)
+trigger_trap(Position *trap_position)
 {
-	register byte tr;
+	register byte trap_type;
 	register int index;
 
-	count = running = FALSE;
-	index = INDEX(tc->y, tc->x);
-	_level[index] = TRAP;
-	tr = _flags[index] & F_TMASK;
-	was_trapped = TRUE;
-	switch (tr) {
-	when T_DOOR:
-		descend("you fell into a trap!");
-	when T_BEAR:
-		no_move += BEARTIME;
-		msg("you are caught in a bear trap");
-	when T_SLEEP:
-		no_command += SLEEPTIME;
-		player.t_flags &= ~ISRUN;
-		msg("a %smist envelops you and you fall asleep",
-			noterse("strange white "));
-	when T_ARROW:
-		if (swing(pstats.s_lvl-1, pstats.s_arm, 1)) {
-			pstats.s_hpt -= roll(1, 6);
-			if (pstats.s_hpt <= 0) {
-				msg("an arrow killed you");
-				death('a');
+	command_repeat_count = running = FALSE;
+	index = map_index(trap_position->y, trap_position->x);
+	terrain_map[index] = TRAP;
+	trap_type = cell_flags[index] & TRAP_TYPE_MASK;
+	trap_display_state = TRUE;
+	switch (trap_type) {
+	when TRAP_TRAPDOOR:
+		fall_to_next_level("you fell into a trap!");
+	when TRAP_BEAR:
+		immobile_turns += BEARTIME;
+		show_message("you are caught in a bear trap");
+	when TRAP_SLEEP_GAS:
+		incapacitated_turns += SLEEPTIME;
+		player.actor_flags &= ~ACTOR_CHASING;
+		show_message("a %smist envelops you and you fall asleep",
+			verbose_text("strange white "));
+	when TRAP_ARROW:
+		if (attack_hits(player_stats.experience_level-1, player_stats.armor_class, 1)) {
+			player_stats.hit_points -= roll_dice(1, 6);
+			if (player_stats.hit_points <= 0) {
+				show_message("an arrow killed you");
+				show_death_screen('a');
 			} else
-				msg("oh no! An arrow shot you");
+				show_message("oh no! An arrow shot you");
 		}
 		else {
-			THING *arrow;
+			Entity *arrow;
 
-			if ((arrow = new_item()) != NULL) {
-				arrow->o_type = WEAPON;
-				arrow->o_which = ARROW;
+			if ((arrow = allocate_entity()) != NULL) {
+				arrow->item_category = WEAPON;
+				arrow->item_subtype = ARROW;
 				init_weapon(arrow, ARROW);
-				arrow->o_count = 1;
-				bcopy(arrow->o_pos,hero);
-				fall(arrow, FALSE);
+				arrow->item_quantity = 1;
+				copy_value(arrow->item_position,player_position);
+				drop_projectile(arrow, FALSE);
 			}
-			msg("an arrow shoots past you");
+			show_message("an arrow shoots past you");
 		}
-	when T_TELEP:
+	when TRAP_TELEPORT:
 		teleport();
-		mvaddch(tc->y, tc->x, TRAP); /* since the hero's leaving, look()
+		mvaddch(trap_position->y, trap_position->x, TRAP); /* since the hero's leaving, look()
 						won't put it on for us */
 		/*@
 		 * I guess this increment is used solely to signal look() at move.c
@@ -280,39 +280,39 @@ be_trapped(coord *tc)
 		 * real type that bool was typdef'd to in original code: unsigned char.
 		 * Either this or refactor the original detection for teleport traps.
 		 */
-		was_trapped++;
-	when T_DART:
-		if (swing(pstats.s_lvl+1, pstats.s_arm, 1)) {
-			pstats.s_hpt -= roll(1, 4);
-			if (pstats.s_hpt <= 0) {
-				msg("a poisoned dart killed you");
-				death('d');
+		trap_display_state++;
+	when TRAP_DART:
+		if (attack_hits(player_stats.experience_level+1, player_stats.armor_class, 1)) {
+			player_stats.hit_points -= roll_dice(1, 4);
+			if (player_stats.hit_points <= 0) {
+				show_message("a poisoned dart killed you");
+				show_death_screen('d');
 			}
-			if (!ISWEARING(R_SUSTSTR) && !save(VS_POISON))
-				chg_str(-1);
-			msg("a dart just hit you in the shoulder");
+			if (!wearing_ring(RING_SUSTAIN_STRENGTH) && !player_saving_throw(VS_POISON))
+				change_player_strength(-1);
+			show_message("a dart just hit you in the shoulder");
 		} else
-			msg("a dart whizzes by your ear and vanishes");
+			show_message("a dart whizzes by your ear and vanishes");
 		break;
 	}
-	flush_type();
-	return tr;
+	clear_macro_input();
+	return trap_type;
 }
 
 void
-descend(mesg)
-	char *mesg;
+fall_to_next_level(message_text)
+	char *message_text;
 {
-	level++;
-	if (*mesg == 0)
-		msg(" ");
-	new_level();
-	msg("");
-	msg(mesg);
-	if (!save(VS_LUCK)) {
-		msg("you are damaged by the fall");
-		if ((pstats.s_hpt -= roll(1,8)) <= 0)
-			death('f');
+	dungeon_level++;
+	if (*message_text == 0)
+		show_message(" ");
+	generate_level();
+	show_message("");
+	show_message(message_text);
+	if (!player_saving_throw(VS_LUCK)) {
+		show_message("you are damaged by the fall");
+		if ((player_stats.hit_points -= roll_dice(1,8)) <= 0)
+			show_death_screen('f');
 	}
 }
 
@@ -321,41 +321,41 @@ descend(mesg)
  *	Move in a random direction if the monster/person is confused
  */
 void
-rndmove(who,newmv)
-	THING *who;
-	coord *newmv;
+random_move(actor,destination)
+	Entity *actor;
+	Position *destination;
 {
 	register int x, y;
-	register byte ch;
-	register THING *obj;
+	register byte character;
+	register Entity *item;
 
-	y = newmv->y = who->t_pos.y + rnd(3) - 1;
-	x = newmv->x = who->t_pos.x + rnd(3) - 1;
+	y = destination->y = actor->actor_position.y + random_below(3) - 1;
+	x = destination->x = actor->actor_position.x + random_below(3) - 1;
 	/*
 	 * Now check to see if that's a legal move.  If not, don't move.
 	 * (I.e., bump into the wall or whatever)
 	 */
-	if (y == who->t_pos.y && x == who->t_pos.x)
+	if (y == actor->actor_position.y && x == actor->actor_position.x)
 		return;
-	if ((y < 1 || y >= maxrow) || (x < 0 || x >= COLS))
+	if ((y < 1 || y >= dungeon_bottom_row) || (x < 0 || x >= COLS))
 		goto bad;
-	else if (!diag_ok(&who->t_pos, newmv))
+	else if (!diagonal_move_allowed(&actor->actor_position, destination))
 		goto bad;
 	else {
-		ch = winat(y, x);
-		if (!step_ok(ch))
+		character = visible_entity_at(y, x);
+		if (!is_walkable_symbol(character))
 			goto bad;
-		if (ch == SCROLL) {
-			for (obj = lvl_obj; obj != NULL; obj = next(obj))
-				if (y == obj->o_pos.y && x == obj->o_pos.x)
+		if (character == SCROLL) {
+			for (item = level_items; item != NULL; item = next(item))
+				if (y == item->item_position.y && x == item->item_position.x)
 					break;
-			if (obj != NULL && obj->o_which == S_SCARE)
+			if (item != NULL && item->item_subtype == SCROLL_SCARE_MONSTER)
 				goto bad;
 		}
 	}
 	return;
 
 bad:
-	bcopy((*newmv),who->t_pos);
+	copy_value((*destination),actor->actor_position);
 	return;
 }

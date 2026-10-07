@@ -12,60 +12,60 @@
  *	Called when it has been decided that A slime should divide itself
  */
 
-static coord slimy;
+static Position slime_spawn_position;
 
-static bool	new_slime(THING *tp);
+static bool	new_slime(Entity *slime);
 
 void
-slime_split(tp)
-	THING *tp;
+slime_split(slime)
+	Entity *slime;
 {
-	register THING *nslime;
+	register Entity *offspring;
 
-	if (!new_slime(tp) || (nslime = new_item()) == NULL)
+	if (!new_slime(slime) || (offspring = allocate_entity()) == NULL)
 		return;
-	msg("The slime divides.  Ick!");
-	new_monster(nslime, 'S', &slimy);
-	if (cansee(slimy.y, slimy.x)) {
-		nslime->t_oldch = chat(slimy.y, slimy.x);
-		mvaddch(slimy.y, slimy.x, 'S');
+	show_message("The slime divides.  Ick!");
+	new_monster(offspring, 'S', &slime_spawn_position);
+	if (player_can_see_position(slime_spawn_position.y, slime_spawn_position.x)) {
+		offspring->actor_previous_tile = terrain_at(slime_spawn_position.y, slime_spawn_position.x);
+		mvaddch(slime_spawn_position.y, slime_spawn_position.x, 'S');
 	}
-	start_run(&slimy);
+	start_monster_chase(&slime_spawn_position);
 }
 
 static
 bool
-new_slime(tp)
-	THING *tp;
+new_slime(slime)
+	Entity *slime;
 {
-	register int y, x, ty, tx;
-	register bool ret;
-	THING *ntp;
-	coord sp;
+	register int y, x, origin_y, origin_x;
+	register bool found_space;
+	Entity *adjacent_monster;
+	Position spawn_position;
 
-	ret = FALSE;
-	tp->t_flags |= ISFLY;
-	if (!plop_monster((ty = tp->t_pos.y), (tx = tp->t_pos.x), &sp)) {
+	found_space = FALSE;
+	slime->actor_flags |= ACTOR_FLIES;
+	if (!find_monster_spawn_position((origin_y = slime->actor_position.y), (origin_x = slime->actor_position.x), &spawn_position)) {
 		/*
 		 * There were no open spaces next to this slime, look for other
 		 * slimes that might have open spaces next to them.
 		 */
-		for (y = ty -1; y <= ty+1; y++)
-			for (x = tx-1; x <= tx+1; x++)
-				if (winat(y, x) == 'S' && (ntp = moat(y, x))) {
-					if (ntp->t_flags & ISFLY)
+		for (y = origin_y -1; y <= origin_y+1; y++)
+			for (x = origin_x-1; x <= origin_x+1; x++)
+				if (visible_entity_at(y, x) == 'S' && (adjacent_monster = monster_at(y, x))) {
+					if (adjacent_monster->actor_flags & ACTOR_FLIES)
 						continue;				/* Already done this one */
-					if (new_slime(ntp)) {
-						y = ty+2;
-						x = tx +2;
+					if (new_slime(adjacent_monster)) {
+						y = origin_y+2;
+						x = origin_x +2;
 					}
 				}
 	} else {
-		ret = TRUE;
-		slimy = sp;
+		found_space = TRUE;
+		slime_spawn_position = spawn_position;
 	}
-	tp->t_flags &= ~ISFLY;
-	return ret;
+	slime->actor_flags &= ~ACTOR_FLIES;
+	return found_space;
 }
 
 /*@
@@ -80,26 +80,26 @@ new_slime(tp)
  * and 'appear' is now "strictly" boolean
  */
 bool
-plop_monster(r, c, cp)
-	int r, c;
-	coord *cp;
+find_monster_spawn_position(origin_y, origin_x, spawn_position)
+	int origin_y, origin_x;
+	Position *spawn_position;
 {
 	register int y, x, inv_odds = 0;
 	bool appear = FALSE;
-	byte ch;
+	byte character;
 
-	for (y = r-1; y <= r+1; y++)
-		for (x = c-1; x <= c+1; x++) {
+	for (y = origin_y-1; y <= origin_y+1; y++)
+		for (x = origin_x-1; x <= origin_x+1; x++) {
 			/*
 			 * Don't put a monster in top of the player.
 			 */
-			if ((y == hero.y && x == hero.x) || offmap(y,x))
+			if ((y == player_position.y && x == player_position.x) || outside_dungeon(y,x))
 				continue;
 			/*
 			 * Or anything else nasty
 			 */
-			if (step_ok(ch = winat(y, x))) {
-				if (ch == SCROLL && find_obj(y, x)->o_which == S_SCARE)
+			if (is_walkable_symbol(character = visible_entity_at(y, x))) {
+				if (character == SCROLL && item_at(y, x)->item_subtype == SCROLL_SCARE_MONSTER)
 					continue;
 				/*@
 				 * Get first available spot with 100% chance,
@@ -107,9 +107,9 @@ plop_monster(r, c, cp)
 				 * with decreasing 1-to-n odds (50%, 33%, 25%, 20%,...)
 				 */
 				appear = TRUE;
-				if (rnd(++inv_odds) == 0) {
-					cp->y = y;
-					cp->x = x;
+				if (random_below(++inv_odds) == 0) {
+					spawn_position->y = y;
+					spawn_position->x = x;
 				}
 			}
 		}

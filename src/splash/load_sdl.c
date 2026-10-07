@@ -8,47 +8,47 @@
 
 
 // A.K.A floor(log2(x)) or logb(x)
-int log2i(int x)
+int integer_log2(int value)
 {
-	int r = 0;
-	while (x >>= 1) r++;
-	return r;
+	int exponent = 0;
+	while (value >>= 1) exponent++;
+	return exponent;
 }
 
 
-void printerr(const char *fmt, ...)
+void print_error(const char *format, ...)
 {
-	char msg[1000];
+	char message_text[1000];
 
-	va_list argp;
-	va_start(argp, fmt);
-	vsnprintf(msg, sizeof(msg), fmt, argp);
-	va_end(argp);
+	va_list arguments;
+	va_start(arguments, format);
+	vsnprintf(message_text, sizeof(message_text), format, arguments);
+	va_end(arguments);
 
-	fprintf(stderr, "error: %s\n", msg);
+	fprintf(stderr, "error: %s\n", message_text);
 }
 
 
-void printwarn(const char *fmt, ...)
+void print_warning(const char *format, ...)
 {
-	char msg[1000];
+	char message_text[1000];
 
-	va_list argp;
-	va_start(argp, fmt);
-	vsnprintf(msg, sizeof(msg), fmt, argp);
-	va_end(argp);
+	va_list arguments;
+	va_start(arguments, format);
+	vsnprintf(message_text, sizeof(message_text), format, arguments);
+	va_end(arguments);
 
-	fprintf(stderr, "warning: %s\n", msg);
+	fprintf(stderr, "warning: %s\n", message_text);
 }
 
 
-void freaderror(FILE* file, const char* path, int size, const char* type)
+void report_picture_read_error(FILE* file, const char* path, int size, const char* type)
 {
 	if (feof(file))  // too small
-		printerr("invalid BSAVE %s, PIC must have %d bytes: %s",
+		print_error("invalid BSAVE %s, PIC must have %d bytes: %s",
 				type, size, path);
 	else
-		printerr("could not read file: %s\n", path);
+		print_error("could not read file: %s\n", path);
 	fclose(file);
 }
 
@@ -56,7 +56,7 @@ void freaderror(FILE* file, const char* path, int size, const char* type)
 // path: Path to rogue PIC splash image. Fallback to "./rogue.pic" if NULL.
 //       rogue's main() calls this using ROGUE_PIC environment variable,
 //       which is NULL if not set.
-int epyx_yeah(const char* path)
+int show_sdl_splash(const char* path)
 {
 	// Independent constants
 	const int CGA_WIDTH      = 320;  // Columns in graphics mode 4
@@ -73,7 +73,7 @@ int epyx_yeah(const char* path)
 
 	// Derived constants
 	const int CGA_NUM_COLORS = sizeof(CGA_COLORS) / sizeof(*CGA_COLORS);  // 4
-	const int CGA_BIT_DEPTH  = log2i(CGA_NUM_COLORS);  // 2 bits per color
+	const int CGA_BIT_DEPTH  = integer_log2(CGA_NUM_COLORS);  // 2 bits per color
 	const int CGA_PPB        = 8 / CGA_BIT_DEPTH;  // 4 pixels per Byte
 	const int CGA_DATA_SIZE  = CGA_WIDTH * CGA_HEIGHT / CGA_PPB;          // 16000
 	const int CGA_SIZE       = CGA_DATA_SIZE + CGA_FIELDS * CGA_PADDING;  // 16384
@@ -107,34 +107,34 @@ int epyx_yeah(const char* path)
 		path = PIC_PATH;
 
 	if ((file = fopen(path, "rb")) == NULL) {
-		printerr("%s: %s", strerror(errno), path);
+		print_error("%s: %s", strerror(errno), path);
 		return 0;
 	}
 
 	// Read and check file header
 	if (!fread(data, sizeof(BSAVE_HEADER), 1, file)) {
-		freaderror(file, path, BSAVE_SIZE, "header");
+		report_picture_read_error(file, path, BSAVE_SIZE, "header");
 		return 0;
 	}
 	if (memcmp(data, BSAVE_HEADER, sizeof(BSAVE_HEADER))) {
-		printwarn("invalid header, possibly not a valid PIC image in "
+		print_warning("invalid header, possibly not a valid PIC image in "
 				"BSAVE format: %s", path);
 	}
 
 	// Read file data
 	if (!fread(data, sizeof(data), 1, file)) {
-		freaderror(file, path, BSAVE_SIZE, "data");
+		report_picture_read_error(file, path, BSAVE_SIZE, "data");
 		return 0;
 	}
 
 	// Check extra data
 	if (fgetc(file) != EOF)
-		printwarn("file is larger than %d bytes, possibly not a valid "
+		print_warning("file is larger than %d bytes, possibly not a valid "
 				"PIC image in BSAVE format: %s", BSAVE_SIZE, path);
 	fclose(file);
 
 	if (strncmp(PIC_SIG, (char *)&data[SIG_OFFSET], (int)strlen(PIC_SIG)) != 0)
-		printwarn("invalid PIC signature at offset 0x%X, expected '%s' in: %s",
+		print_warning("invalid PIC signature at offset 0x%X, expected '%s' in: %s",
 				sizeof(BSAVE_HEADER) + SIG_OFFSET, PIC_SIG, path);
 
 	if (   SDL_Init(SDL_INIT_VIDEO) != 0
@@ -143,7 +143,7 @@ int epyx_yeah(const char* path)
 			SDL_WINDOW_FULLSCREEN_DESKTOP, &window, &renderer) != 0
 	) {
 		SDL_Quit();
-		printerr("could not initialize SDL: %s", SDL_GetError());
+		print_error("could not initialize SDL: %s", SDL_GetError());
 		return 0;
 	}
 	SDL_RenderSetLogicalSize(renderer, CGA_WIDTH, CGA_HEIGHT);
@@ -159,39 +159,39 @@ int epyx_yeah(const char* path)
 
 	// Decode the image into the renderer
 	// Could be done in fewer nested loops, but this is much easier to follow.
-	int i = 0, field, y, x, p;
-	unsigned char c, prevc = CGA_BG_COLOR;
+	int data_offset = 0, field, y, x, pixel_offset;
+	unsigned char color_index, previous_color_index = CGA_BG_COLOR;
 	// Field loop: 2 blocks of even and odd lines
-	for (field = 0; field < CGA_FIELDS; field++, i += CGA_PADDING) {
+	for (field = 0; field < CGA_FIELDS; field++, data_offset += CGA_PADDING) {
 		// Line (row) loop. Screen Y is (y + field)
 		for (y = 0; y < CGA_HEIGHT; y += CGA_FIELDS) {
 			// Byte (column) loop. Screen X is (x + p)
-			for (x = 0; x < CGA_WIDTH; x += CGA_PPB, i++) {
-				assert(i < CGA_SIZE);
+			for (x = 0; x < CGA_WIDTH; x += CGA_PPB, data_offset++) {
+				assert(data_offset < CGA_SIZE);
 				// Pixel loop. Each byte contains 4 pixels
-				for (p = 0; p < CGA_PPB; p++) {
+				for (pixel_offset = 0; pixel_offset < CGA_PPB; pixel_offset++) {
 					// "unpack" the pixels: (d >> 6, 4, 2, 0) & 0b00000011;
-					c = (data[i] >> ((CGA_PPB - p - 1) * CGA_BIT_DEPTH))
+					color_index = (data[data_offset] >> ((CGA_PPB - pixel_offset - 1) * CGA_BIT_DEPTH))
 							& (CGA_NUM_COLORS-1);
-					assert(c < CGA_NUM_COLORS);
+					assert(color_index < CGA_NUM_COLORS);
 					// Set color, if needed
-					if (c != prevc) {
+					if (color_index != previous_color_index) {
 						SDL_SetRenderDrawColor(
 							renderer,
-							CGA_COLORS[c][0],
-							CGA_COLORS[c][1],
-							CGA_COLORS[c][2],
+							CGA_COLORS[color_index][0],
+							CGA_COLORS[color_index][1],
+							CGA_COLORS[color_index][2],
 							SDL_ALPHA_OPAQUE
 						);
-						prevc = c;
+						previous_color_index = color_index;
 					}
 					// Draw!
-					SDL_RenderDrawPoint(renderer, x+p, y+field);
+					SDL_RenderDrawPoint(renderer, x+pixel_offset, y+field);
 				}
 			}
 		}
 	}
-	assert(i == CGA_SIZE);
+	assert(data_offset == CGA_SIZE);
 	SDL_RenderPresent(renderer);
 
 	// Wait for 5 minutes or until keyboard/mouse button press

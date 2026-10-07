@@ -7,8 +7,8 @@
 #include "rogue.h"
 #include "curses.h"
 
-THING *_things;
-int   *_t_alloc;
+Entity *entity_pool;
+int   *entity_slot_used;
 
 /*
  * init_player:
@@ -17,73 +17,73 @@ int   *_t_alloc;
 void
 init_player()
 {
-	register THING *obj;
-	bcopy(pstats,max_stats);
-	food_left = HUNGERTIME;
+	register Entity *item;
+	copy_value(player_stats,maximum_player_stats);
+	food_remaining = HUNGERTIME;
 	/*
 	 * initialize things
 	 */
-	setmem(_things,MAXITEMS*sizeof(THING),0);
-	setmem(_t_alloc,MAXITEMS*sizeof(int),0);
+	fill_bytes(entity_pool,MAXITEMS*sizeof(Entity),0);
+	fill_bytes(entity_slot_used,MAXITEMS*sizeof(int),0);
 	/*
 	 * Give the rogue his weaponry.  First a mace.
 	 */
-	obj = new_item();
-	obj->o_type = WEAPON;
-	obj->o_which = MACE;
-	init_weapon(obj, MACE);
-	obj->o_hplus = 1;
-	obj->o_dplus = 1;
-	obj->o_flags |= ISKNOW;
-	obj->o_count = 1;
-	obj->o_group = 0;
-	add_pack(obj, TRUE);
-	cur_weapon = obj;
+	item = allocate_entity();
+	item->item_category = WEAPON;
+	item->item_subtype = MACE;
+	init_weapon(item, MACE);
+	item->item_hit_bonus = 1;
+	item->item_damage_bonus = 1;
+	item->item_flags |= ITEM_IDENTIFIED;
+	item->item_quantity = 1;
+	item->item_stack_group = 0;
+	add_to_inventory(item, TRUE);
+	equipped_weapon = item;
 	/*
 	 * Now a +1 bow
 	 */
-	obj = new_item();
-	obj->o_type = WEAPON;
-	obj->o_which = BOW;
-	init_weapon(obj, BOW);
-	obj->o_hplus = 1;
-	obj->o_dplus = 0;
-	obj->o_count = 1;
-	obj->o_group = 0;
-	obj->o_flags |= ISKNOW;
-	add_pack(obj, TRUE);
+	item = allocate_entity();
+	item->item_category = WEAPON;
+	item->item_subtype = BOW;
+	init_weapon(item, BOW);
+	item->item_hit_bonus = 1;
+	item->item_damage_bonus = 0;
+	item->item_quantity = 1;
+	item->item_stack_group = 0;
+	item->item_flags |= ITEM_IDENTIFIED;
+	add_to_inventory(item, TRUE);
 	/*
 	 * Now some arrows
 	 */
-	obj = new_item();
-	obj->o_type = WEAPON;
-	obj->o_which = ARROW;
-	init_weapon(obj, ARROW);
-	obj->o_count = rnd(15) + 25;
-	obj->o_hplus = obj->o_dplus = 0;
-	obj->o_flags |= ISKNOW;
-	add_pack(obj, TRUE);
+	item = allocate_entity();
+	item->item_category = WEAPON;
+	item->item_subtype = ARROW;
+	init_weapon(item, ARROW);
+	item->item_quantity = random_below(15) + 25;
+	item->item_hit_bonus = item->item_damage_bonus = 0;
+	item->item_flags |= ITEM_IDENTIFIED;
+	add_to_inventory(item, TRUE);
 	/*
 	 * And his suit of armor
 	 */
-	obj = new_item();
-	obj->o_type = ARMOR;
-	obj->o_which = RING_MAIL;
-	obj->o_ac = a_class[RING_MAIL] - 1;
-	obj->o_flags |= ISKNOW;
-	obj->o_count = 1;
-	obj->o_group = 0;
-	cur_armor = obj;
-	add_pack(obj, TRUE);
+	item = allocate_entity();
+	item->item_category = ARMOR;
+	item->item_subtype = RING_MAIL;
+	item->item_modifier = armor_classes[RING_MAIL] - 1;
+	item->item_flags |= ITEM_IDENTIFIED;
+	item->item_quantity = 1;
+	item->item_stack_group = 0;
+	equipped_armor = item;
+	add_to_inventory(item, TRUE);
 	/*
 	 * Give him some food too
 	 */
-	obj = new_item();
-	obj->o_type = FOOD;
-	obj->o_count = 1;
-	obj->o_which = 0;
-	obj->o_group = 0;
-	add_pack(obj, TRUE);
+	item = allocate_entity();
+	item->item_category = FOOD;
+	item->item_quantity = 1;
+	item->item_subtype = 0;
+	item->item_stack_group = 0;
+	add_to_inventory(item, TRUE);
 }
 
 /*
@@ -91,7 +91,7 @@ init_player()
  * potions and scrolls
  */
 
-static char *rainbow[] = {
+static char *potion_color_choices[] = {
 	"amber",
 	"aquamarine",
 	"black",
@@ -121,17 +121,17 @@ static char *rainbow[] = {
 	"yellow"
 };
 
-#define NCOLORS (sizeof rainbow / sizeof (char *))
+#define NCOLORS (sizeof potion_color_choices / sizeof (char *))
 
-static char *c_set = "bcdfghjklmnpqrstvwxyz";
-static char *v_set = "aeiou";
+static char *consonants = "bcdfghjklmnpqrstvwxyz";
+static char *vowels = "aeiou";
 
 typedef struct {
-	char	*st_name;
-	int		st_value;
-} STONE;
+	char	*name;
+	int		value;
+} Gemstone;
 
-static STONE stones[] = {
+static Gemstone stones[] = {
 	{ "agate",		 25},
 	{ "alexandrite",	 40},
 	{ "amethyst",	 50},
@@ -160,9 +160,9 @@ static STONE stones[] = {
 	{ "zircon",	 	 80}
 };
 
-#define NSTONES (sizeof stones / sizeof (STONE))
+#define NSTONES (sizeof stones / sizeof (Gemstone))
 
-static char *wood[] = {
+static char *wooden_wand_materials[] = {
 	"avocado wood",
 	"balsa",
 	"bamboo",
@@ -198,9 +198,9 @@ static char *wood[] = {
 	"zebrawood"
 };
 
-#define NWOOD (sizeof wood / sizeof (char *))
+#define NWOOD (sizeof wooden_wand_materials / sizeof (char *))
 
-static char *metal[] = {
+static char *metal_wand_materials[] = {
 	"aluminum",
 	"beryllium",
 	"bone",
@@ -225,19 +225,19 @@ static char *metal[] = {
 	"zinc"
 };
 
-#define NMETAL (sizeof metal / sizeof (char *))
+#define NMETAL (sizeof metal_wand_materials / sizeof (char *))
 
 /*
  * init_things
  *	Initialize the probabilities for types of things
  */
 void
-init_things()
+initialize_item_probabilities()
 {
-	register struct magic_item *mp;
+	register struct item_definition *definition;
 
-	for (mp = &things[1]; mp <= &things[NUMTHINGS-1]; mp++)
-		mp->mi_prob += (mp-1)->mi_prob;
+	for (definition = &item_category_probabilities[1]; definition <= &item_category_probabilities[NUMTHINGS-1]; definition++)
+		definition->probability += (definition-1)->probability;
 }
 
 /*
@@ -245,7 +245,7 @@ init_things()
  *	Initialize the potion color scheme for this time
  */
 void
-init_colors()
+initialize_potion_colors()
 {
 	unsigned int i, j;
 	bool used[NCOLORS];
@@ -255,14 +255,14 @@ init_colors()
 	for (i = 0; i < MAXPOTIONS; i++)
 	{
 		do
-			j = rnd(NCOLORS);
+			j = random_below(NCOLORS);
 		while (used[j]);
 		used[j] = TRUE;
-		p_colors[i] = rainbow[j];
-		p_know[i] = FALSE;
-		p_guess[i] = (char *)&_guesses[iguess++];
+		potion_colors[i] = potion_color_choices[j];
+		potion_identified[i] = FALSE;
+		potion_labels[i] = (char *)&item_label_storage[next_item_label++];
 		if (i > 0)
-			p_magic[i].mi_prob += p_magic[i-1].mi_prob;
+			potion_definitions[i].probability += potion_definitions[i-1].probability;
 	}
 }
 
@@ -271,42 +271,42 @@ init_colors()
  *	Generate the names of the various scrolls
  */
 void
-init_names()
+initialize_scroll_titles()
 {
-	 int nsyl;
-	 register char *cp, *sp;
-	 int i, nwords;
+	 int syllable_count;
+	 register char *title_cursor, *syllable;
+	 int i, word_count;
 
 	for (i = 0; i < MAXSCROLLS; i++)
 	{
-	cp = prbuf;
-	nwords = rnd(terse?3:4) + 2;
-	while (nwords--)
+	title_cursor = description_buffer;
+	word_count = random_below(terse?3:4) + 2;
+	while (word_count--)
 	{
-		nsyl = rnd(2) + 1;
-		while (nsyl--)
+		syllable_count = random_below(2) + 1;
+		while (syllable_count--)
 		{
-		sp = getsyl();
-		if (&cp[strlen(sp)] > &prbuf[MAXNAME-1])
+		syllable = random_syllable();
+		if (&title_cursor[strlen(syllable)] > &description_buffer[MAXNAME-1])
 		{
-			nwords = 0;
+			word_count = 0;
 			break;
 		}
-		while (*sp)
-			*cp++ = *sp++;
+		while (*syllable)
+			*title_cursor++ = *syllable++;
 		}
-		*cp++ = ' ';
+		*title_cursor++ = ' ';
 	}
-	*--cp = '\0';
+	*--title_cursor = '\0';
 	/*
 	 * I'm tired of thinking about this one so just in case .....
 	 */
-	prbuf[MAXNAME] = 0;
-	s_know[i] = FALSE;
-	s_guess[i] = (char *)&_guesses[iguess++];
-	strcpy((char *)(&s_names[i]), prbuf);
+	description_buffer[MAXNAME] = 0;
+	scroll_identified[i] = FALSE;
+	scroll_labels[i] = (char *)&item_label_storage[next_item_label++];
+	strcpy((char *)(&scroll_titles[i]), description_buffer);
 	if (i > 0)
-		s_magic[i].mi_prob += s_magic[i-1].mi_prob;
+		scroll_definitions[i].probability += scroll_definitions[i-1].probability;
 	}
 }
 
@@ -315,15 +315,15 @@ init_names()
  *   -- generate a random sylable
  */
 char*
-getsyl()
+random_syllable()
 {
-	static char _tsyl[4];
+	static char syllable[4];
 
-	_tsyl[3] = 0;
-	_tsyl[2] = rchr(c_set);
-	_tsyl[1] = rchr(v_set);
-	_tsyl[0] = rchr(c_set);
-	return (_tsyl);
+	syllable[3] = 0;
+	syllable[2] = random_character(consonants);
+	syllable[1] = random_character(vowels);
+	syllable[0] = random_character(consonants);
+	return (syllable);
 }
 
 /*
@@ -331,10 +331,10 @@ getsyl()
  *    return random character in given string
  */
 char
-rchr(string)
+random_character(string)
 	char *string;
 {
-	return(string[rnd(strlen(string))]);
+	return(string[random_below(strlen(string))]);
 }
 
 /*
@@ -342,7 +342,7 @@ rchr(string)
  *	Initialize the ring stone setting scheme for this time
  */
 void
-init_stones()
+initialize_ring_gemstones()
 {
 	unsigned int i, j;
 	bool used[NSTONES];
@@ -352,15 +352,15 @@ init_stones()
 	for (i = 0; i < MAXRINGS; i++)
 	{
 		do
-			j = rnd(NSTONES);
+			j = random_below(NSTONES);
 		while (used[j]);
 		used[j] = TRUE;
-		r_stones[i] = stones[j].st_name;
-		r_know[i] = FALSE;
-		r_guess[i] = (char *)&_guesses[iguess++];
+		ring_gemstones[i] = stones[j].name;
+		ring_identified[i] = FALSE;
+		ring_labels[i] = (char *)&item_label_storage[next_item_label++];
 		if (i > 0)
-			r_magic[i].mi_prob += r_magic[i-1].mi_prob;
-		r_magic[i].mi_worth += stones[j].st_value;
+			ring_definitions[i].probability += ring_definitions[i-1].probability;
+		ring_definitions[i].value += stones[j].value;
 	}
 }
 
@@ -369,10 +369,10 @@ init_stones()
  *	Initialize the construction materials for wands and staffs
  */
 void
-init_materials()
+initialize_wand_materials()
 {
 	unsigned int i, j;
-	register char *str;
+	register char *text;
 	bool metused[NMETAL], woodused[NWOOD];
 
 	for (i = 0; i < NWOOD; i++)
@@ -382,44 +382,44 @@ init_materials()
 	for (i = 0; i < MAXSTICKS; i++)
 	{
 		for (;;)
-			if (rnd(2) == 0)
+			if (random_below(2) == 0)
 			{
-				j = rnd(NMETAL);
+				j = random_below(NMETAL);
 				if (!metused[j])
 				{
-					ws_type[i] = "wand";
-					str = metal[j];
+					wand_kinds[i] = "wand";
+					text = metal_wand_materials[j];
 					metused[j] = TRUE;
 					break;
 				}
 			}
 			else
 			{
-				j = rnd(NWOOD);
+				j = random_below(NWOOD);
 				if (!woodused[j])
 				{
-					ws_type[i] = "staff";
-					str = wood[j];
+					wand_kinds[i] = "staff";
+					text = wooden_wand_materials[j];
 					woodused[j] = TRUE;
 					break;
 				}
 			}
-		ws_made[i] = str;
-		ws_know[i] = FALSE;
-		ws_guess[i] = (char *)&_guesses[iguess++];
+		wand_materials[i] = text;
+		wand_identified[i] = FALSE;
+		wand_labels[i] = (char *)&item_label_storage[next_item_label++];
 		if (i > 0)
-			ws_magic[i].mi_prob += ws_magic[i-1].mi_prob;
+			wand_definitions[i].probability += wand_definitions[i-1].probability;
 	}
 }
 
 /*
  * Declarations for allocated things
  */
-long *e_levels;		/* Pointer to array of experience level */
-char *tbuf;			/* Temp buffer used in fighting */
-char *msgbuf;		/* Message buffer for msg() */
-char *prbuf;		/* Printing buffer used everywhere */
-char *ring_buf;		/* Buffer used by ring code */
+long *experience_thresholds;		/* Pointer to array of experience level */
+char *combat_name_buffer;			/* Temp buffer used in fighting */
+char *message_buffer;		/* Message buffer for msg() */
+char *description_buffer;		/* Printing buffer used everywhere */
+char *ring_bonus_buffer;		/* Buffer used by ring code */
 //@ Deprecated:
 //@ char *end_mem;	/* Pointer to end of memory */
 
@@ -427,17 +427,17 @@ char *ring_buf;		/* Buffer used by ring code */
 /*
  *  Declarations for data space that must be saved and restored exaxtly
  */
-byte *_level;
-byte *_flags;
+byte *terrain_map;
+byte *cell_flags;
 
 /*
  * init_ds()
  *   Allocate things data space
  */
 void
-init_ds(void)
+allocate_game_state(void)
 {
-	register long *ep;
+	register long *threshold;
 
 	/*@
 	 * Do not change the relation between the allocated pointer and its
@@ -448,33 +448,33 @@ init_ds(void)
 	 */
 
 	//@ data that is saved to and restored from saved game files:
-	_flags = (byte *) newmem((MAXLINES-3)*MAXCOLS);
-	_level = (byte *) newmem((MAXLINES-3)*MAXCOLS);
-	_things = (THING *)newmem(sizeof(THING) * MAXITEMS);
-	_t_alloc = (int *)newmem(MAXITEMS*sizeof(int));
+	cell_flags = (byte *) allocate_memory((MAXLINES-3)*MAXCOLS);
+	terrain_map = (byte *) allocate_memory((MAXLINES-3)*MAXCOLS);
+	entity_pool = (Entity *)allocate_memory(sizeof(Entity) * MAXITEMS);
+	entity_slot_used = (int *)allocate_memory(MAXITEMS*sizeof(int));
 
 	//@ data discarded and re-created on new and restored games:
-	tbuf = newmem(MAXSTR);
-	msgbuf = newmem(BUFSIZE);
-	prbuf = newmem(MAXSTR);
-	ring_buf = newmem(6);
-	e_levels = (long *)newmem(20 * sizeof (long));
-	for (ep = e_levels+1, *e_levels = 10L; ep < e_levels + 19; ep++)
-		*ep = *(ep-1) << 1;
-	*ep = 0L;
+	combat_name_buffer = allocate_memory(MAXSTR);
+	message_buffer = allocate_memory(BUFSIZE);
+	description_buffer = allocate_memory(MAXSTR);
+	ring_bonus_buffer = allocate_memory(6);
+	experience_thresholds = (long *)allocate_memory(20 * sizeof (long));
+	for (threshold = experience_thresholds+1, *experience_thresholds = 10L; threshold < experience_thresholds + 19; threshold++)
+		*threshold = *(threshold-1) << 1;
+	*threshold = 0L;
 }
 
 
 void
-free_ds()
+free_game_state()
 {
-	free(_flags);
-	free(_level);
-	free(_things);
-	free(_t_alloc);
-	free(tbuf);
-	free(msgbuf);
-	free(prbuf);
-	free(ring_buf);
-	free(e_levels);
+	free(cell_flags);
+	free(terrain_map);
+	free(entity_pool);
+	free(entity_slot_used);
+	free(combat_name_buffer);
+	free(message_buffer);
+	free(description_buffer);
+	free(ring_bonus_buffer);
+	free(experience_thresholds);
 }

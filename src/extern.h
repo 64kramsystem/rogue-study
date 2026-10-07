@@ -56,9 +56,9 @@
 
 //@ str{len,cat,cpy,cmp,chr}() and possibly others
 #include <string.h>
-#define bcopy(dest,source)	memmove(&(dest),&(source),sizeof(dest))
-#define stpchr	strchr
-#define setmem(dest,length,ch)	memset(dest,ch,length)
+#define copy_value(dest,source)	memmove(&(dest),&(source),sizeof(dest))
+#define strchr	strchr
+#define fill_bytes(dest,length,ch)	memset(dest,ch,length)
 
 //@ sprintf(), f{open,read,seek,write,close}(), remove(), putchar()
 //@ popen(), fgets(), pclose()
@@ -66,7 +66,7 @@
 
 //@ exit(), atoi(), NULL, EXIT_*, malloc(), free(), abs(), setenv(), getenv()
 #include <stdlib.h>
-#define srand	md_srand	//@ use internal seed generator
+#define random_seed_from_clock	random_seed_from_clock	//@ use internal seed generator
 
 //@ errno, originally in begin.asm
 #include <errno.h>
@@ -77,7 +77,7 @@
 
 //@ time(), nanosleep()
 #include <time.h>
-#define clock	md_clock
+#define update_protection_state	update_protection_state
 
 //@ vsprintf()
 #include <stdarg.h>
@@ -119,7 +119,7 @@
 #define FALSE	0
 #endif
 
-#define msleep(ms)	md_nanosleep(1000000L * ms)
+#define msleep(ms)	sleep_nanoseconds(1000000L * ms)
 
 #ifdef __GNUC__
 //@ macro for dummy arguments in stub functions
@@ -133,7 +133,7 @@
  * Simplified version of <time.h> struct tm, to wrap and abstract it,
  * so local time source is opaque and easily replaceable.
  */
-struct md_tm {
+struct local_time {
 	int second;		/* Seconds	[0-60] (1 leap second) */
 	int minute;		/* Minutes	[0-59] */
 	int hour;		/* Hours	[0-23] */
@@ -141,10 +141,10 @@ struct md_tm {
 	int month;		/* Month	[0-11] */
 	int year;		/* Year */
 };
-typedef struct md_tm TM;
+typedef struct local_time LocalTime;
 
-typedef uintptr_t	intptr;  //@ size of a real pointer
-typedef uint16_t	dosptr;  //@ size of a pointer in DOS, as Rogue relies on
+typedef uintptr_t	PointerBits;  //@ size of a real pointer
+typedef uint16_t	DosOffset;  //@ size of a pointer in DOS, as Rogue relies on
 /*
  *  MANX C compiler funnies
  *  @ moved from rogue.h
@@ -156,40 +156,40 @@ typedef unsigned char byte;
  * Function types
  */
 //@ mach_dep.c originals
-int 	md_srand(), bdos(), swint(), sysint();
-void	setup(), flush_type(), credits(), one_tick();
-char	*newmem();
-byte	readchar();
-bool	set_ctrlb();
+int 	random_seed_from_clock(), dos_service(), call_dos_interrupt(), simulate_dos_interrupt();
+void	setup_game_io(), clear_macro_input(), show_credits(), protection_tick();
+char	*allocate_memory();
+byte	read_game_key();
+bool	set_dos_break_check();
 #ifdef ROGUE_DOS_CLOCK
-void	clock_on(void);
-void	no_clock(void);
+void	install_dos_timer_hook(void);
+void	restore_dos_timer_hook(void);
 #endif
 
 //@ new functions
-byte	swap_bits(byte data, unsigned i, unsigned j, unsigned width);
-int 	md_keyboard_leds(void);
-long	md_time(void);
-TM  	*md_localtime(void);
-void	md_nanosleep(long nanoseconds);
+byte	swap_bits(byte data, unsigned first_bit, unsigned second_bit, unsigned width);
+int 	keyboard_lock_flags(void);
+long	epoch_seconds(void);
+LocalTime  	*current_local_time(void);
+void	sleep_nanoseconds(long nanoseconds);
 
 //@ dos.asm
-int 	csum();
-byte 	peekb();
-void	pokeb();
-void	out();
-byte	in();
-void	dmaout();
-void	dmain();
-void	_halt();
-void	md_clock();
-void	COFF();
+int 	code_checksum();
+byte 	dos_read_byte();
+void	dos_write_byte();
+void	dos_write_port();
+byte	dos_read_port();
+void	dos_write_memory();
+void	dos_read_memory();
+void	halt_game();
+void	update_protection_state();
+void	install_dos_break_handler();
 
 //@ moved from main.c
-void	fatal(const char *msg, ...);
+void	fatal(const char *message_text, ...);
 
 //@ moved from croot.c
-void	md_exit(int status);
+void	exit_game(int update_status_line);
 
 
 /*@
@@ -199,10 +199,10 @@ void	md_exit(int status);
 extern unsigned int tick;  //@ from dos.asm
 #endif
 #ifdef ROGUE_DOS_CURSES
-extern char do_force;
+extern char skip_retrace_check;
 #endif
-extern int bwflag;  //@ from main.c, originally declared in rogue.h
-extern struct sw_regs *regs; //@ from main.c, originally declared in swint.h
+extern int monochrome_requested;  //@ from main.c, originally declared in rogue.h
+extern struct dos_registers *dos_regs; //@ from main.c, originally declared in swint.h
 #ifdef ROGUE_DEBUG
 extern bool print_int_calls;
 #endif

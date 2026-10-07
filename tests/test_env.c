@@ -5,13 +5,13 @@
 static jmp_buf error;
 static bool expect_error;
 
-void one_tick(void) {}
+void protection_tick(void) {}
 
-void fatal(const char *fmt, ...)
+void fatal(const char *format, ...)
 {
-	(void)fmt;
+	(void)format;
 	assert(expect_error);
-	fclose(file);
+	fclose(options_file);
 	longjmp(error, 1);
 }
 
@@ -21,27 +21,27 @@ static void parse(const char *text)
 	assert(input);
 	fputs(text, input);
 	fclose(input);
-	assert(setenv_from_file("rogue.opt"));
+	assert(load_options_file("rogue.opt"));
 }
 
 int main(void)
 {
-	assert(!setenv_from_file("missing.opt"));
+	assert(!load_options_file("missing.opt"));
 	parse("# comment\r\nNAME = Alice\r\nfruit - slime   mold\r\nMENU = OFF\nSCREEN = BW FAST");
-	assert(strcmp(whoami, "Alice") == 0);
-	assert(strcmp(fruit, "slime mold") == 0);
-	assert(strcmp(s_menu, "off") == 0);
-	assert(strcmp(s_screen, "bw fast") == 0);
+	assert(strcmp(player_name, "Alice") == 0);
+	assert(strcmp(favorite_fruit, "slime mold") == 0);
+	assert(strcmp(menu_option, "off") == 0);
+	assert(strcmp(screen_option, "bw fast") == 0);
 
 	parse("name=\nfruit=pear\nmacro=   \nmenu=on\n");
-	assert(*whoami == 0 && *macro == 0);
-	assert(strcmp(fruit, "pear") == 0);
-	assert(strcmp(s_menu, "on") == 0);
+	assert(*player_name == 0 && *keyboard_macro == 0);
+	assert(strcmp(favorite_fruit, "pear") == 0);
+	assert(strcmp(menu_option, "on") == 0);
 	parse("macro=");
-	assert(*macro == 0);
+	assert(*keyboard_macro == 0);
 	parse("# comment without newline");
 	parse("name=Bob\x1a");
-	assert(strcmp(whoami, "Bob") == 0);
+	assert(strcmp(player_name, "Bob") == 0);
 
 	/* Exercise the former end-of-buffer writes, including the exact boundaries. */
 	for (size_t length = 1; length <= 4096; length++) {
@@ -54,9 +54,9 @@ int main(void)
 			fputc('h', input);
 		fputs("\nname=Alice\n", input);
 		fclose(input);
-		assert(setenv_from_file("rogue.opt"));
-		assert(strlen(macro) == (length < 40 ? length : 40));
-		assert(strcmp(whoami, "Alice") == 0);
+		assert(load_options_file("rogue.opt"));
+		assert(strlen(keyboard_macro) == (length < 40 ? length : 40));
+		assert(strcmp(player_name, "Alice") == 0);
 	}
 
 	expect_error = TRUE;

@@ -35,12 +35,12 @@ typedef uint16_t	chtype;  // character with attributes
  * Function prototypes
  * Some are unused
  */
-char	*sav_win(void);
-void	res_win(void);
-void	vbox(byte box[BX_SIZE], int ul_r, int ul_c, int lr_r, int lr_c);
+char	*get_saved_screen(void);
+void	release_saved_screen(void);
+void	draw_custom_box(byte border_characters[BX_SIZE], int top, int left, int bottom, int right);
 #ifdef ROGUE_DOS_CURSES
 void	real_rc(int pn, int *rp, int *cp);
-void	error(int mline, char *msg, int a1, int a2, int a3, int a4, int a5);
+void	error(int mline, char *show_message, int a1, int a2, int a3, int a4, int a5);
 void	set_cursor(void);
 void	scroll_up(int start_row, int end_row, int nlines);
 void	scroll_dn(int start_row, int end_row, int nlines);
@@ -51,7 +51,7 @@ void	fixup(void);
 void	putchr(byte ch);
 
 //@ originally in dos.asm
-void	wsetmem(void *buffer, int count, chtype attrchar);
+void	wsetmem(void *buffer, int command_repeat_count, chtype attrchar);
 #endif  // ROGUE_DOS_CURSES
 
 /*@
@@ -95,7 +95,7 @@ void	wsetmem(void *buffer, int count, chtype attrchar);
 #define A_DOS_BW_STANDOUT A_DOS_STANDOUT | A_DOS_BRIGHT
 
 #ifndef ROGUE_DOS_CURSES
-#define PAIR_INDEX(fg, bg)	(bg * colors + fg + 1)
+#define PAIR_INDEX(fg, bg)	(bg * screen_color_count + fg + 1)
 #define COLOR_PAIR_N(fg, bg)	COLOR_PAIR(PAIR_INDEX(fg, bg))
 
 /*
@@ -114,52 +114,52 @@ void	wsetmem(void *buffer, int count, chtype attrchar);
 #define CGA_GREEN(c)	(CGA_COMP(c, 2) / ((c) == 3 ? 2 : 1))
 #define CGA_BLUE(c)	 CGA_COMP(c, 4)
 
-#define ALENGTH(arr)	(sizeof (arr) / sizeof (*arr))
-#define ASIZE(arr)	(arr + ALENGTH(arr))
+#define ARRAY_LENGTH(arr)	(sizeof (arr) / sizeof (*arr))
+#define ARRAY_END(arr)	(arr + ARRAY_LENGTH(arr))
 
 #define HORIZONTAL TRUE
 #define VERTICAL   FALSE
 
-#define cur_hline(chd, length)	cur_line(chd, length, HORIZONTAL)
-#define cur_vline(chd, length)	cur_line(chd, length, VERTICAL)
-#define cur_mvhline(y,x,c,n)	(cur_move(y,x) == ERR ? ERR : cur_hline(c, n))
-#define cur_mvvline(y,x,c,n)	(cur_move(y,x) == ERR ? ERR : cur_vline(c, n))
+#define screen_draw_horizontal_line(chd, length)	screen_draw_line(chd, length, HORIZONTAL)
+#define screen_draw_vertical_line(chd, length)	screen_draw_line(chd, length, VERTICAL)
+#define screen_draw_horizontal_line_at(y,x,c,n)	(screen_move(y,x) == ERR ? ERR : screen_draw_horizontal_line(c, n))
+#define screen_draw_vertical_line_at(y,x,c,n)	(screen_move(y,x) == ERR ? ERR : screen_draw_vertical_line(c, n))
 
 #ifdef ROGUE_WIDECHAR
-#define cur_mvaddchnstr	mvadd_wchnstr
-#define cur_mvinchnstr	mvin_wchnstr
+#define curses_restore_cells	mvadd_wchnstr
+#define curses_read_cells	mvin_wchnstr
 #else
-#define cur_mvaddchnstr	mvaddchnstr
-#define cur_mvinchnstr	mvinchnstr
+#define curses_restore_cells	mvaddchnstr
+#define curses_read_cells	mvinchnstr
 #endif  // ROGUE_WIDECHAR
 
 #define TTY_ESC "\033"
 #define TTY_CSI TTY_ESC "["
 #define TTY_SS3 TTY_ESC "O"
 
-struct ttykeys {
+struct terminal_key_sequence {
 	char *def;
 	int dest;
 };
-typedef struct ttykeys TTYSEQ;
+typedef struct terminal_key_sequence TerminalKeySequence;
 
-struct charcode {
+struct character_mapping {
 	byte ascii;
 	wchar_t *unicode;
 	byte dos;
 };
-typedef struct charcode CCODE;
+typedef struct character_mapping CharacterMapping;
 
 #ifdef ROGUE_WIDECHAR
-cchar_t *unicode_from_dos(byte chd, byte dos_attr, CCODE *mapping);
-void	attrw_from_dos(byte dos_attr, attr_t *attrs, short *color_pair);
+cchar_t *unicode_from_dos(byte dos_character, byte dos_attr, CharacterMapping *mapping);
+void	wide_attributes_from_dos(byte dos_attr, attr_t *attrs, short *color_pair);
 #endif  // ROGUE_WIDECHAR
 void	define_keys(void);
-byte	ascii_from_dos(byte chd, CCODE *mapping);
-CCODE	*charcode_from_dos(byte chd, CCODE *mapping);
-short	color_from_dos(byte dos_attr, bool fg);
-chtype	attr_from_dos(byte dos_attr);
+byte	ascii_from_dos(byte dos_character, CharacterMapping *mapping);
+CharacterMapping	*charcode_from_dos(byte dos_character, CharacterMapping *mapping);
+short	color_from_dos(byte dos_attr, bool foreground);
+chtype	curses_attributes_from_dos(byte dos_attr);
 void	init_curses_colors(void);
 void	resize_screen();
-int	cur_line(byte chd, int length, bool orientation);
+int	screen_draw_line(byte dos_character, int length, bool orientation);
 #endif  // not ROGUE_DOS_CURSES
