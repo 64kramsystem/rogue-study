@@ -110,8 +110,11 @@
 #ifdef __GNUC__
 //@ macro for dummy arguments in stub functions
 #define UNUSED(arg) __attribute__((unused))arg
+#define PRINTF_FORMAT(format_index, first_argument) \
+	__attribute__((format(printf, format_index, first_argument)))
 #else
 #define UNUSED(arg) arg
+#define PRINTF_FORMAT(format_index, first_argument)
 #endif
 
 
@@ -172,7 +175,7 @@ void	update_protection_state();
 void	install_dos_break_handler();
 
 //@ moved from main.c
-void	fatal(const char *message_text, ...);
+void	fatal(const char *message_text, ...) PRINTF_FORMAT(1, 2);
 
 //@ moved from croot.c
 void	exit_game(int update_status_line);

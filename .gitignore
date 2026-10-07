@@ -8,6 +8,7 @@ src/splash/splash
 tests/test_env
 tests/test_scores
 tests/test_turns
+tests/test_messages
 refdoc/c094.pdf
 refdoc/susv4-2018.tar.bz2
 *.sav

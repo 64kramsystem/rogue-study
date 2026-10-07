@@ -647,10 +647,10 @@ char	random_character(char *string);
 
 //@ io.c
 void	message_by_verbosity(const char *tfmt, const char *format, ...);
-void	show_message(const char *format, ...);
-void	show_message_v(const char *format, va_list arguments);
-void	append_message(const char *format, ...);
-void	append_message_v(const char *format, va_list arguments);
+void	show_message(const char *format, ...) PRINTF_FORMAT(1, 2);
+void	show_message_v(const char *format, va_list arguments) PRINTF_FORMAT(1, 0);
+void	append_message(const char *format, ...) PRINTF_FORMAT(1, 2);
+void	append_message_v(const char *format, va_list arguments) PRINTF_FORMAT(1, 0);
 void	wait_for_enter(const char *message_text);
 void	finish_message(void);
 void	show_more_prompt(char *message_text);

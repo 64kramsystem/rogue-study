@@ -233,7 +233,13 @@ execute_command()
 				: "Goodie, I can use big words again!");
 		when 'F': turn_consumed = FALSE; edit_keyboard_macro(keyboard_macro, MACROSZ);
 		when CTRL('F'): turn_consumed = FALSE; pending_macro_input = keyboard_macro;
-		when CTRL('R'): turn_consumed = FALSE; show_message(previous_message);
+		when CTRL('R'):
+			turn_consumed = FALSE;
+			/* The stored message is already formatted and may contain literal '%'. */
+			if (*previous_message)
+				show_message("%s", previous_message);
+			else
+				show_message("");
 		when 'v':
 			turn_consumed = FALSE;
 			if (strcmp(player_name,"The Grand Beeking") == 0)

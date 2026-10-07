@@ -52,7 +52,9 @@ show_message_v(const char *format, va_list arguments)
 	finish_message();
 }
 
-//@ varargs variant, now a wrapper for show_message_v()
+/* Preformatted or player-entered text must be passed as a "%s" argument.
+ * An empty format clears the displayed line without replacing the saved message.
+ */
 void
 show_message(const char *format, ...)
 {

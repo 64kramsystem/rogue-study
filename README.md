@@ -2,6 +2,8 @@
 
 Study fork of [MestreLion/roguepc](https://github.com/MestreLion/roguepc), a modern port of the original IBM PC Rogue source. Gameplay uses ncurses; SDL2 displays the optional opening picture. The historical C and DOS assembly are retained for study.
 
+This fork prioritizes readable gameplay logic, source-backed explanations, and reproducible correctness fixes.
+
 ## Build and run
 
 Requires a C17 compiler, GNU Make, pkg-config, ncursesw development files, and X11 development files. SDL2 development files are needed for `make sdl` or `make all`.
@@ -55,10 +57,11 @@ The maintained C port uses descriptive symbols and module names: [game_state.c](
 
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
-`make test` runs configuration, score-file, and turn-processing regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, and ncursesw development files. The turn test runs the real command dispatcher with deterministic randomness and mocked terminal/effect callbacks; it needs no display. Tests use temporary files under `/tmp`.
+`make test` runs configuration, score-file, turn-processing, and message-text regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, and ncursesw development files. Gameplay tests exercise the real dispatcher and mechanics with controlled input, randomness, and terminal/effect callbacks; they need no display. Tests use temporary files under `/tmp`.
 
 ## Corrections in this fork
 
+- **Message text:** replaying a message or displaying a completed description could interpret `%` sequences a second time, corrupting output or causing undefined behavior. Completed messages, item descriptions, combat names, and descent text now pass through a literal `%s` format. Compiler format checks cover the message wrappers. Tests exercise `%%`, `%s`, `%n`, `%d`, trailing `%`, and empty-message clearing.
 - **Turn processing — inherited DOS bug:** the ring loop reused the action counter (`ntimes` in the original import), resetting it to 2 and preventing the turn routine from returning. A separate hand index lets it return after one normal action or the existing two/three-action haste budget. Delayed callbacks, recurring callbacks, and ring effects still run after each action in the same order. The regression test fails on the old loop and covers both haste budgets, both ring slots, teleport rolls, incapacitation, and haste expiring during callbacks.
 - **Options:** prevent buffer overruns; handle empty values; honor the full 40-byte macro limit and normalize case-insensitive settings.
 - **Scores:** validate loaded records, handle creation/write failures, and avoid decrementing the insertion pointer before the score array. The file format remains native C structs.

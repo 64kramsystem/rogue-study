@@ -304,7 +304,8 @@ fall_to_next_level(message_text)
 		show_message(" ");
 	generate_level();
 	show_message("");
-	show_message(message_text);
+	if (*message_text)
+		show_message("%s", message_text);
 	if (!player_saving_throw(VS_LUCK)) {
 		show_message("you are damaged by the fall");
 		if ((player_stats.hit_points -= roll_dice(1,8)) <= 0)
