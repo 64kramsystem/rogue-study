@@ -2,6 +2,8 @@
 
 Study fork of [MestreLion/roguepc](https://github.com/MestreLion/roguepc), a modern port of the original IBM PC Rogue source. Gameplay uses ncurses; SDL2 displays the optional opening picture. The historical C and DOS assembly are retained for study.
 
+This fork prioritizes readable gameplay logic, source-backed explanations, and reproducible correctness fixes.
+
 ## Build and run
 
 Requires a C17 compiler, GNU Make, pkg-config, ncursesw development files, and X11 development files. SDL2 development files are needed for `make sdl` or `make all`.
@@ -55,10 +57,11 @@ The maintained C port uses descriptive symbols and module names: [game_state.c](
 
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
-`make test` runs configuration and score-file regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers and GNU ld (Linux); tests use temporary files under `/tmp`.
+`make test` runs configuration, score-file, and message-text regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, ncursesw development files, and GNU ld (Linux), as the gameplay tests use `--wrap`. Gameplay tests exercise the real dispatcher and mechanics with controlled input, randomness, and terminal/effect callbacks; they need no display. Tests use temporary files under `/tmp`.
 
 ## Corrections in this fork
 
+- **Message text:** replaying a message or displaying a completed description could interpret `%` sequences a second time, corrupting output or causing undefined behavior. Completed messages and item descriptions now pass through a literal `%s` format. Compiler format checks cover the message wrappers. Tests exercise `%%`, `%s`, `%n`, `%d`, trailing `%`, and empty-message clearing.
 - **Options:** prevent buffer overruns on long labels and values; handle empty values; apply the intended lowercase normalization of `menu` and `screen`.
 - **Scores:** don't crash when the score file can't be created.
 - **Display:** show the disabled-save notice on the message line instead of overwriting dungeon cells. Saving remains disabled.

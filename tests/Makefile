@@ -1,12 +1,17 @@
-CFLAGS = -std=c17 -Wall -Wextra -pedantic -g -O1
+CFLAGS = -std=c17 -Wall -Wextra -Wformat-security -Wno-format-zero-length -pedantic -g -O1
 SANITIZERS = -fsanitize=address,undefined -fno-omit-frame-pointer
+GAME_SOURCES = $(filter-out ../src/main.c ../src/croot.c,$(wildcard ../src/*.c))
+GAME_FLAGS = -DMINROG -DROGUE_NO_X11 $(shell pkg-config ncursesw --cflags)
+GAME_LIBS = $(shell pkg-config ncursesw --libs)
+MESSAGE_WRAPPERS = update_player_view regenerate_health screen_move screen_clear_to_eol \
+	read_game_key screen_printf select_inventory_item
 
 .PHONY: test clean
 
-test: test_env test_scores
+test: test_env test_scores test_messages
 	@run_dir=$$(mktemp -d /tmp/rogue-tests.XXXXXX) || exit 1; \
 	status=0; \
-	(cd "$$run_dir" && $(CURDIR)/test_env && $(CURDIR)/test_scores) || status=$$?; \
+	(cd "$$run_dir" && $(CURDIR)/test_env && $(CURDIR)/test_scores && $(CURDIR)/test_messages) || status=$$?; \
 	rm -rf -- "$$run_dir"; \
 	exit $$status
 
@@ -16,5 +21,12 @@ test_env: test_env.c ../src/options.c ../src/strings.c ../src/rogue.h ../src/pla
 test_scores: test_scores.c ../src/endgame.c ../src/game_state.c ../src/strings.c ../src/gameplay.c ../src/rogue.h ../src/platform.h ../src/screen.h ../src/screen_common.h
 	$(CC) $(CFLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections test_scores.c ../src/game_state.c ../src/strings.c ../src/gameplay.c -Wl,--gc-sections -o $@
 
+test_game_main.o: ../src/main.c $(wildcard ../src/*.h)
+	$(CC) $(CFLAGS) $(SANITIZERS) $(GAME_FLAGS) -Dmain=rogue_program_main -c $< -o $@
+
+test_messages: test_messages.c test_game_main.o $(GAME_SOURCES) $(wildcard ../src/*.h)
+	$(CC) $(CFLAGS) $(SANITIZERS) $(GAME_FLAGS) test_messages.c test_game_main.o $(GAME_SOURCES) \
+		$(foreach symbol,$(MESSAGE_WRAPPERS),-Xlinker --wrap=$(symbol)) $(GAME_LIBS) -o $@
+
 clean:
-	rm -f test_env test_scores
+	rm -f test_env test_scores test_messages test_game_main.o
