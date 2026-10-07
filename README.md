@@ -55,4 +55,15 @@ The maintained C port uses descriptive symbols and module names: [game_state.c](
 
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
-`make test` runs configuration and score-file regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers; tests use temporary files under `/tmp`.
+`make test` runs configuration, score-file, and turn-processing regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, and ncursesw development files. The turn test runs the real command dispatcher with deterministic randomness and mocked terminal/effect callbacks; it needs no display. Tests use temporary files under `/tmp`.
+
+## Corrections in this fork
+
+- **Turn processing — inherited DOS bug:** the ring loop reused the action counter (`ntimes` in the original import), resetting it to 2 and preventing the turn routine from returning. A separate hand index lets it return after one normal action or the existing two/three-action haste budget. Delayed callbacks, recurring callbacks, and ring effects still run after each action in the same order. The regression test fails on the old loop and covers both haste budgets, both ring slots, teleport rolls, incapacitation, and haste expiring during callbacks.
+- **Options:** prevent buffer overruns; handle empty values; honor the full 40-byte macro limit and normalize case-insensitive settings.
+- **Scores:** validate loaded records, handle creation/write failures, and avoid decrementing the insertion pointer before the score array. The file format remains native C structs.
+- **Display:** show the disabled-save notice on the message line instead of overwriting dungeon cells. Saving remains disabled.
+- **Launchers:** fix `--no-splash`, duplicate arguments, executable resolution, working directories, and fallback when SDL libraries are missing.
+- **Builds:** remove parallel clean/build races, serialize shared splash compilation, track source/header dependencies, and provide root build targets.
+
+The original import at `dd9179d` and the archived analysis remain available for studying historical behavior. These are intentional corrections to the historical source or upstream port.

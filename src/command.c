@@ -35,11 +35,15 @@ process_turn()
 			execute_command();
 		run_delayed_actions();
 		run_recurring_actions();
-		for (remaining_actions = LEFT; remaining_actions <= RIGHT; remaining_actions++)
+		/*
+		 * The DOS source reused the action counter for ring iteration, leaving
+		 * it at RIGHT + 1 (2) and preventing the outer loop from finishing.
+		 */
+		for (int hand = LEFT; hand <= RIGHT; hand++)
 		{
-			if (equipped_rings[remaining_actions])
+			if (equipped_rings[hand])
 			{
-				switch (equipped_rings[remaining_actions]->item_subtype)
+				switch (equipped_rings[hand]->item_subtype)
 				{
 				when RING_SEARCHING:
 					search();
