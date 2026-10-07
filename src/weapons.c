@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #define NO_LAUNCHER 100
 

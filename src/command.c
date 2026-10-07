@@ -5,7 +5,7 @@
  */
 
 #include	"rogue.h"
-#include	"curses.h"
+#include "screen.h"
 
 static int previous_repeat_count;
 static byte previous_command, pickup_enabled, previous_pickup_enabled;

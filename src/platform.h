@@ -4,26 +4,15 @@
  * @(#)extern.h	5.1 (Berkeley) 5/11/82
  */
 
-/*@
- * Also standard library includes, defines and "overrides",
- * assembly function declarations, and a bunch of global variables.
- *
- * The plan is to gradually move all platform-agnostic vars to rogue.h,
- * and keep here only the declarations for mach_dep.c (as originally intended)
- *
- * Standard Library includes will also remain here, as original code did not
- * (explicitly) use any. After all, Rogue is pre-ANSI C.
- *
- * Assembly functions are be replaced either by standard library equivalents
- * or functions in mach_dep.
- *
- * When port is completed, maybe this will be renamed mach_dep.h to avoid
- * confusion with extern.c, which is the definition of global game vars
+/*
+ * Platform services, standard-library adapters, and retained DOS interface types.
+ * Game state and gameplay declarations live in rogue.h; native platform services
+ * are implemented in platform.c. Original header name: extern.h.
  */
 
 //@ header guard not in original, mainly for curses_common.h
-#ifndef EXTERN_H
-#define EXTERN_H
+#ifndef ROGUE_PLATFORM_H
+#define ROGUE_PLATFORM_H
 
 /*@
  * Functions from libc and their "overrides"
@@ -57,7 +46,6 @@
 //@ str{len,cat,cpy,cmp,chr}() and possibly others
 #include <string.h>
 #define copy_value(dest,source)	memmove(&(dest),&(source),sizeof(dest))
-#define strchr	strchr
 #define fill_bytes(dest,length,ch)	memset(dest,ch,length)
 
 //@ sprintf(), f{open,read,seek,write,close}(), remove(), putchar()
@@ -66,7 +54,6 @@
 
 //@ exit(), atoi(), NULL, EXIT_*, malloc(), free(), abs(), setenv(), getenv()
 #include <stdlib.h>
-#define random_seed_from_clock	random_seed_from_clock	//@ use internal seed generator
 
 //@ errno, originally in begin.asm
 #include <errno.h>
@@ -77,7 +64,6 @@
 
 //@ time(), nanosleep()
 #include <time.h>
-#define update_protection_state	update_protection_state
 
 //@ vsprintf()
 #include <stdarg.h>
@@ -101,7 +87,7 @@
 /*@
  * Project includes, defines and typedefs
  */
-#include "swint.h"
+#include "dos_interrupts.h"
 
 //@ created for show_fake_dos(), but could also be used in save.c and load.c
 #ifndef ROGUE_DOS_DRIVE
@@ -211,4 +197,4 @@ extern int current_drive;
 extern int last_drive;
 #endif
 
-#endif //EXTERN_H
+#endif //ROGUE_PLATFORM_H

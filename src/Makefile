@@ -38,7 +38,7 @@ UNICODE=3
 # 1 - ASCII, requires ncurses. Looks like Rogue UNIX, but with color
 # 2 - CP437, requires ncurses, configured terminal and CP437 font. Good luck!
 # 3 - Unicode, requires ncursesw and Unicode font. The default, as set below.
-# See curses_common.h
+# See screen_common.h
 ROGUE_CHARSET:=$(UNICODE)
 # Debian and others can use 'ncurses{,w}{5,6}-config' instead of 'pkg-config ncurses{,w}'
 ifeq ($(ROGUE_CHARSET),$(UNICODE))
@@ -60,11 +60,11 @@ endif
 
 export CFLAGS
 
-OBJS=armor.o new_leve.o command.o mach_dep.o rip.o save.o \
-	chase.o curses.o daemon.o daemons.o env.o extern.o fakedos.o fight.o \
-	init.o io.o list.o maze.o misc.o monsters.o move.o pack.o passages.o \
-	potions.o rings.o rooms.o scrolls.o sticks.o strings.o things.o \
-	weapons.o wizard.o slime.o load.o protect.o
+OBJS=armor.o level_generation.o command.o platform.o endgame.o save.o \
+	chase.o screen.o turn_scheduler.o turn_effects.o options.o game_state.o fake_dos.o fight.o \
+	init.o messages.o entity_pool.o maze.o gameplay.o monsters.o move.o inventory.o passages.o \
+	potions.o rings.o rooms.o scrolls.o wands.o strings.o items.o \
+	weapons.o wizard.o slime.o dos_splash.o copy_protection.o
 
 ASMS=zoom.o dos.o begin.o fio.o sbrk.o csav.o
 
@@ -77,11 +77,11 @@ sdl: splash $(TARGET)-sdl
 splash: splash/splash
 
 # Share the loader target so parallel sub-makes never compile it twice.
-splash/splash: splash/load_sdl.o FORCE
+splash/splash: splash/sdl_splash.o FORCE
 	$(MAKE) -C splash splash
 
-splash/load_sdl.o: FORCE
-	$(MAKE) -C splash load_sdl.o
+splash/sdl_splash.o: FORCE
+	$(MAKE) -C splash sdl_splash.o
 
 FORCE:
 
@@ -95,7 +95,7 @@ $(OBJS) main.o main-sdl.o: Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 $(TARGET)-sdl: LDLIBS+=$(shell pkg-config sdl2 --libs)
-$(TARGET)-sdl: $(OBJS) main-sdl.o splash/load_sdl.o
+$(TARGET)-sdl: $(OBJS) main-sdl.o splash/sdl_splash.o
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(TARGET): $(OBJS) main.o

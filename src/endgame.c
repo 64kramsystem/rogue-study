@@ -6,7 +6,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 //@ moved from rogue.h
 #define MAX_HIGH_SCORES	10

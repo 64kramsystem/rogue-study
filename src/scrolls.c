@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 char *laugh = "you hear maniacal laughter%s.";
 char *in_dist = " in the distance";
@@ -249,7 +249,7 @@ read_scroll()
 					if (random_below(20) == 0) {
 						equipped_weapon->item_flags |= ITEM_CURSED;
 						if (!player_saving_throw(VS_MAGIC)) {
-							equipped_weapon->item_flags |= ITEM_EGO|ITEM_SLAYER_REVEALED;
+							equipped_weapon->item_flags |= ITEM_LEGACY_VORPAL_FLAG|ITEM_SLAYER_REVEALED;
 							scroll_identified[SCROLL_VORPALIZE] = TRUE;
 							show_message("you feel a sudden desire to kill %ss.",
 							monsters[equipped_weapon->item_slays_species-'A'].name);

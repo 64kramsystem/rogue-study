@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 static int	choose_ring_hand(void);
 

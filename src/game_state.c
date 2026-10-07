@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #ifdef LOG
 int captains_log = FALSE;

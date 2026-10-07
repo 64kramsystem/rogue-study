@@ -5,7 +5,7 @@
  */
 
 #include	"rogue.h"
-#include	"curses.h"
+#include "screen.h"
 
 #define AC(a) (-((a)-11))
 #define PT(i,j) ((COLS==40)?i:j)

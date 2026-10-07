@@ -1,4 +1,4 @@
-#include "../src/env.c"
+#include "../src/options.c"
 #include <assert.h>
 #include <setjmp.h>
 

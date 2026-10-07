@@ -2,7 +2,7 @@
  *  Cursor motion stuff to simulate a "no refresh" version of curses
  */
 
-#include	"extern.h"
+#include "platform.h"
 
 #ifndef ROGUE_DOS_CURSES
 
@@ -19,8 +19,8 @@
 #include	<curses.h>
 #endif  // not ROGUE_DOS_CURSES
 
-#include	"curses_common.h"
-#include	"curses_dos.h"
+#include "screen_common.h"
+#include "screen_internal.h"
 #include	"keypad.h"
 
 
@@ -550,37 +550,12 @@ screen_move(row, col)
 
 
 #ifdef ROGUE_DOS_CURSES
-/*@
- * Put the given character on the screen
- *
- * Character is put at current (c_row, c_col) cursor position, and set with
- * current current_dos_attribute attributes.
- *
- * Works as a stripped-down <curses.h> addch(), or as an improved <stdio.h>
- * putchar(): it uses attributes but always operate on current current_dos_attribute instead
- * of extracting attributes from ch, and put at cursor position but does not
- * update its location, nor has any special CR/LF/scroll up handling for '\n'.
- *
- * A curses replacement could be:
- *    delch();
- *    insch(ch);
- *
- * Originally in zoom.asm
- *
- * By my understanding, asm function works as follows: if cursor is has_actor_flag (via
- * iscuron C var), it invokes BIOS INT 10h/AH=09h to put char with attributes.
- * If not, it waits for video retrace (unless no_check C var was TRUE) and
- * then write directly in Video Memory, using C vars scr_row and scr_ds to
- * calculate position address.
- *
- * This function replicates this behavior using dos_write_memory() and call_dos_interrupt().
- *
- * BIOS INT 10h/AH=09h - Write character with attribute at cursor position
- * AL = character
- * BH = page number
- * BL = character attribute
- * CX = number of times to write character
- *
+/*
+ * The original zoom.asm putchr_ writes one character with the current attribute.
+ * With the cursor visible it uses BIOS INT 10h/AH=09h; otherwise it writes video
+ * memory directly, waiting for retrace unless no_check is set. It neither advances
+ * the cursor nor interprets newlines. The retained C translation calls DOS stubs;
+ * the native screen_write_character uses ncurses.
  */
 void
 putchr(byte ch)
@@ -1239,11 +1214,11 @@ wide_attributes_from_dos(byte dos_attr, attr_t *attrs, short *color_pair)
 void
 init_curses_colors(void)
 {
-	int foreground, dos_fg, dfg;
-	int background, dos_bg, dbg;
-	int i, row, g, b, cube;
-	int colormode;
-	int cmap[16];
+	int foreground, dos_foreground, default_foreground;
+	int background, dos_background, default_background;
+	int i, red_component, green_component, blue_component, color_cube_size;
+	int terminal_color_mode;
+	int color_map[16];
 
 	/*
 	 * Terminal capabilities determine the available color pairs. monochrome_requested
@@ -1282,37 +1257,37 @@ init_curses_colors(void)
 
 	// colormode is only used here, colors is global
 	screen_color_count = 16;
-	if      (COLORS >= 256) colormode = 256;
-	else if (COLORS >=  88) colormode =  88;
-	else if (COLORS >=  16) colormode =  16;
-	else                    colormode = screen_color_count = 8;
+	if      (COLORS >= 256) terminal_color_mode = 256;
+	else if (COLORS >=  88) terminal_color_mode =  88;
+	else if (COLORS >=  16) terminal_color_mode =  16;
+	else                    terminal_color_mode = screen_color_count = 8;
 
-	switch(colormode)
+	switch(terminal_color_mode)
 	{
 	case 8:
 	case 16:
-		cube = 0;
+		color_cube_size = 0;
 		if (can_change_color() && change_colors)
 		{
 			colors_changed = TRUE;
 		}
 		break;
 	case  88:
-		cube = 4;
+		color_cube_size = 4;
 		break;
 	case 256:
-		cube = 6;
+		color_cube_size = 6;
 		break;
 	}
 
-	if (cube)
+	if (color_cube_size)
 	{
 		for (i = 0; i < screen_color_count; i++)
 		{
-			row = (cube - 1) * CGA_RED(i);
-			g = (cube - 1) * CGA_GREEN(i);
-			b = (cube - 1) * CGA_BLUE(i);
-			cmap[i] = 16 + cube * cube * row + cube * g + b;
+			red_component = (color_cube_size - 1) * CGA_RED(i);
+			green_component = (color_cube_size - 1) * CGA_GREEN(i);
+			blue_component = (color_cube_size - 1) * CGA_BLUE(i);
+			color_map[i] = 16 + color_cube_size * color_cube_size * red_component + color_cube_size * green_component + blue_component;
 		}
 	}
 	else if (colors_changed)
@@ -1323,14 +1298,14 @@ init_curses_colors(void)
 					1000 * CGA_RED(i),
 					1000 * CGA_GREEN(i),
 					1000 * CGA_BLUE(i));
-			cmap[i] = i;  // 1:1 mapping
+			color_map[i] = i;  // 1:1 mapping
 		}
 	}
 	else
 	{
 		for (i = 0; i < screen_color_count; i++)
 		{
-			cmap[i] = i;  // 1:1 mapping
+			color_map[i] = i;  // 1:1 mapping
 		}
 	}
 
@@ -1348,13 +1323,13 @@ init_curses_colors(void)
 	 *   terminal colors.
 	 */
 
-	dos_fg = color_from_dos(A_DOS_NORMAL, TRUE);
-	dos_bg = color_from_dos(A_DOS_NORMAL, FALSE);
+	dos_foreground = color_from_dos(A_DOS_NORMAL, TRUE);
+	dos_background = color_from_dos(A_DOS_NORMAL, FALSE);
 	if ((A_DOS_NORMAL & A_DOS_BRIGHT) && screen_color_count > 8)
-		dos_fg += 8;
+		dos_foreground += 8;
 
-	dfg = cmap[COLOR_WHITE];
-	dbg = cmap[COLOR_BLACK];
+	default_foreground = color_map[COLOR_WHITE];
+	default_background = color_map[COLOR_BLACK];
 
 #ifdef NCURSES_VERSION
 	/*
@@ -1364,7 +1339,7 @@ init_curses_colors(void)
 	if (use_terminal_fgbg)
 	{
 		use_default_colors();
-		dfg = dbg = -1;
+		default_foreground = default_background = -1;
 	}
 #else
 	use_terminal_fgbg = FALSE;
@@ -1375,16 +1350,16 @@ init_curses_colors(void)
 		for (foreground = screen_color_count - (background ? 2 : 1); foreground >= 0; foreground--)
 		{
 			init_pair(PAIR_INDEX(foreground, background),
-					(foreground == dos_fg) ? dfg : cmap[foreground],
-					(background == dos_bg) ? dbg : cmap[background]);
+					(foreground == dos_foreground) ? default_foreground : color_map[foreground],
+					(background == dos_background) ? default_background : color_map[background]);
 		}
 	}
 
 #ifdef ROGUE_DEBUG
 	int j;
 	printw("COLOR TEST - Displayed colors should match [R,G,B] values\n");
-	printw("Color mode: %d colors, using %s\n", colormode,
-			cube ? "color cube" :
+	printw("Color mode: %d colors, using %s\n", terminal_color_mode,
+			color_cube_size ? "color cube" :
 			colors_changed ? "RGB" :
 			screen_color_count > 8 ? "ANSI 16" :
 			"ANSI 8 + Bold");
@@ -1641,24 +1616,11 @@ initialize_screen(void)
 	if (screen_initialized)
 		return;
 
-	/*@
-	 * ROGUE_SCR_TYPE should affect both columns and colors, and dos_screen_mode
-	 * is also used by game in various contexts with ambiguous meanings.
-	 *
-	 * My current implementation is "messy", to say the least:
-	 * ROGUE_SCR_TYPE is ignored, it does not affect neither columns
-	 * (controlled by ROGUE_COLUMNS) nor colors, and dos_screen_mode will be
-	 * inconsistent with it if anything but 80-column color mode is used.
-	 *
-	 * I see 2 elegant approaches to solve this mess:
-	 * - dos_screen_mode is "crafted" based on colors and columns, reversing the
-	 *   logic in original initialize_screen() switch.
-	 * - dos_screen_mode is completely removed, and all tests based on that are
-	 *   changed to match original *intention*, if one can figure that out.
-	 *
-	 * Not to mention game_screen_columns itself should not be defined only at
-	 * compile-time, but perhaps also subject to initial terminal size
-	 * and/or env file setting.
+	/*
+	 * ROGUE_SCR_TYPE sets the legacy DOS mode identifier. In the native backend,
+	 * ROGUE_COLUMNS controls width and ncurses capabilities determine color support.
+	 * Those values are independent, so the DOS mode identifier can disagree with the
+	 * native screen configuration. Runtime mode selection is not implemented.
 	 */
 	dos_screen_mode = ROGUE_SCR_TYPE;
 
@@ -1820,7 +1782,7 @@ shutdown_screen()
 		 * might have themed the terminal in .bashrc, .Xresources, etc.
 		 *
 		 * So we have 2 choices: we can redefine colors back to ANSI's
-		 * default RGB, which is also useless has_actor_flag (2), or we can try
+		 * default RGB, which is also useless in case (2), or we can try
 		 * `system("type reset 2>/dev/null && reset");`, which reset
 		 * colors on some terminals (xterm, but not gnome-terminal)
 		 *

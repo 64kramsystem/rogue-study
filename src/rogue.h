@@ -5,7 +5,7 @@
  */
 
 
-#include "extern.h"
+#include "platform.h"
 
 /*
  *  Options set for PC rogue
@@ -160,7 +160,7 @@
 #define ITEM_CURSED 0x0001		/* object is cursed */
 #define ITEM_IDENTIFIED	 0x0002		/* player knows details about the object */
 #define ITEM_VORPAL_FLASHED 0x0004		/* has the vorpal weapon flashed */
-#define ITEM_EGO	 0x0008		/* weapon has control of player @ unused */
+#define ITEM_LEGACY_VORPAL_FLAG	 0x0008	/* Set on vorpalization; no reader in this source. */
 #define ITEM_THROWABLE	 0x0010		/* object is a missile type */
 #define ITEM_STACKABLE	 0x0020		/* object comes in groups */
 #define ITEM_SLAYER_REVEALED 0x0040		/* Do you know who the enemy of the object is */
@@ -169,7 +169,7 @@
 #define ACTOR_BLIND	 0x0001		/* creature is blind */
 #define ACTOR_DETECTS_MONSTERS 0x0002		/* hero can detect unseen monsters */
 #define ACTOR_CHASING	 0x0004		/* creature is running at the player */
-#define ACTOR_FOUND	 0x0008		/* creature has been seen (used for objects) */
+#define ENTITY_ENCOUNTERED	 0x0008	/* Latched after monster encounter or item pickup. */
 #define ACTOR_INVISIBLE	 0x0010		/* creature is invisible */
 #define ACTOR_AGGRESSIVE	 0x0020		/* creature can wake when player enters room */
 #define ACTOR_GREEDY	 0x0040		/* creature runs to protect gold */
@@ -407,7 +407,7 @@ union entity {
 	shint subtype;			/* Which object of a type it is */
 	shint hit_bonus;			/* Plusses to hit */
 	shint damage_bonus;			/* Plusses to damage */
-	short modifier;			/* Armor class */
+	short modifier;			/* Armor class, ring bonus, wand charges, or gold. */
 	short flags;			/* Information about objects */
 	char slays_species;			/* If it is enchanted, who it hates */
 	shint stack_group;			/* Group number for this object */
@@ -703,7 +703,7 @@ void	eat_food(void);
 void	change_player_strength(int adjustment);
 void	adjust_strength(Strength *strength, int adjustment);
 void	aggravate_monsters(void);
-void	prompt_item_label(bool know, char **guess);
+void	prompt_item_label(bool identified, char **label);
 void	show_help(struct help_entry *entries);
 void	search(void);
 void	descend_stairs(void);
@@ -721,9 +721,9 @@ bool	outside_dungeon(int y, int x);
 char	*trap_name(byte type);
 char	*article_suffix(char *text);
 char	display_item_symbol(Entity *item);
-shint	sign(int nm);
+shint	sign(int value);
 byte	visible_entity_at(int y, int x);
-int	randomize_duration(int nm);
+int	randomize_duration(int base_duration);
 int	distance_squared(int y1, int x1, int y2, int x2);
 int	map_index(int y, int x);
 #ifdef ME

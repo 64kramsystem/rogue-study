@@ -15,7 +15,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #define is_key(s) ((*s=='-')||(*s=='/'))
 #define is_char(c1,c2) ((c1==c2)||((c1+'a'-'A')==c2))
@@ -177,10 +177,7 @@ next_random_value()
  */
 int
 random_below(range)
-	/*@
-	 * range size was expected to be 16 bit
-	 * function will return the seed itself if range value is >= 2^31 - 1
-	 */
+	/* DOS callers used 16-bit ints; the native range uses the host int width. */
 	register int range;
 {
 	return range < 1 ? 0 : ((next_random_value() + next_random_value())&0x7fffffffl) % range;

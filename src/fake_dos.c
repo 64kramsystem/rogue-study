@@ -11,38 +11,38 @@
  */
 
 #include	"rogue.h"
-#include	"curses.h"
+#include "screen.h"
 
-static bool	execute_fake_dos_command(char *com);
-static int	select_drive(int drv);
+static bool	execute_fake_dos_command(char *command_text);
+static int	select_drive(int drive_index);
 
 void
 show_fake_dos(void)
 {
-	char comline[132];
-	char savedir[] = "a:", *comhead;
+	char command_buffer[132];
+	char saved_drive[] = "a:", *command_start;
 
 	save_screen();
 	clear();
 	move (0,0);
 	set_cursor_visible(TRUE);
 #ifdef ROGUE_DOS_DRIVE
-	*savedir = dos_service(0x19,0) + 'A';
+	*saved_drive = dos_service(0x19,0) + 'A';
 #else
-	*savedir = current_drive + 'A';  //@ save current drive
+	*saved_drive = current_drive + 'A';  //@ save current drive
 #endif
 	do {
-		fill_bytes(comline, sizeof(comline), 0);
+		fill_bytes(command_buffer, sizeof(command_buffer), 0);
 #ifdef ROGUE_DOS_DRIVE
 		printw("\n%c>",dos_service(0x19,0)+'A');
 #else
 		printw("\n%c>",current_drive+'A');
 #endif
-		read_line(comline,130);
-		comhead = skip_whitespace(comline);
-		trim_trailing_whitespace(comhead);
-	} while (execute_fake_dos_command(comhead));
-	execute_fake_dos_command(savedir);  //@ restore current drive
+		read_line(command_buffer,130);
+		command_start = skip_whitespace(command_buffer);
+		trim_trailing_whitespace(command_start);
+	} while (execute_fake_dos_command(command_start));
+	execute_fake_dos_command(saved_drive);  //@ restore current drive
 	set_cursor_visible(FALSE);
 	clear();
 	restore_screen();
@@ -53,27 +53,27 @@ show_fake_dos(void)
  */
 static
 bool
-execute_fake_dos_command(com)
-	char *com;
+execute_fake_dos_command(command_text)
+	char *command_text;
 {
-	int drv;
+	int drive_index;
 
-	if ((!isascii(*com)) || (strcmp(com, "rogue") == 0))
+	if ((!isascii(*command_text)) || (strcmp(command_text, "rogue") == 0))
 	{
 		return FALSE;
 	}
-	if (com[1] == ':' && com[2] == 0)
+	if (command_text[1] == ':' && command_text[2] == 0)
 	{
 		//@ smart way to get toupper() and 'A'=>0 in a single strike
-		drv = (*com & 0x1f) - 1;
+		drive_index = (*command_text & 0x1f) - 1;
 
 		printw("\n");
-		if ((!is_alpha(*com)) || drv >= select_drive(drv))
+		if ((!is_alpha(*command_text)) || drive_index >= select_drive(drive_index))
 		{
 			printw("Invalid drive specification\n");
 		}
 	}
-	else if (com[0])
+	else if (command_text[0])
 	{
 		printw("\nBad command or file name\n");
 	}
@@ -86,14 +86,14 @@ execute_fake_dos_command(com)
  */
 static
 int
-select_drive(int drv)
+select_drive(int drive_index)
 {
 #ifdef ROGUE_DOS_DRIVE
-	return dos_service(0x0e, drv);
+	return dos_service(0x0e, drive_index);
 #else
-	if (drv >= 0 && drv <= last_drive)
+	if (drive_index >= 0 && drive_index <= last_drive)
 	{
-		current_drive = drv;
+		current_drive = drive_index;
 	}
 	return last_drive;
 #endif

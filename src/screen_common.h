@@ -8,7 +8,7 @@
  */
 
 //@ not in original, to make IDE happy about 'bool'
-#include "extern.h"
+#include "platform.h"
 
 //@ Available charsets, not in original
 #define ASCII	1

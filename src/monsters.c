@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 static int	monster_experience_bonus(Entity *monster);
 
@@ -197,13 +197,13 @@ wake_monster(y, x)
 		monster->actor_destination = &player_position;
 		monster->actor_flags |= ACTOR_CHASING;
 	}
-	if (character == 'M' && !has_actor_flag(player, ACTOR_BLIND) && !has_actor_flag(*monster, ACTOR_FOUND)
+	if (character == 'M' && !has_actor_flag(player, ACTOR_BLIND) && !has_actor_flag(*monster, ENTITY_ENCOUNTERED)
 		&& !has_actor_flag(*monster, ACTOR_CANCELLED) && has_actor_flag(*monster, ACTOR_CHASING))
 	{
 		room = player_room;
 		gold_distance = distance_squared(y, x, player_position.y, player_position.x);
 		if ((room != NULL && !(room->flags & ROOM_DARK)) || gold_distance < LAMPDIST) {
-			monster->actor_flags |= ACTOR_FOUND;
+			monster->actor_flags |= ENTITY_ENCOUNTERED;
 			if (!player_saving_throw(VS_MAGIC)) {
 				if (has_actor_flag(player, ACTOR_CONFUSED))
 					extend_delayed_action(end_confusion, random_below(20) + HUHDURATION);

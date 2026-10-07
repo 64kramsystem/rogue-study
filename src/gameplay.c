@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 /*
  * trap_name:
@@ -469,13 +469,13 @@ decode_direction(byte character, Position *direction)
  *	Return the sign of the number
  */
 shint
-sign(nm)
-	register int nm;
+sign(value)
+	register int value;
 {
-	if (nm < 0)
+	if (value < 0)
 		return -1;
 	else
-		return (nm > 0);
+		return (value > 0);
 }
 
 /*
@@ -483,10 +483,10 @@ sign(nm)
  *	Give a spread around a given number (+/- 10%)
  */
 int
-randomize_duration(nm)
-	register int nm;
+randomize_duration(base_duration)
+	register int base_duration;
 {
-	return nm - nm / 10 + random_below(nm / 5);
+	return base_duration - base_duration / 10 + random_below(base_duration / 5);
 }
 
 /*
@@ -494,15 +494,15 @@ randomize_duration(nm)
  *	Call an object something after use.
  */
 void
-prompt_item_label(bool know, char **guess)
+prompt_item_label(bool identified, char **label)
 {
-	if (know && **guess)
-		**guess = '\0';
-	else if (!know && **guess == '\0') {
+	if (identified && **label)
+		**label = '\0';
+	else if (!identified && **label == '\0') {
 		show_message("%scall it? ",verbose_text("what do you want to "));
 		read_line(description_buffer,MAXNAME);
 		if (*description_buffer != ESCAPE)
-			strcpy(*guess, description_buffer);
+			strcpy(*label, description_buffer);
 		show_message("");
 	}
 }

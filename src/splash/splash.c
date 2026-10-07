@@ -5,7 +5,7 @@
 #include <string.h>  // strcmp
 #include <stdbool.h> // bool, true, false
 
-#include "load_sdl.h"
+#include "sdl_splash.h"
 
 
 static const char * const PIC_PATH = "../rogue.pic";

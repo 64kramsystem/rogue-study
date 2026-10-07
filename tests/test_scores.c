@@ -1,4 +1,4 @@
-#include "../src/rip.c"
+#include "../src/endgame.c"
 #include <assert.h>
 #include <limits.h>
 

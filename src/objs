@@ -1,6 +1,6 @@
-begin.o croot.o fio.o csav.o armor.o new_leve.o command.o mach_dep.o
-main.o save.o chase.o curses.o daemon.o daemons.o env.o extern.o
-fakedos.o fight.o init.o list.o maze.o misc.o monsters.o move.o
-pack.o passages.o potions.o rings.o rooms.o scrolls.o sticks.o strings.o
-rip.o zoom.o things.o weapons.o wizard.o dos.o slime.o sbrk.o load.o
-protect.o io.o
+begin.o croot.o fio.o csav.o armor.o level_generation.o command.o platform.o
+main.o save.o chase.o screen.o turn_scheduler.o turn_effects.o options.o game_state.o
+fake_dos.o fight.o init.o entity_pool.o maze.o gameplay.o monsters.o move.o
+inventory.o passages.o potions.o rings.o rooms.o scrolls.o wands.o strings.o
+endgame.o zoom.o items.o weapons.o wizard.o dos.o slime.o sbrk.o dos_splash.o
+copy_protection.o messages.o

@@ -6,7 +6,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 #define MAX_MAZE_FRONTIER 100
 

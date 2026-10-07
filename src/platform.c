@@ -5,7 +5,7 @@
  */
 
 #include	"rogue.h"
-#include	"curses.h"
+#include "screen.h"
 
 #ifndef ROGUE_NO_X11
 #include <X11/Xlib.h>

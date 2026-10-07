@@ -12,7 +12,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 /*
  * Placeholders for the original linker-provided static-data boundaries. They do not

@@ -5,7 +5,7 @@
  */
 
 #include "rogue.h"
-#include "curses.h"
+#include "screen.h"
 
 /*
  * connect_rooms:
@@ -159,11 +159,11 @@ generate_passages()
 {
 	register int i, j;
 	int connected_rooms;
-	static struct rdes
+	static struct room_connections
 	{
-	char	connect_rooms[MAXROOMS];		/* possible to connect to room i? */
-	char	isconn[MAXROOMS];	/* connection been made to room i? */
-	char	ingraph;		/* this room in graph already? */
+	char	possible_connections[MAXROOMS];		/* possible to connect to room i? */
+	char	existing_connections[MAXROOMS];	/* connection been made to room i? */
+	char	connected_to_graph;		/* this room in graph already? */
 	} room_graph[MAXROOMS] = {
 	{ { 0, 1, 0, 1, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
 	{ { 1, 0, 1, 0, 1, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
@@ -175,7 +175,7 @@ generate_passages()
 	{ { 0, 0, 0, 0, 1, 0, 1, 0, 1 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
 	{ { 0, 0, 0, 0, 0, 1, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 }
 	};
-	struct rdes *source_node, *destination_node = NULL;
+	struct room_connections *source_node, *destination_node = NULL;
 
 	/*
 	 * reinitialize room graph description
@@ -183,8 +183,8 @@ generate_passages()
 	for (source_node = room_graph; source_node < &room_graph[MAXROOMS]; source_node++)
 	{
 		for (j = 0; j < MAXROOMS; j++)
-			source_node->isconn[j] = FALSE;
-		source_node->ingraph = FALSE;
+			source_node->existing_connections[j] = FALSE;
+		source_node->connected_to_graph = FALSE;
 	}
 
 	/*
@@ -193,7 +193,7 @@ generate_passages()
 	 */
 	connected_rooms = 1;
 	source_node = &room_graph[random_below(MAXROOMS)];
-	source_node->ingraph = TRUE;
+	source_node->connected_to_graph = TRUE;
 	do
 	{
 		/*
@@ -201,7 +201,7 @@ generate_passages()
 		 */
 		j = 0;
 		for (i = 0; i < MAXROOMS; i++)
-			if (source_node->connect_rooms[i] && !room_graph[i].ingraph && random_below(++j) == 0)
+			if (source_node->possible_connections[i] && !room_graph[i].connected_to_graph && random_below(++j) == 0)
 				destination_node = &room_graph[i];
 		/*
 		 * if no adjacent rooms are outside the graph, pick a new room
@@ -211,7 +211,7 @@ generate_passages()
 		{
 			do
 				source_node = &room_graph[random_below(MAXROOMS)];
-			while (!source_node->ingraph);
+			while (!source_node->connected_to_graph);
 		}
 		/*
 		 * otherwise, connect new room to the graph, and draw a tunnel
@@ -219,12 +219,12 @@ generate_passages()
 		 */
 		else
 		{
-			destination_node->ingraph = TRUE;
+			destination_node->connected_to_graph = TRUE;
 			i = source_node - room_graph;
 			j = destination_node - room_graph;
 			connect_rooms(i, j);
-			source_node->isconn[j] = TRUE;
-			destination_node->isconn[i] = TRUE;
+			source_node->existing_connections[j] = TRUE;
+			destination_node->existing_connections[i] = TRUE;
 			connected_rooms++;
 		}
 	} while (connected_rooms < MAXROOMS);
@@ -241,7 +241,7 @@ generate_passages()
 		 */
 		j = 0;
 		for (i = 0; i < MAXROOMS; i++)
-			if (source_node->connect_rooms[i] && !source_node->isconn[i] && random_below(++j) == 0)
+			if (source_node->possible_connections[i] && !source_node->existing_connections[i] && random_below(++j) == 0)
 				destination_node = &room_graph[i];
 		/*
 		 * if there is one, connect it and look for the next added
@@ -252,8 +252,8 @@ generate_passages()
 			i = source_node - room_graph;
 			j = destination_node - room_graph;
 			connect_rooms(i, j);
-			source_node->isconn[j] = TRUE;
-			destination_node->isconn[i] = TRUE;
+			source_node->existing_connections[j] = TRUE;
+			destination_node->existing_connections[i] = TRUE;
 		}
 	}
 	number_passages();
