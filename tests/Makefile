@@ -8,13 +8,14 @@ TURN_WRAPPERS = update_status_line update_player_view read_game_key regenerate_h
 	show_message random_below
 MESSAGE_WRAPPERS = update_player_view regenerate_health screen_move screen_clear_to_eol \
 	read_game_key screen_printf select_inventory_item generate_level player_saving_throw
+POTION_WRAPPERS = select_inventory_item update_status_line show_message random_below
 
 .PHONY: test clean
 
-test: test_env test_scores test_turns test_messages
+test: test_env test_scores test_turns test_messages test_potions
 	@run_dir=$$(mktemp -d /tmp/rogue-tests.XXXXXX) || exit 1; \
 	status=0; \
-	(cd "$$run_dir" && $(CURDIR)/test_env && $(CURDIR)/test_scores && $(CURDIR)/test_turns && $(CURDIR)/test_messages) || status=$$?; \
+	(cd "$$run_dir" && $(CURDIR)/test_env && $(CURDIR)/test_scores && $(CURDIR)/test_turns && $(CURDIR)/test_messages && $(CURDIR)/test_potions) || status=$$?; \
 	rm -rf -- "$$run_dir"; \
 	exit $$status
 
@@ -35,5 +36,9 @@ test_messages: test_messages.c test_game_main.o $(GAME_SOURCES) $(wildcard ../sr
 	$(CC) $(CFLAGS) $(SANITIZERS) $(GAME_FLAGS) test_messages.c test_game_main.o $(GAME_SOURCES) \
 		$(foreach symbol,$(MESSAGE_WRAPPERS),-Xlinker --wrap=$(symbol)) $(GAME_LIBS) -o $@
 
+test_potions: test_potions.c test_game_main.o $(GAME_SOURCES) $(wildcard ../src/*.h)
+	$(CC) $(CFLAGS) $(SANITIZERS) $(GAME_FLAGS) test_potions.c test_game_main.o $(GAME_SOURCES) \
+		$(foreach symbol,$(POTION_WRAPPERS),-Xlinker --wrap=$(symbol)) $(GAME_LIBS) -o $@
+
 clean:
-	rm -f test_env test_scores test_turns test_messages test_game_main.o
+	rm -f test_env test_scores test_turns test_messages test_potions test_game_main.o
