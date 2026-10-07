@@ -27,6 +27,11 @@ else
 # To test it: gcc -E -Og -dM -x c /dev/null | grep FORTIFY
 CFLAGS+=-Og -g3
 endif
+# Opt in to gameplay corrections; otherwise retain historical DOS behavior.
+ifeq ($(ROGUE_BUGFIX),1)
+CFLAGS+=-DROGUE_BUGFIX
+endif
+
 ifdef ROGUE_DEBUG
 CFLAGS+=-DROGUE_DEBUG
 endif

@@ -32,6 +32,8 @@ Enter a name or press Enter at startup. Use `h j k l` to move left/down/up/right
 
 For a build without X11, use `make ROGUE_NO_X11=1`. `ROGUE_RELEASE=1` enables optimization; `ROGUE_CHARSET=1` selects ASCII with ncurses. Run `make clean` before changing compiler or build options.
 
+Gameplay corrections follow upstream's [`ROGUE_BUGFIX` convention](https://github.com/MestreLion/roguepc/issues/23). Use `make ROGUE_BUGFIX=1` to enable the corrected turn loop and confusion-potion duration. Without it, historical behavior is preserved, including the turn loop failing to return. Regression tests enable the corrections. Run `make clean` when changing this option.
+
 ## Configuration and limitations
 
 An optional `rogue.opt` in the game's working directory accepts `key=value` lines and comments beginning with `#`:
@@ -55,4 +57,15 @@ The maintained C port uses descriptive symbols and module names: [game_state.c](
 
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
-`make test` runs configuration and score-file regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers; tests use temporary files under `/tmp`.
+`make test` runs configuration, score-file, and turn-processing regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, and ncursesw development files. The turn test runs the real command dispatcher with deterministic randomness and mocked terminal/effect callbacks; it needs no display. Tests use temporary files under `/tmp`.
+
+## Corrections in this fork
+
+- **Turn processing — inherited DOS bug:** the ring loop reused the action counter (`ntimes` in the original import), resetting it to 2 and preventing the turn routine from returning. A separate hand index lets it return after one normal action or the existing two/three-action haste budget. Delayed callbacks, recurring callbacks, and ring effects still run after each action in the same order. The regression test fails on the old loop and covers both haste budgets, both ring slots, teleport rolls, incapacitation, and haste expiring during callbacks.
+- **Options:** prevent buffer overruns; handle empty values; honor the full 40-byte macro limit and normalize case-insensitive settings.
+- **Scores:** validate loaded records, handle creation/write failures, and avoid decrementing the insertion pointer before the score array. The file format remains native C structs.
+- **Display:** show the disabled-save notice on the message line instead of overwriting dungeon cells. Saving remains disabled.
+- **Launchers:** fix `--no-splash`, duplicate arguments, executable resolution, working directories, and fallback when SDL libraries are missing.
+- **Builds:** remove parallel clean/build races, serialize shared splash compilation, track source/header dependencies, and provide root build targets.
+
+The original import at `dd9179d` and the archived analysis remain available for studying historical behavior. These are intentional corrections to the historical source or upstream port.

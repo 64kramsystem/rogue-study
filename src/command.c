@@ -35,11 +35,24 @@ process_turn()
 			execute_command();
 		run_delayed_actions();
 		run_recurring_actions();
+		/*
+		 * The DOS source reused the action counter for ring iteration, leaving
+		 * it at RIGHT + 1 (2) and preventing the outer loop from finishing.
+		 */
+#ifdef ROGUE_BUGFIX
+		for (int hand = LEFT; hand <= RIGHT; hand++)
+#else
 		for (remaining_actions = LEFT; remaining_actions <= RIGHT; remaining_actions++)
+#endif
 		{
-			if (equipped_rings[remaining_actions])
+#ifdef ROGUE_BUGFIX
+			int ring_hand = hand;
+#else
+			int ring_hand = remaining_actions;
+#endif
+			if (equipped_rings[ring_hand])
 			{
-				switch (equipped_rings[remaining_actions]->item_subtype)
+				switch (equipped_rings[ring_hand]->item_subtype)
 				{
 				when RING_SEARCHING:
 					search();
