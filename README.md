@@ -56,3 +56,13 @@ The maintained C port uses descriptive symbols and module names: [game_state.c](
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
 `make test` runs configuration and score-file regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers and GNU ld (Linux); tests use temporary files under `/tmp`.
+
+## Corrections in this fork
+
+- **Options:** prevent buffer overruns on long labels and values; handle empty values; apply the intended lowercase normalization of `menu` and `screen`.
+- **Scores:** don't crash when the score file can't be created.
+- **Display:** show the disabled-save notice on the message line instead of overwriting dungeon cells. Saving remains disabled.
+- **Launchers:** fix `--no-splash`, duplicate arguments, executable resolution, working directories, and, on Linux, fallback when SDL libraries are missing.
+- **Builds:** remove parallel clean/build races, serialize shared splash compilation, track source/header dependencies, and provide root build targets.
+
+The original import at `dd9179d` and the archived analysis remain available for studying historical behavior. These are intentional corrections to the historical source or upstream port.
