@@ -46,8 +46,16 @@ drink_potion(void)
 	{
 	when POTION_CONFUSION:
 		potion_identified[POTION_CONFUSION] = TRUE;
-		if (!has_actor_flag(player, ACTOR_CONFUSED))
-			{
+#ifdef ROGUE_BUGFIX
+		/* The original outer !ACTOR_CONFUSED guard made extension unreachable. */
+		if (has_actor_flag(player, ACTOR_CONFUSED))
+			extend_delayed_action(end_confusion, random_below(8)+HUHDURATION);
+		else
+			schedule_delayed_action(end_confusion, random_below(8)+HUHDURATION);
+		player.actor_flags |= ACTOR_CONFUSED;
+		show_message("wait, what's going on? Huh? What? Who?");
+#else
+		if (!has_actor_flag(player, ACTOR_CONFUSED)) {
 			if (has_actor_flag(player, ACTOR_CONFUSED))
 				extend_delayed_action(end_confusion, random_below(8)+HUHDURATION);
 			else
@@ -55,6 +63,7 @@ drink_potion(void)
 			player.actor_flags |= ACTOR_CONFUSED;
 			show_message("wait, what's going on? Huh? What? Who?");
 		}
+#endif
 	when POTION_POISON:
 		{
 		char *sick = "you feel %s sick.";

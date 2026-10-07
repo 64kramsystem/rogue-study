@@ -34,7 +34,7 @@ Enter a name or press Enter at startup. Use `h j k l` to move left/down/up/right
 
 For a build without X11, use `make ROGUE_NO_X11=1`. `ROGUE_RELEASE=1` enables optimization; `ROGUE_CHARSET=1` selects ASCII with ncurses. Run `make clean` before changing compiler or build options.
 
-Gameplay corrections follow upstream's [`ROGUE_BUGFIX` convention](https://github.com/MestreLion/roguepc/issues/23). Use `make ROGUE_BUGFIX=1` to enable them; without it, historical behavior is preserved. Run `make clean` when changing this option.
+Gameplay corrections follow upstream's [`ROGUE_BUGFIX` convention](https://github.com/MestreLion/roguepc/issues/23). Use `make ROGUE_BUGFIX=1` to enable the corrected confusion-potion duration. Without it, historical behavior is preserved. Regression tests enable the corrections. Run `make clean` when changing this option.
 
 ## Configuration and limitations
 
@@ -59,10 +59,11 @@ The maintained C port uses descriptive symbols and module names: [game_state.c](
 
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
-`make test` runs configuration, score-file, and message-text regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, ncursesw development files, and GNU ld (Linux), as the gameplay tests use `--wrap`. Gameplay tests exercise the real dispatcher and mechanics with controlled input, randomness, and terminal/effect callbacks; they need no display. Tests use temporary files under `/tmp`.
+`make test` runs configuration, score-file, message-text, and potion-duration regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, ncursesw development files, and GNU ld (Linux), as the gameplay tests use `--wrap`. Gameplay tests exercise the real dispatcher and mechanics with controlled input, randomness, and terminal/effect callbacks; they need no display. Tests use temporary files under `/tmp`.
 
 ## Corrections in this fork
 
+- **Confusion potions — inherited DOS bug:** an outer “not confused” guard made the inner timer-extension branch unreachable. Drinking another confusion potion consumed it without extending the active effect. The guard is removed, so the existing timer is extended. Tests cover initial application, repeated doses at minimum/maximum duration rolls, and a single eventual expiration.
 - **Message text:** replaying a message or displaying a completed description could interpret `%` sequences a second time, corrupting output or causing undefined behavior. Completed messages and item descriptions now pass through a literal `%s` format. Compiler format checks cover the message wrappers. Tests exercise `%%`, `%s`, `%n`, `%d`, trailing `%`, and empty-message clearing.
 - **Options:** prevent buffer overruns on long labels and values; handle empty values; apply the intended lowercase normalization of `menu` and `screen`.
 - **Scores:** don't crash when the score file can't be created.
