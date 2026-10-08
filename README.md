@@ -55,6 +55,39 @@ Saving (`S`) and restoring (`-r` or a save filename) are explicitly disabled in 
 
 The maintained C port uses descriptive symbols and module names: [game_state.c](src/game_state.c) holds globals, [level_generation.c](src/level_generation.c) builds levels, [platform.c](src/platform.c) handles platform services, and [screen.c](src/screen.c) implements terminal rendering. The original assembly and archived analysis retain their historical names; the assembly is reference material and is not linked into the Linux game.
 
+### Guided reading map
+
+Follow one player action through these functions:
+
+```mermaid
+flowchart TD
+    A[main: initialize state and generate a level] --> B[run_game]
+    B --> C[process_turn: choose action budget]
+    C --> D[execute_command: read until a turn is consumed]
+    D --> E[move_player / player_attack / item command]
+    E --> F[run_delayed_actions]
+    F --> G[run_recurring_actions]
+    G --> H[ring effects]
+    H --> I{More actions in this call?}
+    I -- Yes --> D
+    I -- No --> B
+```
+
+1. **Startup — [main.c](src/main.c), [init.c](src/init.c).** `main()` allocates state, reads options, seeds randomness, initializes the player and item appearances, generates a level, and registers timed effects.
+2. **A dungeon — [level_generation.c](src/level_generation.c), [rooms.c](src/rooms.c), [passages.c](src/passages.c).** `generate_level()` replaces the previous level, builds rooms and connections, and places items, stairs, traps and the player. [maze.c](src/maze.c) builds mazes.
+3. **A command — [command.c](src/command.c).** `read_command_prefix()` handles counts, repetition and running; `execute_command()` selects the action. `turn_consumed = FALSE` requests another command without advancing effects, as inventory/help do. Incapacitation skips input but advances effects.
+4. **Movement/combat — [move.c](src/move.c), [fight.c](src/fight.c), [chase.c](src/chase.c).** Follow `move_player()` through movement checks, traps and pickups. A monster collision reaches `player_attack()` → `resolve_attack_damage()`. Monster movement reaches `move_chasing_monster()` → `monster_attack()`.
+5. **Effects — [turn_scheduler.c](src/turn_scheduler.c), [turn_effects.c](src/turn_effects.c).** Delayed callbacks run, then recurring callbacks, then rings. Timers count actions, not elapsed seconds; callbacks run synchronously. Commands can also invoke effects directly: rest regenerates health, and armor changes call `advance_turn()` for an extra recurring-effect pass.
+
+Keep these data relationships in view while reading:
+
+- **`Entity` — [rogue.h](src/rogue.h):** a union of actor and item views with shared list links. Context determines the valid view; `actor_*` and `item_*` macros select fields.
+- **Maps — [gameplay.c](src/gameplay.c):** `terrain_map` stores terrain/item symbols; `cell_flags` stores passage, maze and hidden-terrain properties, plus context-dependent passage numbers or trap types. Storage is column-major: `map_index(y, x) = x * (dungeon_bottom_row - 1) + y - 1`. `visible_entity_at()` overlays monsters; `update_player_view()` controls display.
+- **Lists — [entity_pool.c](src/entity_pool.c), [inventory.c](src/inventory.c):** `level_monsters`, `level_items` and inventories link pooled entities. Attach/detach changes membership; release makes a slot reusable. Trace one item through pickup, equipment and dropping.
+- **Globals — [game_state.c](src/game_state.c), [init.c](src/init.c):** world/player state, definition tables and buffers are shared. `player_position`, `player_stats` and `player_inventory` alias fields of `player`. Formatting helpers reuse buffers; later calls can overwrite returned text.
+
+Useful worked examples are [test_turns.c](tests/test_turns.c) for action order, [test_potions.c](tests/test_potions.c) for an effect's lifetime, and [test_messages.c](tests/test_messages.c) for text passing through the real command dispatcher.
+
 Comments distinguish source-proven behavior from unresolved historical intent. The BIOS timer hook uses vector `0x1C` (table byte offset `0x70`); the trap display flag has three states. Historical DOS checksum bounds and physical disk-protection behavior are not established by the native stubs.
 
 `make test` runs configuration, score-file, turn-processing, message-text, and potion-duration regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, and ncursesw development files. Gameplay tests exercise the real dispatcher and mechanics with controlled input, randomness, and terminal/effect callbacks; they need no display. Tests use temporary files under `/tmp`.
