@@ -51,10 +51,8 @@ show_fake_dos(void)
 /*
  * execute a dos like command
  */
-static
-bool
-execute_fake_dos_command(command_text)
-	char *command_text;
+static bool
+execute_fake_dos_command(char *command_text)
 {
 	int drive_index;
 
