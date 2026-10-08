@@ -1,4 +1,4 @@
-#include "platform.h"
+#include "rogue.h"
 
 //@ extern char ctp_[]; //@ not needed anymore. could not find definition
 

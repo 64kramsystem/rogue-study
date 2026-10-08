@@ -293,7 +293,7 @@ setup_game_io(void)
  * Default timer-cleanup callback. install_dos_timer_hook replaces this function with
  * restore_dos_timer_hook after saving the original vector; exit_game invokes it.
  */
-void
+static void
 no_timer_cleanup(void)
 {
 	return;
@@ -745,7 +745,7 @@ set_dos_break_check(bool state)
 	return previous_state;
 }
 
-void
+static void
 restore_game_io(void)
 {
 	set_dos_break_check(saved_break_check);

@@ -13,7 +13,7 @@
 TARGET:=rogue
 .DEFAULT_GOAL := default
 # ISO C17/18 requires GCC8 or greater: CC=gcc-8 make ...
-CFLAGS:=-Wall -Wextra -Wformat-security -Wstrict-prototypes -Wold-style-definition -std=c17 -pedantic
+CFLAGS:=-Wall -Wextra -Wformat-security -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes -Wcast-function-type -std=c17 -pedantic
 # An empty show_message format deliberately clears the message line.
 CFLAGS+=-Wno-format-zero-length
 LDLIBS:=

@@ -30,10 +30,9 @@ typedef uint16_t	chtype;  // character with attributes
  * Function prototypes
  * Some are unused
  */
-char	*get_saved_screen(void);
-void	release_saved_screen(void);
 void	draw_custom_box(byte border_characters[BX_SIZE], int top, int left, int bottom, int right);
 #ifdef ROGUE_DOS_CURSES
+void	release_saved_screen(void);
 void	real_rc(int pn, int *rp, int *cp);
 void	error(int mline, char *show_message, int a1, int a2, int a3, int a4, int a5);
 void	set_cursor(void);

@@ -113,11 +113,11 @@ static bool	colors_changed = FALSE;  // if colors palette was redefined
  * The native representation contains curses cells; it is not a portable save format.
  */
 #if   defined (ROGUE_DOS_CURSES)
-char saved_screen[2048 * sizeof(chtype)];  //@ originally 4096 bytes
+static char saved_screen[2048 * sizeof(chtype)];  //@ originally 4096 bytes
 #elif defined (ROGUE_WIDECHAR)
-cchar_t	saved_screen[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
+static cchar_t	saved_screen[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
 #else
-chtype	saved_screen[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
+static chtype	saved_screen[MAXLINES][MAXCOLS + 1];  // temp buffer to hold screen contents
 #endif
 
 /*@
@@ -1668,16 +1668,6 @@ save_screen(void)
 	screen_updates_suspended = TRUE;
 }
 
-char *
-get_saved_screen(void)
-{
-	/*@ savewin is now a fixed size array
-	if (savewin == (char *)cell_flags)
-		dos_write_memory(savewin,LINES*COLS,0xb800,8192);
-	 */
-	return(saved_screen);
-}
-
 void
 release_saved_screen(void)
 {
@@ -1738,6 +1728,13 @@ restore_screen(void)
 	screen_updates_suspended = FALSE;
 }
 #endif
+
+/* Raw storage for the disabled legacy save code; native cells are not a DOS save format. */
+char *
+get_saved_screen(void)
+{
+	return (char *)saved_screen;
+}
 
 /*
  *   close the window file
