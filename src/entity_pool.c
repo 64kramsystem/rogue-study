@@ -16,8 +16,7 @@ static void	*find_free_entity_slot(void);
  *	Takes an item out of whatever linked list it might be in
  */
 void
-list_detach(list, item)
-	register Entity **list, *item;
+list_detach(register Entity **list, register Entity *item)
 {
 	if (*list == item)
 		*list = next(item);
@@ -32,8 +31,7 @@ list_detach(list, item)
  *	add an item to the head of a list
  */
 void
-list_attach(list, item)
-	register Entity **list, *item;
+list_attach(register Entity **list, register Entity *item)
 {
 	if (*list != NULL)
 	{
@@ -54,8 +52,7 @@ list_attach(list, item)
  *	Throw the whole blamed thing away
  */
 void
-list_free(list_head)
-	register Entity **list_head;
+list_free(register Entity **list_head)
 {
 	register Entity *item;
 
@@ -72,7 +69,7 @@ list_free(list_head)
  *	Get a new item with a specified size
  */
 Entity *
-allocate_entity()
+allocate_entity(void)
 {
 	register Entity *item;
 #ifdef DEBUG
@@ -89,9 +86,8 @@ allocate_entity()
 /*
  * find_free_entity_slot: simple allocation of a Entity
  */
-static
-void *  //@ maybe should be Entity*, as this is a specialized malloc()
-find_free_entity_slot()
+static void *
+find_free_entity_slot(void)
 {
 	register int i;
 
@@ -114,8 +110,7 @@ find_free_entity_slot()
  *	Free up an item
  */
 int
-release_entity(item)
-	register Entity *item;
+release_entity(register Entity *item)
 {
 	register int i;
 

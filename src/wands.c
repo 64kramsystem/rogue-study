@@ -13,8 +13,7 @@
  *	Set up a new stick
  */
 void
-initialize_wand(wand)
-	register Entity *wand;
+initialize_wand(register Entity *wand)
 {
 	if (strcmp(wand_kinds[wand->item_subtype], "staff") == 0)
 		wand->item_melee_damage = "2d3";
@@ -25,11 +24,12 @@ initialize_wand(wand)
 	wand->item_charges = 3 + random_below(5);
 	switch (wand->item_subtype)
 	{
-	when WAND_STRIKING:
+	case WAND_STRIKING:
 		wand->item_hit_bonus = 100;
 		wand->item_damage_bonus = 3;
 		wand->item_melee_damage = "1d8";
-	when WAND_LIGHT:
+		break;
+	case WAND_LIGHT:
 		wand->item_charges = 10 + random_below(10);
 		break;
 	}
@@ -40,7 +40,7 @@ initialize_wand(wand)
  *	Perform a zap with a wand
  */
 void
-zap_wand()
+zap_wand(void)
 {
 	Entity *item;
 	Entity *monster;
@@ -69,7 +69,7 @@ zap_wand()
 	}
 	switch (effect_index)
 	{
-	when WAND_LIGHT:
+	case WAND_LIGHT:
 		/*
 		 * Reddy Kilowat wand.  Light up the room
 		 */
@@ -91,7 +91,8 @@ zap_wand()
 			 */
 			enter_room(&player_position);
 		}
-	when WAND_DRAIN_LIFE:
+		break;
+	case WAND_DRAIN_LIFE:
 		/*
 		 * Take away 1/2 of hero's hit points, then take it away
 		 * evenly from the monsters in the room (or next to hero
@@ -104,7 +105,8 @@ zap_wand()
 		}
 		else
 			drain_monsters();
-	when WAND_POLYMORPH:
+		break;
+	case WAND_POLYMORPH:
 	case WAND_TELEPORT_AWAY:
 	case WAND_TELEPORT_TO:
 	case WAND_CANCELLATION:
@@ -199,9 +201,8 @@ zap_wand()
 			monster->actor_destination = &player_position;
 			monster->actor_flags |= ACTOR_CHASING;
 		}
-	}
-	when WAND_MAGIC_MISSILE:
-	{
+	} break;
+	case WAND_MAGIC_MISSILE: {
 		Entity bolt;
 
 		wand_identified[WAND_MAGIC_MISSILE] = TRUE;
@@ -217,8 +218,8 @@ zap_wand()
 			hit_monster(position_yx(bolt.item_position), &bolt);
 		else
 		show_message("the missle vanishes with a puff of smoke");
-	}
-	when WAND_STRIKING:
+	} break;
+	case WAND_STRIKING:
 		action_direction.y += player_position.y;
 		action_direction.x += player_position.x;
 		if ((monster = monster_at(action_direction.y, action_direction.x)) != NULL)
@@ -235,7 +236,8 @@ zap_wand()
 			}
 			player_attack(&action_direction, monster->actor_species, item, FALSE);
 		}
-	when WAND_HASTE_MONSTER:
+		break;
+	case WAND_HASTE_MONSTER:
 	case WAND_SLOW_MONSTER:
 		y = player_position.y;
 		x = player_position.x;
@@ -265,7 +267,8 @@ zap_wand()
 			action_direction.x = x;
 			start_monster_chase(&action_direction);
 		}
-	when WAND_LIGHTNING:
+		break;
+	case WAND_LIGHTNING:
 	case WAND_FIRE:
 	case WAND_COLD:
 		if (effect_index == WAND_LIGHTNING)
@@ -277,7 +280,8 @@ zap_wand()
 		fire_bolt(&player_position, &action_direction, name);
 		wand_identified[effect_index] = TRUE;
 #ifdef DEBUG
-	otherwise:
+		break;
+	default:
 		show_message("what a bizarre schtick!");
 #endif
 		break;
@@ -291,7 +295,7 @@ zap_wand()
  *	Do drain hit points from player schtick
  */
 void
-drain_monsters()
+drain_monsters(void)
 {
 	Entity *monster;
 	register int target_count;
@@ -341,9 +345,7 @@ drain_monsters()
  *	Fire a bolt in a given direction from a specific starting place
  */
 void
-fire_bolt(start, direction, name)
-	Position *start, *direction;
-	char *name;
+fire_bolt(Position *start, Position *direction, char *name)
 {
 	register byte bolt_symbol = 0, character;
 	register Entity *monster;
@@ -365,9 +367,16 @@ fire_bolt(start, direction, name)
 	bolt.item_damage_bonus = 0;
 	weapon_names[FLAME] = name;
 	switch (direction->y + direction->x) {
-		when 0: bolt_symbol = '/';
-		when 1: case -1: bolt_symbol = (direction->y == 0 ? '-' : '|');
-		when 2: case -2: bolt_symbol = '\\';
+	case 0:
+		bolt_symbol = '/';
+		break;
+	case 1:
+	case -1:
+		bolt_symbol = (direction->y == 0 ? '-' : '|');
+		break;
+	case 2:
+	case -2:
+		bolt_symbol = '\\';
 		break;
 	}
 	position = *start;
@@ -463,8 +472,7 @@ fire_bolt(start, direction, name)
  *	Return an appropriate string for a wand charge
  */
 char *
-format_wand_charges(item)
-	register Entity *item;
+format_wand_charges(register Entity *item)
 {
 	static char buffer[20];
 

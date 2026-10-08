@@ -12,8 +12,7 @@
  *	Draw a corridor from a room in a certain direction.
  */
 void
-connect_rooms(first_room_index, second_room_index)
-	int first_room_index, second_room_index;
+connect_rooms(int first_room_index, int second_room_index)
 {
 	struct room *source_room, *destination_room = NULL;
 	register int destination_index, source_index;
@@ -155,7 +154,7 @@ connect_rooms(first_room_index, second_room_index)
  *	Draw all the passages on a level.
  */
 void
-generate_passages()
+generate_passages(void)
 {
 	register int i, j;
 	int connected_rooms;
@@ -266,9 +265,7 @@ generate_passages()
  *	the exits array of the room.
  */
 void
-place_door(room, position)
-	struct room *room;
-	Position *position;
+place_door(struct room *room, Position *position)
 {
 	register int index, exit_index;
 
@@ -292,7 +289,7 @@ place_door(room, position)
  *	Add the passages to the current window (wizard command)
  */
 void
-add_pass()
+add_pass(void)
 {
 	register int y, x, ch;
 
@@ -311,7 +308,7 @@ static int passage_number;
 static byte passage_needs_number;
 
 void
-number_passages()
+number_passages(void)
 {
 	register struct room *room;
 	register int i;
@@ -332,8 +329,7 @@ number_passages()
  *	Number a passageway square and its brethren
  */
 void
-mark_connected_passage(y, x)
-	int y, x;
+mark_connected_passage(int y, int x)
 {
 	register byte *flags_cursor;
 	register struct room *room;
@@ -369,8 +365,7 @@ mark_connected_passage(y, x)
 }
 
 void
-carve_passage_cell(y, x)
-	shint y, x;
+carve_passage_cell(shint y, shint x)
 {
 	register int idx;
 

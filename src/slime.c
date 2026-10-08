@@ -17,8 +17,7 @@ static Position slime_spawn_position;
 static bool	new_slime(Entity *slime);
 
 void
-slime_split(slime)
-	Entity *slime;
+slime_split(Entity *slime)
 {
 	register Entity *offspring;
 
@@ -33,10 +32,8 @@ slime_split(slime)
 	start_monster_chase(&slime_spawn_position);
 }
 
-static
-bool
-new_slime(slime)
-	Entity *slime;
+static bool
+new_slime(Entity *slime)
 {
 	register int y, x, origin_y, origin_x;
 	register bool found_space;
@@ -80,9 +77,7 @@ new_slime(slime)
  * and 'appear' is now "strictly" boolean
  */
 bool
-find_monster_spawn_position(origin_y, origin_x, spawn_position)
-	int origin_y, origin_x;
-	Position *spawn_position;
+find_monster_spawn_position(int origin_y, int origin_x, Position *spawn_position)
 {
 	register int y, x, inv_odds = 0;
 	bool appear = FALSE;

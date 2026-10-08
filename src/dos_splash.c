@@ -235,7 +235,7 @@ int
 find_copy_protection_drive(void)
 {
 #ifdef ROGUE_DOS_DRIVE
-	int drive = dos_service(0x19);  //@ Get Current Default Drive (0=A, 1=B, etc)
+	int drive = dos_service(0x19, 0);  //@ Get Current Default Drive ignores the DX input.
 #else
 	int drive = current_drive;
 #endif

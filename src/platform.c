@@ -110,7 +110,7 @@ int keyboard_lock_flags(void)
  * its actual bounds. This native stub returns the expected historical constant.
  */
 int
-code_checksum()
+code_checksum(void)
 {
 	return -1632;
 }
@@ -121,10 +121,7 @@ code_checksum()
  * implementation is in dos.asm. Native memory is not addressed through DOS segments.
  */
 void
-dos_write_byte(offset, segment, value)
-	int UNUSED(offset);
-	int UNUSED(segment);
-	byte UNUSED(value);
+dos_write_byte(int UNUSED (offset), int UNUSED (segment), byte UNUSED (value))
 {
 	;  // it was written, I promise!
 }
@@ -140,9 +137,7 @@ dos_write_byte(offset, segment, value)
  * Only used in load.c to read CGA (0xB800) and BIOS (0x40) data
  */
 byte
-dos_read_byte(offset, segment)
-	int UNUSED(offset);
-	int UNUSED(segment);
+dos_read_byte(int UNUSED (offset), int UNUSED (segment))
 {
 	return 0;  // we just rebooted, so...
 }
@@ -160,9 +155,7 @@ dos_read_byte(offset, segment)
  * written to DX, so a type uint16_t could be used enforce this.
  */
 void
-dos_write_port(port, value)
-	int UNUSED(port);
-	byte UNUSED(value);
+dos_write_port(int UNUSED (port), byte UNUSED (value))
 {
 	;  // and it's out! :)
 }
@@ -174,8 +167,7 @@ dos_write_port(port, value)
  * A dummy wrapper to the x86 IN instruction. Return 0
  */
 byte
-dos_read_port(port)
-	int UNUSED(port);
+dos_read_port(int UNUSED (port))
 {
 	return 0;  // maybe it's not connected :P
 }
@@ -198,22 +190,14 @@ dos_read_port(port)
  */
 #if defined(ROGUE_DOS_CURSES) && defined(ROGUE_DEBUG)
 void
-dos_write_memory(data, wordlength, segment, offset)
-	void * data;
-	unsigned int wordlength;
-	unsigned int segment;
-	unsigned int offset;
+dos_write_memory(void *data, unsigned int wordlength, unsigned int segment, unsigned int offset)
 {
 	printf("dmaout(%p, %d, %04x:%04x)\n",
 			data, wordlength, segment, offset);
 }
 #else
 void
-dos_write_memory(data, wordlength, segment, offset)
-	void UNUSED(*data);
-	unsigned int UNUSED(wordlength);
-	unsigned int UNUSED(segment);
-	unsigned int UNUSED(offset);
+dos_write_memory(void UNUSED (*data), unsigned int UNUSED (wordlength), unsigned int UNUSED (segment), unsigned int UNUSED (offset))
 {
 		; // blazing fast!
 }
@@ -230,11 +214,7 @@ dos_write_memory(data, wordlength, segment, offset)
  * Originally in dos.asm. See notes on dos_write_memory()
  */
 void
-dos_read_memory(buffer, wordlength, segment, offset)
-	void UNUSED(*buffer);
-	unsigned int UNUSED(wordlength);
-	unsigned int UNUSED(segment);
-	unsigned int UNUSED(offset);
+dos_read_memory(void UNUSED (*buffer), unsigned int UNUSED (wordlength), unsigned int UNUSED (segment), unsigned int UNUSED (offset))
 {
 	;
 }
@@ -249,7 +229,7 @@ dos_read_memory(buffer, wordlength, segment, offset)
  * hanging the PC. Now it uses a harmless pause()
  */
 void
-halt_game()
+halt_game(void)
 {
 	shutdown_screen();
 	printf("HALT!\n");
@@ -272,7 +252,7 @@ halt_game()
  * code anyway. See notes on update_protection_state().
  */
 void
-install_dos_break_handler()
+install_dos_break_handler(void)
 {
 	struct dos_registers reg;
 	reg.ax = 0x2523;  //@ hooking to INT 23h
@@ -287,7 +267,7 @@ install_dos_break_handler()
  *	Get starting setup for all games
  */
 void
-setup_game_io()
+setup_game_io(void)
 {
 	terse = FALSE;
 	dungeon_bottom_row = 23;
@@ -314,12 +294,12 @@ setup_game_io()
  * restore_dos_timer_hook after saving the original vector; exit_game invokes it.
  */
 void
-no_timer_cleanup()
+no_timer_cleanup(void)
 {
 	return;
 }
 
-void (*restore_timer_hook)() = no_timer_cleanup;
+void(*restore_timer_hook)(void) = no_timer_cleanup;
 
 
 /*
@@ -335,7 +315,7 @@ void (*restore_timer_hook)() = no_timer_cleanup;
  * for timing and does not install this hook.
  */
 void
-install_dos_timer_hook()
+install_dos_timer_hook(void)
 {
 	/*@
 	 * CS register value. Originally an extern set by begin.asm
@@ -372,7 +352,7 @@ install_dos_timer_hook()
  * update_protection_state() would no longer be called, and thus tick will not be updated.
  */
 void
-restore_dos_timer_hook()
+restore_dos_timer_hook(void)
 {
 	dos_write_memory(saved_timer_vector, 2, 0, TIMER_VECTOR_OFFSET);
 }
@@ -386,7 +366,7 @@ restore_dos_timer_hook()
  * not run an interrupt-driven watchdog or reproduce the single-step-vector check.
  */
 void
-update_protection_state()
+update_protection_state(void)
 {
 #ifdef ROGUE_DOS_CLOCK
 	//@ tick the old clock
@@ -426,7 +406,7 @@ epoch_seconds(void)
  * Return current local time as a pointer to a struct
  */
 LocalTime *
-current_local_time()
+current_local_time(void)
 {
 	static LocalTime result;
 	time_t now = time(NULL);
@@ -462,7 +442,7 @@ sleep_nanoseconds(long nanoseconds)
  * returns a seed for a random number generator
  */
 int
-random_seed_from_clock()
+random_seed_from_clock(void)
 {
 #ifdef DEBUG
 	return ++initial_random_seed;
@@ -471,7 +451,7 @@ random_seed_from_clock()
 	 * Get Time
 	 */
 #ifdef ROGUE_DOS_CLOCK
-	dos_service(0x2C);
+	dos_service(0x2C, 0);  // Get Time does not use the DX input.
 	return(dos_regs->cx + dos_regs->dx);
 #else
 	return (int)epoch_seconds();
@@ -485,7 +465,7 @@ random_seed_from_clock()
  *	Flush typebuf for traps, etc.
  */
 void
-clear_macro_input()
+clear_macro_input(void)
 {
 #ifdef CRASH_MACHINE
 	dos_regs->ax = 0xc06;		/* clear keyboard input */
@@ -499,7 +479,7 @@ clear_macro_input()
  * Display the credits and read the player's name before generating the first level.
  */
 void
-show_credits()
+show_credits(void)
 {
 	#define ULINE() if(is_color) lmagenta();else uline();
 
@@ -613,7 +593,7 @@ no_char()
  *	Return the next input character, from the macro or from the keyboard.
  */
 byte
-read_game_key()
+read_game_key(void)
 {
 	int terminal_key;
 	byte character;
@@ -641,8 +621,7 @@ read_game_key()
 
 
 int
-dos_service(function_number, argument)
-	int function_number, argument;
+dos_service(int function_number, int argument)
 {
 	register struct dos_registers *saved_registers;
 
@@ -684,8 +663,7 @@ allocate_memory(nbytes,clrflag)
  * Clients should call free() for allocated objects
  */
 char *
-allocate_memory(byte_count)
-	unsigned int byte_count;
+allocate_memory(unsigned int byte_count)
 {
 	void * memory;
 	if ((memory = (char *) malloc(byte_count)) == NULL)
@@ -695,9 +673,7 @@ allocate_memory(byte_count)
 
 
 int
-call_dos_interrupt(interrupt_number, registers)
-	int interrupt_number;
-	struct dos_registers *registers;
+call_dos_interrupt(int interrupt_number, struct dos_registers *registers)
 {
 	//@ DS register value. Originally an extern set by begin.asm, now a dummy
 	int data_segment = 0x00;
@@ -715,13 +691,7 @@ call_dos_interrupt(interrupt_number, registers)
  * Return FLAGS register, or rather a dummy with reasonable values
  */
 int
-simulate_dos_interrupt(interrupt_number, input_registers, output_registers)
-#if defined(ROGUE_DOS_CURSES) && defined(ROGUE_DEBUG)
-	int interrupt_number;
-#else
-	int UNUSED(interrupt_number);
-#endif
-	struct dos_registers *input_registers, *output_registers;
+simulate_dos_interrupt(int UNUSED (interrupt_number), struct dos_registers *input_registers, struct dos_registers *output_registers)
 {
 #if defined(ROGUE_DOS_CURSES) && defined(ROGUE_DEBUG)
 	if(print_int_calls)
@@ -759,8 +729,7 @@ simulate_dos_interrupt(interrupt_number, input_registers, output_registers)
 }
 
 bool
-set_dos_break_check(state)
-	bool state;
+set_dos_break_check(bool state)
 {
 	struct dos_registers registers;
 	int previous_state;
@@ -777,7 +746,7 @@ set_dos_break_check(state)
 }
 
 void
-restore_game_io()
+restore_game_io(void)
 {
 	set_dos_break_check(saved_break_check);
 #ifndef ROGUE_NO_X11
@@ -799,7 +768,7 @@ restore_game_io()
  * normal damage and tombstone text after successful disk authentication.
  */
 void
-protection_tick()
+protection_tick(void)
 {
 /*@
 	int otick = tick;

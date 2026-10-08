@@ -161,28 +161,35 @@ update_player_view(bool wakeup)
 
 			if (door_stop && !first_run_step && running) {
 				switch (run_direction) {
-				when 'h':
+				case 'h':
 					if (x == neighbor_x_end)
 						continue;
-				when 'j':
+					break;
+				case 'j':
 					if (y == neighbor_y_start)
 						continue;
-				when 'k':
+					break;
+				case 'k':
 					if (y == neighbor_y_end)
 						continue;
-				when 'l':
+					break;
+				case 'l':
 					if (x == neighbor_x_start)
 						continue;
-				when 'y':
+					break;
+				case 'y':
 					if ((y + x) - player_diagonal_sum >= 1)
 						continue;
-				when 'u':
+					break;
+				case 'u':
 					if ((y - x) - player_diagonal_difference >= 1)
 						continue;
-				when 'n':
+					break;
+				case 'n':
 					if ((y + x) - player_diagonal_sum <= -1)
 						continue;
-				when 'b':
+					break;
+				case 'b':
 					if ((y - x) - player_diagonal_difference <= -1)
 						continue;
 					break;
@@ -237,8 +244,7 @@ update_player_view(bool wakeup)
  *	Find the unclaimed object at y, x
  */
 Entity *
-item_at(y, x)
-	register int y, x;
+item_at(register int y, register int x)
 {
 	register Entity *other_item;
 
@@ -259,7 +265,7 @@ item_at(y, x)
 	 *	She wants to eat something, so let her try
 	 */
 void
-eat_food()
+eat_food(void)
 {
 	register Entity *item;
 
@@ -306,8 +312,7 @@ eat_food()
  *	highest it has been, just in case
  */
 void
-change_player_strength(adjustment)
-	register int adjustment;
+change_player_strength(register int adjustment)
 {
 	Strength previous_strength;
 
@@ -328,9 +333,7 @@ change_player_strength(adjustment)
  *	Perform the actual add, checking upper and lower bound
  */
 void
-adjust_strength(strength, adjustment)
-	register Strength *strength;
-	int adjustment;
+adjust_strength(register Strength *strength, int adjustment)
 {
 	if ((*strength += adjustment) < 3)
 		*strength = 3;
@@ -368,7 +371,7 @@ add_haste(bool potion)
  *	Aggravate all the monsters on this level
  */
 void
-aggravate_monsters()
+aggravate_monsters(void)
 {
 	register Entity *monster;
 
@@ -382,8 +385,7 @@ aggravate_monsters()
  *	"an".
  */
 char *
-article_suffix(text)
-	register char *text;
+article_suffix(register char *text)
 {
 	switch (*text)
 	{
@@ -403,8 +405,7 @@ article_suffix(text)
  *	See if the object is one of the currently used items
  */
 bool
-is_equipped(item)
-	register Entity *item;
+is_equipped(register Entity *item)
 {
 	if (item == NULL)
 		return FALSE;
@@ -422,7 +423,7 @@ is_equipped(item)
  *	commands
  */
 bool
-read_direction()
+read_direction(void)
 {
 	register int character;
 
@@ -451,15 +452,48 @@ decode_direction(byte character, Position *direction)
 
 	gotit = TRUE;
 	switch (character) {
-		when 'h': case'H': direction->y =  0; direction->x = -1;
-		when 'j': case'J': direction->y =  1; direction->x =  0;
-		when 'k': case'K': direction->y = -1; direction->x =  0;
-		when 'l': case'L': direction->y =  0; direction->x =  1;
-		when 'y': case'Y': direction->y = -1; direction->x = -1;
-		when 'u': case'U': direction->y = -1; direction->x =  1;
-		when 'b': case'B': direction->y =  1; direction->x = -1;
-		when 'n': case'N': direction->y =  1; direction->x =  1;
-		otherwise: gotit = FALSE;
+	case 'h':
+	case 'H':
+		direction->y = 0;
+		direction->x = -1;
+		break;
+	case 'j':
+	case 'J':
+		direction->y = 1;
+		direction->x = 0;
+		break;
+	case 'k':
+	case 'K':
+		direction->y = -1;
+		direction->x = 0;
+		break;
+	case 'l':
+	case 'L':
+		direction->y = 0;
+		direction->x = 1;
+		break;
+	case 'y':
+	case 'Y':
+		direction->y = -1;
+		direction->x = -1;
+		break;
+	case 'u':
+	case 'U':
+		direction->y = -1;
+		direction->x = 1;
+		break;
+	case 'b':
+	case 'B':
+		direction->y = 1;
+		direction->x = -1;
+		break;
+	case 'n':
+	case 'N':
+		direction->y = 1;
+		direction->x = 1;
+		break;
+	default:
+		gotit = FALSE;
 	}
 	return gotit;
 }
@@ -469,8 +503,7 @@ decode_direction(byte character, Position *direction)
  *	Return the sign of the number
  */
 shint
-sign(value)
-	register int value;
+sign(register int value)
 {
 	if (value < 0)
 		return -1;
@@ -483,8 +516,7 @@ sign(value)
  *	Give a spread around a given number (+/- 10%)
  */
 int
-randomize_duration(base_duration)
-	register int base_duration;
+randomize_duration(register int base_duration)
 {
 	return base_duration - base_duration / 10 + random_below(base_duration / 5);
 }
@@ -535,53 +567,58 @@ is_walkable_symbol(byte character)
  * printing.
  */
 char
-display_item_symbol(item)
-	register Entity *item;
+display_item_symbol(register Entity *item)
 {
 	register char display_symbol = MAGIC;
 
 	if (item->item_flags & ITEM_CURSED)
 		display_symbol = BMAGIC;
 	switch (item->item_category) {
-	when ARMOR:
+	case ARMOR:
 		if (item->item_modifier > armor_classes[item->item_subtype])
 			display_symbol = BMAGIC;
-	when WEAPON:
+		break;
+	case WEAPON:
 		if (item->item_hit_bonus < 0 || item->item_damage_bonus < 0)
 			display_symbol = BMAGIC;
-	when SCROLL:
+		break;
+	case SCROLL:
 		switch (item->item_subtype) {
-		when SCROLL_SLEEP:
+		case SCROLL_SLEEP:
 		case SCROLL_CREATE_MONSTER:
 		case SCROLL_AGGRAVATE_MONSTERS:
 			display_symbol = BMAGIC;
 			break;
 		}
-	when POTION:
+		break;
+	case POTION:
 		switch (item->item_subtype) {
-		when POTION_CONFUSION:
+		case POTION_CONFUSION:
 		case POTION_PARALYSIS:
 		case POTION_POISON:
 		case POTION_BLINDNESS:
 			display_symbol = BMAGIC;
 			break;
 		}
-	when STICK:
+		break;
+	case STICK:
 		switch (item->item_subtype) {
-		when WAND_HASTE_MONSTER:
+		case WAND_HASTE_MONSTER:
 		case WAND_TELEPORT_TO:
 			display_symbol = BMAGIC;
 			break;
 		}
-	when RING:
+		break;
+	case RING:
 		switch (item->item_subtype) {
-		when RING_PROTECTION:
+		case RING_PROTECTION:
 		case RING_ADD_STRENGTH:
 		case RING_DAMAGE:
 		case RING_DEXTERITY:
 			if (item->item_modifier < 0)
 				display_symbol = BMAGIC;
-		when RING_AGGRAVATION:
+			break;
+		case RING_AGGRAVATION:
 		case RING_TELEPORTATION:
 			display_symbol = BMAGIC;
 			break;
@@ -595,8 +632,7 @@ display_item_symbol(item)
  * show_help: prints out help screens
  */
 void
-show_help(entries)
-	struct help_entry *entries;
+show_help(struct help_entry *entries)
 {
 #ifdef HELP
 	register int entry_index = 0;
@@ -659,8 +695,7 @@ show_help(entries)
 #ifndef UNIX
 
 int
-distance_squared(y1, x1, y2, x2)
-	int y1, x1, y2, x2;
+distance_squared(int y1, int x1, int y2, int x2)
 {
 	register int dx, dy;
 
@@ -670,15 +705,13 @@ distance_squared(y1, x1, y2, x2)
 }
 
 bool
-compare_positions(a,b)
-	Position *a, *b;
+compare_positions(Position *a, Position *b)
 {
 	return(a->x == b->x && a->y == b->y);
 }
 
 int
-map_index(y,x)
-	int y, x;
+map_index(int y, int x)
 {
 #ifdef DEBUG
 	if (outside_dungeon(y,x) && me())
@@ -688,15 +721,13 @@ map_index(y,x)
 }
 
 bool
-outside_dungeon(y,x)
-	int y, x;
+outside_dungeon(int y, int x)
 {
 	return (y < 1 || y >= dungeon_bottom_row || x < 0 || x >= COLS) ;
 }
 
 byte
-visible_entity_at(y,x)
-	int y, x;
+visible_entity_at(int y, int x)
 {
 	return(monster_at(y,x) != NULL ? monster_at(y,x)->actor_disguise : terrain_at(y,x));
 }
@@ -707,7 +738,7 @@ visible_entity_at(y,x)
  *	Player gropes about him to find hidden things.
  */
 void
-search()
+search(void)
 {
 	register int y, x;
 	register byte *flags_cursor;
@@ -756,7 +787,7 @@ search()
  *	He wants to go down a level
  */
 void
-descend_stairs()
+descend_stairs(void)
 {
 	if (terrain_at(player_position.y, player_position.x) != STAIRS)
 		show_message("I see no way down");
@@ -771,7 +802,7 @@ descend_stairs()
  *	He wants to go up a level
  */
 void
-ascend_stairs()
+ascend_stairs(void)
 {
 	if (terrain_at(player_position.y, player_position.x) == STAIRS)
 		if (carrying_amulet) {
@@ -792,7 +823,7 @@ ascend_stairs()
  *	Allow a user to call a potion, scroll, or ring something
  */
 void
-name_item_type()
+name_item_type(void)
 {
 	register Entity *item;
 	register char **labels, *current_label;
@@ -806,27 +837,31 @@ name_item_type()
 		return;
 	switch (item->item_category)
 	{
-	when RING:
+	case RING:
 		labels = (char **)ring_labels;
 		identified_types = ring_identified;
 		current_label = (*labels[item->item_subtype] != '\0' ?
 			labels[item->item_subtype] : ring_gemstones[item->item_subtype]);
-	when POTION:
+		break;
+	case POTION:
 		labels = (char **)potion_labels;
 		identified_types = potion_identified;
 		current_label = (*labels[item->item_subtype] != '\0' ?
 			labels[item->item_subtype] : potion_colors[item->item_subtype]);
-	when SCROLL:
+		break;
+	case SCROLL:
 		labels = (char **)scroll_labels;
 		identified_types = scroll_identified;
 		current_label = (*labels[item->item_subtype] != '\0' ?
 			labels[item->item_subtype] : scroll_titles[item->item_subtype].storage);
-	when STICK:
+		break;
+	case STICK:
 		labels = (char **)wand_labels;
 		identified_types = wand_identified;
 		current_label = (*labels[item->item_subtype] != '\0' ?
 			labels[item->item_subtype] : wand_materials[item->item_subtype]);
-	otherwise:
+		break;
+	default:
 		show_message("you can't call that anything");
 		return;
 	}
@@ -847,9 +882,7 @@ name_item_type()
  * prompt player for definition of macro
  */
 void
-edit_keyboard_macro(buffer,capacity)
-	char *buffer;
-	int capacity;
+edit_keyboard_macro(char *buffer, int capacity)
 {
 	register char *buffer_cursor = description_buffer;
 
@@ -865,7 +898,7 @@ edit_keyboard_macro(buffer,capacity)
 
 #ifdef ME
 bool
-me()
+me(void)
 {
 	return is_me;
 }
@@ -874,7 +907,7 @@ me()
 
 #ifdef TEST
 bool
-istest()
+istest(void)
 {
 	return (!strcmp("debug",favorite_fruit));
 }

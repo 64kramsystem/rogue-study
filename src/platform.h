@@ -145,11 +145,18 @@ typedef unsigned char byte;
  * Function types
  */
 //@ mach_dep.c originals
-int 	random_seed_from_clock(), dos_service(), call_dos_interrupt(), simulate_dos_interrupt();
-void	setup_game_io(), clear_macro_input(), show_credits(), protection_tick();
-char	*allocate_memory();
-byte	read_game_key();
-bool	set_dos_break_check();
+int	random_seed_from_clock(void);
+int	dos_service(int function_number, int argument);
+int	call_dos_interrupt(int interrupt_number, struct dos_registers *registers);
+int	simulate_dos_interrupt(int interrupt_number, struct dos_registers *input_registers,
+		struct dos_registers *output_registers);
+void	setup_game_io(void);
+void	clear_macro_input(void);
+void	show_credits(void);
+void	protection_tick(void);
+char	*allocate_memory(unsigned int byte_count);
+byte	read_game_key(void);
+bool	set_dos_break_check(bool state);
 #ifdef ROGUE_DOS_CLOCK
 void	install_dos_timer_hook(void);
 void	restore_dos_timer_hook(void);
@@ -163,16 +170,16 @@ LocalTime  	*current_local_time(void);
 void	sleep_nanoseconds(long nanoseconds);
 
 //@ dos.asm
-int 	code_checksum();
-byte 	dos_read_byte();
-void	dos_write_byte();
-void	dos_write_port();
-byte	dos_read_port();
-void	dos_write_memory();
-void	dos_read_memory();
-void	halt_game();
-void	update_protection_state();
-void	install_dos_break_handler();
+int	code_checksum(void);
+byte	dos_read_byte(int offset, int segment);
+void	dos_write_byte(int offset, int segment, byte value);
+void	dos_write_port(int port, byte value);
+byte	dos_read_port(int port);
+void	dos_write_memory(void *data, unsigned int wordlength, unsigned int segment, unsigned int offset);
+void	dos_read_memory(void *buffer, unsigned int wordlength, unsigned int segment, unsigned int offset);
+void	halt_game(void);
+void	update_protection_state(void);
+void	install_dos_break_handler(void);
 
 //@ moved from main.c
 void	fatal(const char *message_text, ...) PRINTF_FORMAT(1, 2);

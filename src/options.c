@@ -72,8 +72,7 @@ static char *option_key_cursor, *option_value_cursor;
  *                  @@ FALSE on failure to open envfile, TRUE otherwise
  */
 bool
-load_options_file(filename)
-	char *filename;
+load_options_file(char *filename)
 {
 	register char separator;
 
@@ -200,10 +199,8 @@ read_option_character(void)
  * @ used only by the unused is_set(), so safe to remove. renamed from getenv()
  * @ to avoid conflict with <stdlib.h>, and also made static
  */
-static
-char *
-get_option_value(label)
-	char *label;
+static char *
+get_option_value(char *label)
 {
 	register int i;
 
@@ -226,9 +223,8 @@ get_option_value(label)
  *	  No meaningful return codes to save data space
  *	  Just ingnores strange labels
  */
-void
-set_option_value(label,string)
-	char *label, *string;
+static void
+set_option_value(char *label, char *string)
 {
 	register int i;
 
@@ -241,10 +237,8 @@ set_option_value(label,string)
 
 #ifdef LUXURY
 //@ unused, safe to remove, made static
-static
-bool
-is_set(label,string)
-	char *label,*string;
+static bool
+is_set(char *label, char *string)
 {
 	return(!strcmp(string,getenv(label)));
 }

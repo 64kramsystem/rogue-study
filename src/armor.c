@@ -12,7 +12,7 @@
  *	The player wants to wear something, so let him/her put it on.
  */
 void
-wear_armor()
+wear_armor(void)
 {
 	register Entity *item;
 	register char *text_cursor;
@@ -41,7 +41,7 @@ wear_armor()
  *	Get the armor off of the player's back
  */
 void
-remove_armor()
+remove_armor(void)
 {
 	register Entity *item;
 
@@ -61,7 +61,7 @@ remove_armor()
  *	Do nothing but let other things happen
  */
 void
-advance_turn()
+advance_turn(void)
 {
 	run_recurring_actions();
 	run_delayed_actions();

@@ -14,7 +14,7 @@ char *in_dist = " in the distance";
  *	Read a scroll from the pack and do the appropriate thing
  */
 void
-read_scroll()
+read_scroll(void)
 {
 	register Entity *item;
 	register int y, x;
@@ -37,20 +37,22 @@ read_scroll()
 	if (item == equipped_weapon)
 		equipped_weapon = NULL;
 	switch (item->item_subtype){
-	when SCROLL_CONFUSE_MONSTER:
+	case SCROLL_CONFUSE_MONSTER:
 		/*
 		 * Scroll of monster confusion.  Give him that power.
 		 */
 		player.actor_flags |= ACTOR_CAN_CONFUSE;
 		show_message("your hands begin to glow red");
-	when SCROLL_ENCHANT_ARMOR:
+		break;
+	case SCROLL_ENCHANT_ARMOR:
 		if (equipped_armor != NULL) {
 			equipped_armor->item_modifier--;
 			equipped_armor->item_flags &= ~ITEM_CURSED;
 			message_by_verbosity0("your armor glows faintly",
 				"your armor glows faintly for a moment");
 		}
-	when SCROLL_HOLD_MONSTERS:
+		break;
+	case SCROLL_HOLD_MONSTERS:
 		/*
 		 * Hold monster scroll.  Stop all monsters within two spaces
 		 * from chasing after the hero.
@@ -63,7 +65,8 @@ read_scroll()
 						affected_item->actor_flags &= ~ACTOR_CHASING;
 						affected_item->actor_flags |= ACTOR_HELD;
 					}
-	when SCROLL_SLEEP:
+		break;
+	case SCROLL_SLEEP:
 		/*
 		 * Scroll which makes you fall asleep
 		 */
@@ -71,8 +74,8 @@ read_scroll()
 		incapacitated_turns += random_below(SLEEPTIME) + 4;
 		player.actor_flags &= ~ACTOR_CHASING;
 		show_message("you fall asleep");
-	when SCROLL_CREATE_MONSTER:
-		{
+		break;
+	case SCROLL_CREATE_MONSTER: {
 		Position monster_position;
 
 		if (find_monster_spawn_position(player_position.y, player_position.x, &monster_position) && (affected_item=allocate_entity()) != NULL)
@@ -80,8 +83,8 @@ read_scroll()
 		else
 			message_by_verbosity0("you hear a faint cry of anguish",
 				"you hear a faint cry of anguish in the distance");
-		}
-	when SCROLL_IDENTIFY:
+	} break;
+	case SCROLL_IDENTIFY:
 		/*
 		 * Identify, let the rogue figure something out
 		 */
@@ -90,7 +93,8 @@ read_scroll()
 		if (! strcmp(menu_option,"on") || !strcmp(menu_option,"sel"))
 			show_more_prompt(" More ");
 		identify_item();
-	when SCROLL_MAPPING:
+		break;
+	case SCROLL_MAPPING:
 		/*
 		 * Scroll of magic mapping.
 		 */
@@ -134,7 +138,8 @@ read_scroll()
 					mvaddch(y, x, character);
 				standend();
 			}
-	when SCROLL_FOOD_DETECTION:
+		break;
+	case SCROLL_FOOD_DETECTION:
 		/*
 					 * Scroll of food detection
 					 */
@@ -158,7 +163,8 @@ read_scroll()
 			show_message("your nose tingles as you sense food");
 		} else
 			message_by_verbosity0("you hear a growling noise close by","you hear a growling noise very close to you");
-	when SCROLL_TELEPORT:
+		break;
+	case SCROLL_TELEPORT:
 		/*
 		 * Scroll of teleportation:
 		 * Make him dissapear and reappear
@@ -171,7 +177,8 @@ read_scroll()
 		if (cur_room != player_room)
 			scroll_identified[SCROLL_TELEPORT] = TRUE;
 		}
-	when SCROLL_ENCHANT_WEAPON:
+		break;
+	case SCROLL_ENCHANT_WEAPON:
 		if (equipped_weapon == NULL || equipped_weapon->item_category != WEAPON)
 		show_message("you feel a strange sense of loss");
 		else
@@ -183,13 +190,15 @@ read_scroll()
 			equipped_weapon->item_damage_bonus++;
 		message_by_verbosity1("your %s glows blue","your %s glows blue for a moment", weapon_names[equipped_weapon->item_subtype]);
 		}
-	when SCROLL_SCARE_MONSTER:
+		break;
+	case SCROLL_SCARE_MONSTER:
 		/*
 		 * Reading it is a mistake and produces laughter at the
 		 * poor rogue's boo boo.
 		 */
 			show_message(laugh, terse || expert ? "" : in_dist);
-	when SCROLL_REMOVE_CURSE:
+		    break;
+	case SCROLL_REMOVE_CURSE:
 		if (equipped_armor != NULL)
 			equipped_armor->item_flags &= ~ITEM_CURSED;
 		if (equipped_weapon != NULL)
@@ -199,7 +208,8 @@ read_scroll()
 		if (equipped_rings[RIGHT] != NULL)
 			equipped_rings[RIGHT]->item_flags &= ~ITEM_CURSED;
 		message_by_verbosity0("somebody is watching over you","you feel as if somebody is watching over you");
-	when SCROLL_AGGRAVATE_MONSTERS:
+		break;
+	case SCROLL_AGGRAVATE_MONSTERS:
 		/*
 		 * This scroll aggravates all the monsters on the current
 		 * level and sets them running towards the hero
@@ -207,9 +217,11 @@ read_scroll()
 		aggravate_monsters();
 		message_by_verbosity("you hear a humming noise",
 					"you hear a high pitched humming noise");
-	when SCROLL_BLANK:
+		break;
+	case SCROLL_BLANK:
 		show_message("this scroll seems to be blank");
-	when SCROLL_VORPALIZE:
+		break;
+	case SCROLL_VORPALIZE:
 		/*
 		 * Extra Vorpal Enchant Weapon
 		 *     Give weapon +1,+1
@@ -258,7 +270,8 @@ read_scroll()
 				 */
 			}
 		}
-	otherwise:
+		break;
+	default:
 		show_message("what a puzzling scroll!");
 		return;
 	}
