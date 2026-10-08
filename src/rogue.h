@@ -672,11 +672,6 @@ int	release_entity(Entity *item);
 void	show_dos_splash(void);
 int	find_copy_protection_drive(void);
 
-#ifdef ROGUE_SPLASH
-//@ load_sdl.c - not in original
-int	show_sdl_splash(const char* path);
-#endif //ROGUE_SPLASH
-
 //@ main.c
 void	exit_game_message(void);
 void	run_game(char *saved_game_path);

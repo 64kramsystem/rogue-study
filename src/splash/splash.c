@@ -12,14 +12,14 @@ static const char * const PIC_PATH = "../rogue.pic";
 static const char * PROGNAME = NULL;  // == argv[0], set by main()
 
 
-void usage(FILE* stream)
+static void usage(FILE* stream)
 {
 	fprintf(stream, "Usage: %s [-h|--help] [-d|--debug] [PIC_PATH]\n", PROGNAME);
 }
 
 
 // explain_output_error_and_die() using stdlib only
-_Noreturn void fatal(const char *format, ...)
+_Noreturn static void fatal(const char *format, ...)
 {
 	char message_text[1000];
 

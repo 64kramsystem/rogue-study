@@ -412,7 +412,7 @@ resolve_attack_damage(Entity *attacker, Entity *defender, Entity *weapon, bool t
  * format_combat_name:
  *	The print name of a combatant
  */
-char *
+static char *
 format_combat_name(char *combatant_name, bool capitalize)
 {
 	*combat_name_buffer = '\0';

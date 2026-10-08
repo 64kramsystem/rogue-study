@@ -67,8 +67,7 @@ process_turn(void)
 	}
 }
 
-//@ No need to declare in rogue.h
-byte
+static byte
 read_command_key(void)
 {
 	register bool run_mode_unchanged;
@@ -96,12 +95,11 @@ read_command_key(void)
 	return character;
 }
 
-//@ No need to declare in rogue.h
 /*
  * Read a command, setting thing up according to prefix like devices
  * Return the command character to be executed.
  */
-byte
+static byte
 read_command_prefix(void)
 {
 	register int parsed_repeat_count;
