@@ -94,8 +94,13 @@ Comments distinguish source-proven behavior from unresolved historical intent. T
 
 `make test` runs configuration, score-file, message-text, and potion-duration regression tests with AddressSanitizer and UndefinedBehaviorSanitizer. It requires a compiler with those sanitizers, pkg-config, ncursesw development files, and GNU ld (Linux), as the gameplay tests use `--wrap`. Gameplay tests exercise the real dispatcher and mechanics with controlled input, randomness, and terminal/effect callbacks; they need no display. Tests use temporary files under `/tmp`.
 
+Function declarations and definitions are checked with GCC/Clang prototype warnings; exported definitions include their declaring headers. For GCC's additional checks across translation units, build with `make clean` then `make -j all CC=gcc CPPFLAGS=-flto LDFLAGS="-flto -Werror=lto-type-mismatch"`. A direct Clang type audit also checked declarations that optimization can discard, including the disabled save code.
+
+Historical `WIZARD`, `DEBUG` (distinct from `ROGUE_DEBUG`), `UNIX`, and `ROGUE_DOS_CURSES` branches are not supported build configurations. They retain compile failures: for example, wizard gold input passes a `short *` and an extra argument to `get_num(int *)`; `UNIX` macros collide with function declarations; and the DOS screen backend mixes native and DOS interfaces. These branches require separate porting work.
+
 ## Corrections in this fork
 
+- **C interfaces:** `saved_screen` was declared as `char[]` but defined as a curses-cell array; it is now private and reached through `get_saved_screen()`. An SDL diagnostic printed a `size_t` with `%X`. Neither had a runtime effect.
 - **Confusion potions — inherited DOS bug:** an outer “not confused” guard made the inner timer-extension branch unreachable. Drinking another confusion potion consumed it without extending the active effect. The guard is removed, so the existing timer is extended. Tests cover initial application, repeated doses at minimum/maximum duration rolls, and a single eventual expiration.
 - **Message text:** replaying a message or displaying a completed description could interpret `%` sequences a second time, corrupting output or causing undefined behavior. Completed messages and item descriptions now pass through a literal `%s` format. Compiler format checks cover the message wrappers. Tests exercise `%%`, `%s`, `%n`, `%d`, trailing `%`, and empty-message clearing.
 - **Options:** prevent buffer overruns on long labels and values; handle empty values; apply the intended lowercase normalization of `menu` and `screen`.

@@ -1,6 +1,6 @@
 TARGET:=splash
 .DEFAULT_GOAL := default
-CFLAGS?=-Wall -Wextra -Wstrict-prototypes -Wold-style-definition -std=c11 -pedantic -Og -g
+CFLAGS?=-Wall -Wextra -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes -Wcast-function-type -std=c11 -pedantic -Og -g
 LDLIBS:=
 
 # --silence-errors only needed for 'make clean' from parent dir

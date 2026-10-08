@@ -140,7 +140,7 @@ write_legacy_memory_dump(char *filename)
 	 * save the screen (have to bring it into current data segment first)
 	 */
 	save_screen();
-	if (fwrite(saved_screen, 4000, 1, file))
+	if (fwrite(get_saved_screen(), 4000, 1, file))
 		errno = 0;
 	restore_screen();
 
@@ -261,7 +261,7 @@ rok:
 	}
 
 	save_screen();
-	if (!fread(saved_screen, 4000, 1, file))
+	if (!fread(get_saved_screen(), 4000, 1, file))
 	{
 		fclose(file);
 		fatal("Serious restore error");

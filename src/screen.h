@@ -48,23 +48,3 @@
 #define printw	screen_printf
 #define getch	cur_getch  //@ no longer used
 #define getch_timeout	screen_read_key
-
-
-/*@
- * Global variables declarations. All defined in curses.c
- */
-extern int LINES, COLS;
-extern int screen_updates_suspended;
-extern int dos_screen_mode;
-#ifdef ROGUE_DOS_CURSES
-extern bool iscuron;
-extern int old_page_no;
-extern int scr_ds;
-extern int svwin_ds;
-#endif
-
-/*
- * we need to know location of screen being saved
- * @ used in save.c
- */
-extern char saved_screen[];
