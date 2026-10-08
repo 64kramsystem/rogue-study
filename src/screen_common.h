@@ -148,7 +148,18 @@
 //@ total time, in milliseconds, for each drop and raise curtain animation
 #define CURTAIN_TIME	1500
 
-/*@
+/* Shared screen state; included by both callers and the implementation. */
+extern int LINES, COLS;
+extern int screen_updates_suspended;
+extern int dos_screen_mode;
+#ifdef ROGUE_DOS_CURSES
+extern bool iscuron;
+extern int old_page_no;
+extern int scr_ds;
+extern int svwin_ds;
+#endif
+
+/*
  * Function prototypes
  * Names with 'cur_' prefix were renamed to avoid conflict with <curses.h>
  */
@@ -167,6 +178,7 @@ void	set_display_attribute(int attribute_index);
 void	initialize_screen(void);
 void	save_screen(void);
 void	restore_screen(void);
+char	*get_saved_screen(void);
 void	shutdown_screen(void);
 void	screen_draw_box(int top, int left, int bottom, int right);
 void	center(int row, char *string);

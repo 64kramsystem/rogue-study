@@ -16,6 +16,9 @@
 
 #include "rogue.h"
 #include "screen.h"
+#ifdef ROGUE_SPLASH
+#include "splash/sdl_splash.h"
+#endif
 
 #define is_key(s) ((*s=='-')||(*s=='/'))
 #define is_char(c1,c2) ((c1==c2)||((c1+'a'-'A')==c2))
@@ -154,14 +157,13 @@ exit_game_message(void)
 
 #define RN		(((random_state = random_state*11109L+13849L) >> 16) & 0xffff)  //@ unused
 
-//@ no need to declare in rogue.h
 /*
  * Random number generator -
  * adapted from the FORTRAN version
  * in "Software Manual for the Elementary Functions"
  * by W.J. Cody, Jr and William Waite.
  */
-long
+static long
 next_random_value(void)
 {
 	random_state *= 125;

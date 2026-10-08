@@ -5,10 +5,14 @@
 #include <string.h>  // str*, memcmp
 
 #include <SDL.h>
+#include "sdl_splash.h"
+
+static void print_error(const char *format, ...) SDL_PRINTF_VARARG_FUNC(1);
+static void print_warning(const char *format, ...) SDL_PRINTF_VARARG_FUNC(1);
 
 
 // A.K.A floor(log2(x)) or logb(x)
-int integer_log2(int value)
+static int integer_log2(int value)
 {
 	int exponent = 0;
 	while (value >>= 1) exponent++;
@@ -16,7 +20,7 @@ int integer_log2(int value)
 }
 
 
-void print_error(const char *format, ...)
+static void print_error(const char *format, ...)
 {
 	char message_text[1000];
 
@@ -29,7 +33,7 @@ void print_error(const char *format, ...)
 }
 
 
-void print_warning(const char *format, ...)
+static void print_warning(const char *format, ...)
 {
 	char message_text[1000];
 
@@ -42,7 +46,7 @@ void print_warning(const char *format, ...)
 }
 
 
-void report_picture_read_error(FILE* file, const char* path, int size, const char* type)
+static void report_picture_read_error(FILE* file, const char* path, int size, const char* type)
 {
 	if (feof(file))  // too small
 		print_error("invalid BSAVE %s, PIC must have %d bytes: %s",
@@ -134,7 +138,7 @@ int show_sdl_splash(const char* path)
 	fclose(file);
 
 	if (strncmp(PIC_SIG, (char *)&data[SIG_OFFSET], (int)strlen(PIC_SIG)) != 0)
-		print_warning("invalid PIC signature at offset 0x%X, expected '%s' in: %s",
+		print_warning("invalid PIC signature at offset 0x%zX, expected '%s' in: %s",
 				sizeof(BSAVE_HEADER) + SIG_OFFSET, PIC_SIG, path);
 
 	if (   SDL_Init(SDL_INIT_VIDEO) != 0
