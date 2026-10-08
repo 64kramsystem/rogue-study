@@ -528,9 +528,7 @@ translate_key(int character)
  * DL = col
  */
 int
-screen_move(row, col)
-	int row;
-	int col;
+screen_move(int row, int col)
 {
 #ifdef ROGUE_DOS_CURSES
 	c_row = row;
@@ -666,10 +664,7 @@ screen_read_character(void)
  * must be sized using sizeof(chtype) or sizeof(cchar_t). Original routine: dos.asm.
  */
 void
-wsetmem(buffer, command_repeat_count, attrchar)
-	void *buffer;
-	int command_repeat_count;
-	chtype attrchar;  // enforced to prevent misuse
+wsetmem(void *buffer, int command_repeat_count, chtype attrchar)  // enforced to prevent misuse
 {
 	while (command_repeat_count--)
 		((chtype *)buffer)[command_repeat_count] = (chtype)attrchar;
@@ -742,8 +737,7 @@ set_cursor_visible(bool visible)
  * get curent cursor position
  */
 void
-get_cursor_position(row,column)
-	int *row, *column;
+get_cursor_position(int *row, int *column)
 {
 #ifdef ROGUE_DOS_CURSES
 	*row = c_row;
@@ -755,8 +749,7 @@ get_cursor_position(row,column)
 
 #ifdef ROGUE_DOS_CURSES
 void
-real_rc(pn, rp,cp)
-	int pn, *rp, *cp;
+real_rc(int pn, int *rp, int *cp)
 {
 	/*
 	 * pc bios: read current cursor position
@@ -799,9 +792,7 @@ screen_clear_to_eol(void)
 }
 
 void
-screen_write_text_at(row,column,s)
-	int row,column;
-	char *s;
+screen_write_text_at(int row, int column, char *s)
 {
 	screen_move(row, column);
 	screen_write_text(s);
@@ -815,8 +806,7 @@ screen_write_character_at(int row, int column, byte character)
 }
 
 byte
-screen_read_character_at(row, column)
-	int row, column;
+screen_read_character_at(int row, int column)
 {
 	screen_move(row, column);
 	return screen_read_character();
@@ -954,8 +944,7 @@ screen_write_character(byte character)
 
 
 void
-screen_write_text(s)
-	char *s;
+screen_write_text(char *s)
 {
 #ifdef ROGUE_DEBUG
 	print_int_calls = FALSE;
@@ -1393,7 +1382,7 @@ init_curses_colors(void)
 
 
 void
-resize_screen()
+resize_screen(void)
 {
 	if ((LINES != game_screen_rows) || (COLS != game_screen_columns))
 	{
@@ -1412,8 +1401,7 @@ resize_screen()
 
 
 void
-set_display_attribute(attribute_index)
-	int attribute_index;
+set_display_attribute(int attribute_index)
 {
 	if (attribute_index < MAXATTR)
 		current_dos_attribute = active_attributes[attribute_index];
@@ -1433,10 +1421,7 @@ set_display_attribute(attribute_index)
 #ifdef ROGUE_DOS_CURSES
 //@ unused, and proper varargs implementation would require cur_vprintw()
 void
-error(mline,show_message,a1,a2,a3,a4,a5)
-	int mline;
-	char *show_message;
-	int a1,a2,a3,a4,a5;
+error(int mline, char *show_message, int a1, int a2, int a3, int a4, int a5)
 {
 	int row, col;
 
@@ -1482,7 +1467,7 @@ set_cursor(void)
 #define JR  0xfd
 #define AT  0xfc
 bool
-isjr()
+isjr(void)
 {
 	static int machine = 0;
 
@@ -1676,7 +1661,7 @@ forcebw()
  *		it can be retieved using windex
  */
 void
-save_screen()
+save_screen(void)
 {
 	get_saved_screen();
 	dos_read_memory(saved_screen,LINES*COLS,scr_ds,0);
@@ -1684,7 +1669,7 @@ save_screen()
 }
 
 char *
-get_saved_screen()
+get_saved_screen(void)
 {
 	/*@ savewin is now a fixed size array
 	if (savewin == (char *)cell_flags)
@@ -1694,7 +1679,7 @@ get_saved_screen()
 }
 
 void
-release_saved_screen()
+release_saved_screen(void)
 {
 	/*@ savewin is now a fixed size array
 	if (savewin == (char *)cell_flags)
@@ -1707,7 +1692,7 @@ release_saved_screen()
  *		restor the window saved on disk
  */
 void
-restore_screen()
+restore_screen(void)
 {
 	dos_write_memory(saved_screen,LINES*COLS,scr_ds,0);
 	release_saved_screen();
@@ -1759,7 +1744,7 @@ restore_screen(void)
  *   @renamed from wclose()
  */
 void
-shutdown_screen()
+shutdown_screen(void)
 {
 #ifdef ROGUE_DOS_CURSES
 	/*
@@ -1858,9 +1843,7 @@ screen_draw_box(int top, int left, int bottom, int right)
 		 *        upper left coordinate and the lower right
 		 */
 void
-draw_custom_box(border_characters, top,left,bottom,right)
-	byte border_characters[BX_SIZE];
-	int top,left,bottom,right;
+draw_custom_box(byte border_characters[BX_SIZE], int top, int left, int bottom, int right)
 {
 	bool wason;
 	int i;
@@ -1911,9 +1894,7 @@ draw_custom_box(border_characters, top,left,bottom,right)
  * center a string according to how many columns there really are
  */
 void
-center(row,string)
-	int row;
-	char *string;
+center(int row, char *string)
 {
 	screen_write_text_at(row,(COLS-strlen(string))/2,string);
 }
@@ -1940,8 +1921,7 @@ screen_printf(const char *format, ...)
 
 #ifdef ROGUE_DOS_CURSES
 void
-scroll_up(start_row,end_row,nlines)
-	int start_row,end_row,nlines;
+scroll_up(int start_row, int end_row, int nlines)
 {
 	dos_regs->ax = 0x600 + nlines;
 	dos_regs->bx = 0x700;
@@ -1953,8 +1933,7 @@ scroll_up(start_row,end_row,nlines)
 
 //@ unused
 void
-scroll_dn(start_row,end_row,nlines)
-	int start_row,end_row,nlines;
+scroll_dn(int start_row, int end_row, int nlines)
 {
 	dos_regs->ax = 0x700 + nlines;
 	dos_regs->bx = 0x700;
@@ -1977,8 +1956,7 @@ scroll(void)
  *	  (lower right row, lower right column)
  */
 void
-blot_out(ul_row,ul_col,lr_row,lr_col)
-	int ul_row,ul_col,lr_row,lr_col;
+blot_out(int ul_row, int ul_col, int lr_row, int lr_col)
 {
 	dos_regs->ax = 0x600;
 	dos_regs->bx = 0x700;
@@ -2024,7 +2002,7 @@ repeat_character(byte character, int count)
  * Clear the screen in an interesting fashion
  */
 void
-animate_level_transition()
+animate_level_transition(void)
 {
 	int j, delay, row, column, column_step = COLS/10/2, bottom, right;
 
@@ -2195,8 +2173,7 @@ raise_curtain(void)
 
 #ifdef ROGUE_DOS_CURSES
 void
-switch_page(pn)
-	int pn;
+switch_page(int pn)
 {
 	register int pgsize;
 
@@ -2247,8 +2224,7 @@ get_dos_video_mode(void)
  * Return AL
  */
 byte
-set_dos_video_mode(type)
-	int type;
+set_dos_video_mode(int type)
 {
 	struct dos_registers dos_regs;
 
@@ -2285,9 +2261,7 @@ set_dos_video_mode(type)
  * keep typed string or set first char to '\0', effectively blanking str.
  */
 int
-read_line(text,size)
-	char *text;
-	int size;
+read_line(char *text, int size)
 {
 	register char *input_start;
 	int character;

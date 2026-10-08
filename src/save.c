@@ -51,7 +51,7 @@ static int	write_legacy_memory_dump(char *filename);
  *	Implement the "save game" command
  */
 void
-save_game()
+save_game(void)
 {
 #ifndef DEMO
 	int result;
@@ -107,10 +107,8 @@ save_game()
  *		and then dump data area determined previous to opening
  *		file.
  */
-static
-int
-write_legacy_memory_dump(filename)
-	char *filename;
+static int
+write_legacy_memory_dump(char *filename)
 {
 	register FILE *file;
 	register char answer;

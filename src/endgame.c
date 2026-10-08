@@ -393,77 +393,115 @@ show_victory_screen(void)
 	{
 	switch (item->item_category)
 	{
-		when FOOD:
-			worth = 2 * item->item_quantity;
-		when WEAPON:
-			switch (item->item_subtype)
-			{
-				when MACE: worth = 8;
-				when SWORD: worth = 15;
-				when CROSSBOW: worth = 30;
-				when ARROW: worth = 1;
-				when DAGGER: worth = 2;
-				when TWO_HANDED_SWORD: worth = 75;
-				when DART: worth = 1;
-				when BOW: worth = 15;
-				when BOLT: worth = 1;
-				when SPEAR: worth = 5;
-				break;
-			}
-			worth *= 3 * (item->item_hit_bonus + item->item_damage_bonus) + item->item_quantity;
-			item->item_flags |= ITEM_IDENTIFIED;
-		when ARMOR:
-			switch (item->item_subtype)
-			{
-				when LEATHER: worth = 20;
-				when RING_MAIL: worth = 25;
-				when STUDDED_LEATHER: worth = 20;
-				when SCALE_MAIL: worth = 30;
-				when CHAIN_MAIL: worth = 75;
-				when SPLINT_MAIL: worth = 80;
-				when BANDED_MAIL: worth = 90;
-				when PLATE_MAIL: worth = 150;
-				break;
-			}
-			worth += (9 - item->item_modifier) * 100;
-			worth += (10 * (armor_classes[item->item_subtype] - item->item_modifier));
-			item->item_flags |= ITEM_IDENTIFIED;
-		when SCROLL:
-			worth = scroll_definitions[item->item_subtype].value;
-			worth *= item->item_quantity;
-			if (!scroll_identified[item->item_subtype])
-				worth /= 2;
-			scroll_identified[item->item_subtype] = TRUE;
-		when POTION:
-			worth = potion_definitions[item->item_subtype].value;
-			worth *= item->item_quantity;
-			if (!potion_identified[item->item_subtype])
-				worth /= 2;
-			potion_identified[item->item_subtype] = TRUE;
-		when RING:
-			worth = ring_definitions[item->item_subtype].value;
-			if (item->item_subtype == RING_ADD_STRENGTH || item->item_subtype == RING_DAMAGE ||
-				item->item_subtype == RING_PROTECTION || item->item_subtype == RING_DEXTERITY)
-			{
-				if (item->item_modifier > 0)
-					worth += item->item_modifier * 100;
-				else
-					worth = 10;
-			}
-			if (!(item->item_flags & ITEM_IDENTIFIED))
-				worth /= 2;
-			item->item_flags |= ITEM_IDENTIFIED;
-			ring_identified[item->item_subtype] = TRUE;
-		when STICK:
-			worth = wand_definitions[item->item_subtype].value;
-			worth += 20 * item->item_charges;
-			if (!(item->item_flags & ITEM_IDENTIFIED))
-				worth /= 2;
-			item->item_flags |= ITEM_IDENTIFIED;
-			wand_identified[item->item_subtype] = TRUE;
-			when AMULET:
-			worth = 1000;
+	case FOOD:
+		worth = 2 * item->item_quantity;
+		break;
+	case WEAPON:
+		switch (item->item_subtype) {
+		case MACE:
+			worth = 8;
 			break;
+		case SWORD:
+			worth = 15;
+			break;
+		case CROSSBOW:
+			worth = 30;
+			break;
+		case ARROW:
+			worth = 1;
+			break;
+		case DAGGER:
+			worth = 2;
+			break;
+		case TWO_HANDED_SWORD:
+			worth = 75;
+			break;
+		case DART:
+			worth = 1;
+			break;
+		case BOW:
+			worth = 15;
+			break;
+		case BOLT:
+			worth = 1;
+			break;
+		case SPEAR:
+			worth = 5;
+			break;
+		}
+		worth *= 3 * (item->item_hit_bonus + item->item_damage_bonus) + item->item_quantity;
+		item->item_flags |= ITEM_IDENTIFIED;
+		break;
+	case ARMOR:
+		switch (item->item_subtype) {
+		case LEATHER:
+			worth = 20;
+			break;
+		case RING_MAIL:
+			worth = 25;
+			break;
+		case STUDDED_LEATHER:
+			worth = 20;
+			break;
+		case SCALE_MAIL:
+			worth = 30;
+			break;
+		case CHAIN_MAIL:
+			worth = 75;
+			break;
+		case SPLINT_MAIL:
+			worth = 80;
+			break;
+		case BANDED_MAIL:
+			worth = 90;
+			break;
+		case PLATE_MAIL:
+			worth = 150;
+			break;
+		}
+		worth += (9 - item->item_modifier) * 100;
+		worth += (10 * (armor_classes[item->item_subtype] - item->item_modifier));
+		item->item_flags |= ITEM_IDENTIFIED;
+		break;
+	case SCROLL:
+		worth = scroll_definitions[item->item_subtype].value;
+		worth *= item->item_quantity;
+		if (!scroll_identified[item->item_subtype])
+			worth /= 2;
+		scroll_identified[item->item_subtype] = TRUE;
+		break;
+	case POTION:
+		worth = potion_definitions[item->item_subtype].value;
+		worth *= item->item_quantity;
+		if (!potion_identified[item->item_subtype])
+			worth /= 2;
+		potion_identified[item->item_subtype] = TRUE;
+		break;
+	case RING:
+		worth = ring_definitions[item->item_subtype].value;
+		if (item->item_subtype == RING_ADD_STRENGTH || item->item_subtype == RING_DAMAGE ||
+			item->item_subtype == RING_PROTECTION || item->item_subtype == RING_DEXTERITY) {
+			if (item->item_modifier > 0)
+				worth += item->item_modifier * 100;
+			else
+				worth = 10;
+		}
+		if (!(item->item_flags & ITEM_IDENTIFIED))
+			worth /= 2;
+		item->item_flags |= ITEM_IDENTIFIED;
+		ring_identified[item->item_subtype] = TRUE;
+		break;
+	case STICK:
+		worth = wand_definitions[item->item_subtype].value;
+		worth += 20 * item->item_charges;
+		if (!(item->item_flags & ITEM_IDENTIFIED))
+			worth /= 2;
+		item->item_flags |= ITEM_IDENTIFIED;
+		wand_identified[item->item_subtype] = TRUE;
+		break;
+	case AMULET:
+		worth = 1000;
+		break;
 	}
 	if (worth < 0)
 		worth = 0;
@@ -492,18 +530,23 @@ death_cause_name(byte cause, bool include_article)
 	needs_article = TRUE;
 	switch (cause)
 	{
-	when 'a':
+	case 'a':
 		cause_name = "arrow";
-	when 'b':
+		break;
+	case 'b':
 		cause_name = "bolt";
-	when 'd':
+		break;
+	case 'd':
 		cause_name = "dart";
-	when 's':
+		break;
+	case 's':
 		cause_name = "starvation";
 		needs_article = FALSE;
-	when 'f':
+		break;
+	case 'f':
 		cause_name = "fall";
-	otherwise:
+		break;
+	default:
 		if (is_monster_symbol(cause))
 			cause_name = monster_definitions[cause-'A'].name;
 		else

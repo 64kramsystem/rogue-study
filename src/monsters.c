@@ -90,16 +90,33 @@ new_monster(Entity *monster, byte type, Position *spawn_position)
 	{
 		switch (random_below(dungeon_level > 25 ? 9 : 8))
 		{
-		when 0: monster->actor_disguise = GOLD;
-		when 1: monster->actor_disguise = POTION;
-		when 2: monster->actor_disguise = SCROLL;
-		when 3: monster->actor_disguise = STAIRS;
-		when 4: monster->actor_disguise = WEAPON;
-		when 5: monster->actor_disguise = ARMOR;
-		when 6: monster->actor_disguise = RING;
-		when 7: monster->actor_disguise = STICK;
-		when 8: monster->actor_disguise = AMULET;
-		break;
+		case 0:
+			monster->actor_disguise = GOLD;
+			break;
+		case 1:
+			monster->actor_disguise = POTION;
+			break;
+		case 2:
+			monster->actor_disguise = SCROLL;
+			break;
+		case 3:
+			monster->actor_disguise = STAIRS;
+			break;
+		case 4:
+			monster->actor_disguise = WEAPON;
+			break;
+		case 5:
+			monster->actor_disguise = ARMOR;
+			break;
+		case 6:
+			monster->actor_disguise = RING;
+			break;
+		case 7:
+			monster->actor_disguise = STICK;
+			break;
+		case 8:
+			monster->actor_disguise = AMULET;
+			break;
 		}
 	}
 }
@@ -177,8 +194,7 @@ spawn_wandering_monster(void)
  *	What to do when the hero steps next to a monster
  */
 Entity *
-wake_monster(y, x)
-	int y, x;
+wake_monster(int y, int x)
 {
 	register Entity *monster;
 	register struct room *room;
@@ -232,8 +248,7 @@ wake_monster(y, x)
  *	Give a pack to a monster if it deserves one
  */
 void
-give_monster_item(monster)
-	Entity *monster;
+give_monster_item(Entity *monster)
 {
 	/*
 	 * check if we can allocate a new item
@@ -269,8 +284,7 @@ random_vorpal_enemy(void)
  */
 
 Entity *
-monster_at(y,x)
-	int y, x;
+monster_at(int y, int x)
 {
 	register Entity *monster;
 

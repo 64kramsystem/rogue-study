@@ -156,6 +156,6 @@ CharacterMapping	*charcode_from_dos(byte dos_character, CharacterMapping *mappin
 short	color_from_dos(byte dos_attr, bool foreground);
 chtype	curses_attributes_from_dos(byte dos_attr);
 void	init_curses_colors(void);
-void	resize_screen();
+void	resize_screen(void);
 int	screen_draw_line(byte dos_character, int length, bool orientation);
 #endif  // not ROGUE_DOS_CURSES

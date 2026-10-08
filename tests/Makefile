@@ -1,4 +1,4 @@
-CFLAGS = -std=c17 -Wall -Wextra -Wformat-security -Wno-format-zero-length -pedantic -g -O1
+CFLAGS = -std=c17 -Wall -Wextra -Wformat-security -Wno-format-zero-length -Wstrict-prototypes -Wold-style-definition -pedantic -g -O1
 SANITIZERS = -fsanitize=address,undefined -fno-omit-frame-pointer
 GAME_SOURCES = $(filter-out ../src/main.c ../src/croot.c,$(wildcard ../src/*.c))
 GAME_FLAGS = -DMINROG -DROGUE_NO_X11 $(shell pkg-config ncursesw --cflags)

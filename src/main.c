@@ -34,9 +34,7 @@ int log_read, log_write;
  *	The main program, of course
  */
 int
-main(argc, argv)
-	int argc;
-	char **argv;
+main(int argc, char **argv)
 {
 	register char *argument, *saved_game_path=0;
 
@@ -149,7 +147,7 @@ main(argc, argv)
  *	Exit the program abnormally.
  */
 void
-exit_game_message()
+exit_game_message(void)
 {
 	fatal("Ok, if you want to exit that badly, I'll have to allow it\n");
 }
@@ -164,7 +162,7 @@ exit_game_message()
  * by W.J. Cody, Jr and William Waite.
  */
 long
-next_random_value()
+next_random_value(void)
 {
 	random_state *= 125;
 	random_state -= (random_state/2796203) * 2796203;
@@ -174,11 +172,10 @@ next_random_value()
 /*
  * random_below:
  *	Pick a very random number.
+ * DOS callers used 16-bit ints; the native range uses the host int width.
  */
 int
-random_below(range)
-	/* DOS callers used 16-bit ints; the native range uses the host int width. */
-	register int range;
+random_below(register int range)
 {
 	return range < 1 ? 0 : ((next_random_value() + next_random_value())&0x7fffffffl) % range;
 }
@@ -188,8 +185,7 @@ random_below(range)
  *	Roll a number of dice
  */
 int
-roll_dice(number, sides)
-	register int number, sides;
+roll_dice(register int number, register int sides)
 {
 	register int dice_total = 0;
 
@@ -204,8 +200,7 @@ roll_dice(number, sides)
  *	refreshing things and looking at the proper times.
  */
 void
-run_game(saved_game_path)
-	char *saved_game_path;
+run_game(char *saved_game_path)
 {
 	if (saved_game_path) {
 		restore_game(saved_game_path);
@@ -232,7 +227,7 @@ run_game(saved_game_path)
  *	Have player make certain, then exit.
  */
 void
-quit()
+quit(void)
 {
 	int saved_y, saved_x;
 	register byte answer;
@@ -281,7 +276,7 @@ quit()
  *	Leave quickly, but courteously
  */
 void
-leave()
+leave(void)
 {
 	update_player_view(FALSE);
 	move(LINES - 1, 0);

@@ -31,7 +31,7 @@
  */
 static
 struct delayed_action {
-	void (*callback)();
+	void (*callback)(void);
 	int turns_remaining;
 } scheduled_actions[MAX_SCHEDULED_ACTIONS];
 
@@ -60,7 +60,7 @@ find_free_action_slot(void)
  */
 static
 struct delayed_action *
-find_action_slot(void (*func)())
+find_action_slot(void (*func)(void))
 {
 	register struct delayed_action *action;
 
@@ -75,7 +75,7 @@ find_action_slot(void (*func)())
  *	Start a daemon, takes a function.
  */
 void
-schedule_recurring_action(void (*func)())
+schedule_recurring_action(void (*func)(void))
 {
 	register struct delayed_action *action;
 
@@ -114,7 +114,7 @@ run_recurring_actions(void)
  *	Start a fuse to go off in a certain number of turns
  */
 void
-schedule_delayed_action(void (*func)(), int time)
+schedule_delayed_action(void (*func)(void), int time)
 {
 	register struct delayed_action *action;
 
@@ -128,7 +128,7 @@ schedule_delayed_action(void (*func)(), int time)
  *	Increase the time until a fuse goes off
  */
 void
-extend_delayed_action(void (*func)(), int xtime)
+extend_delayed_action(void (*func)(void), int xtime)
 {
 	register struct delayed_action *action;
 
@@ -142,7 +142,7 @@ extend_delayed_action(void (*func)(), int xtime)
  *	Put out a fuse
  */
 void
-cancel_delayed_action(void (*func)())
+cancel_delayed_action(void (*func)(void))
 {
 	register struct delayed_action *action;
 

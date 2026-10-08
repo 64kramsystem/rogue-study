@@ -18,8 +18,7 @@ static shint maze_right, maze_bottom;
 static shint *frontier_rows, *frontier_columns;
 
 void
-draw_maze(room)
-	struct room *room;
+draw_maze(struct room *room)
 {
 	register int y, x;
 	shint frontier_y_storage[MAX_MAZE_FRONTIER], frontier_x_storage[MAX_MAZE_FRONTIER];
@@ -77,8 +76,7 @@ draw_maze(room)
 }
 
 void
-expand_maze_frontier(y, x)
-	int y, x;
+expand_maze_frontier(int y, int x)
 {
 	add_maze_frontier(y-2, x);
 	add_maze_frontier(y+2, x);
@@ -87,8 +85,7 @@ expand_maze_frontier(y, x)
 }
 
 void
-add_maze_frontier(y, x)
-	int y, x;
+add_maze_frontier(int y, int x)
 {
 #ifdef DEBUG
 	if (frontier_count == MAX_MAZE_FRONTIER - 1)
@@ -106,7 +103,7 @@ add_maze_frontier(y, x)
  * Connect randomly to one of the adjacent points in the spanning tree
  */
 void
-connect_maze_frontier()
+connect_maze_frontier(void)
 {
 	register int frontier_index, direction_index, y_step = 0, x_step = 0;
 	int available_directions[4];
@@ -141,10 +138,21 @@ connect_maze_frontier()
 	carve_maze_cell(selected_frontier_y, selected_frontier_x);
 	switch(direction_index)
 	{
-		when 0: direction_index = 1; y_step = -1;
-		when 1: direction_index = 0; y_step = 1;
-		when 2: direction_index = 3; x_step = -1;
-		when 3: direction_index = 2; x_step = 1;
+	case 0:
+		direction_index = 1;
+		y_step = -1;
+		break;
+	case 1:
+		direction_index = 0;
+		y_step = 1;
+		break;
+	case 2:
+		direction_index = 3;
+		x_step = -1;
+		break;
+	case 3:
+		direction_index = 2;
+		x_step = 1;
 		break;
 	}
 	y = selected_frontier_y + y_step;
@@ -154,15 +162,13 @@ connect_maze_frontier()
 }
 
 bool
-is_maze_passage(y, x)
-	int y, x;
+is_maze_passage(int y, int x)
 {
 	return (inside_maze_bounds(y, x) && terrain_at(y, x) == PASSAGE);
 }
 
 void
-carve_maze_cell(y, x)
-	int y, x;
+carve_maze_cell(int y, int x)
 {
 	terrain_at(y, x) = PASSAGE;
 	cell_flags_at(y, x) = CELL_MAZE|CELL_REVEALED;
@@ -176,8 +182,7 @@ carve_maze_cell(y, x)
 #define MAZE_X_LIMIT (maze_left+COLS/3)
 
 bool
-inside_maze_bounds(y, x)
-	int x, y;
+inside_maze_bounds(int y, int x)
 {
 	return(y >= maze_top && y < MAZE_Y_LIMIT && x >= maze_left && x < MAZE_X_LIMIT);
 }

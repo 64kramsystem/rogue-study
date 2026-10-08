@@ -78,9 +78,6 @@
  * All the fun defines
  */
 #define shint		int		/* short integer (for very small #s) */
-#define when		break;case
-#define otherwise	break;default
-#define until(expr)	while(!(expr))
 #define next(ptr)	(*ptr).next_entity
 #define prev(ptr)	(*ptr).previous_entity
 #ifdef UNIX
@@ -592,11 +589,11 @@ void	show_repeat_count(void);
 void	execute_command(void);
 
 //@ daemon.c
-void	schedule_recurring_action(void (*func)());
+void	schedule_recurring_action(void (*func)(void));
 void	run_recurring_actions(void);
-void	schedule_delayed_action(void (*func)(), int time);
-void	extend_delayed_action(void (*func)(), int xtime);
-void	cancel_delayed_action(void (*func)());
+void	schedule_delayed_action(void (*func)(void), int time);
+void	extend_delayed_action(void (*func)(void), int xtime);
+void	cancel_delayed_action(void (*func)(void));
 void	run_delayed_actions(void);
 
 //@ daemons.c
@@ -788,7 +785,7 @@ void	authenticate_game_disk(int drive);
 void	put_on_ring(void);
 void	remove_ring(void);
 char	*format_ring_bonus(Entity *item);
-int	ring_food_cost();
+int	ring_food_cost(int hand);
 
 //@ rip.c
 void	update_high_scores(int amount, int end_reason, char death_cause);
@@ -859,7 +856,7 @@ bool	hit_monster(int y, int x, Entity *item);
 void	identify_item(void);
 int	teleport(void);
 #ifdef WIZARD
-void	create_obj();
+void	create_obj(void);
 #endif //WIZARD
 
 

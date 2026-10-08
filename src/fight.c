@@ -108,139 +108,128 @@ monster_attack(Entity *monster)
 		if (!has_actor_flag(*monster, ACTOR_CANCELLED))
 			switch (monster->actor_species)
 		{
-		when 'A':
-			/*
-			 * If a rust monster hits, you lose armor, unless
-			 * that armor is leather or there is a magic ring
-			 */
-			if (equipped_armor != NULL && equipped_armor->item_modifier < 9
-			  && equipped_armor->item_subtype != LEATHER)
-			{
-				if (wearing_ring(RING_MAINTAIN_ARMOR))
-					show_message("the rust vanishes instantly");
-				else
-				{
-					show_message("your armor weakens, oh my!");
-					equipped_armor->item_modifier++;
+			case 'A':
+				/*
+				 * If a rust monster hits, you lose armor, unless
+				 * that armor is leather or there is a magic ring
+				 */
+				if (equipped_armor != NULL && equipped_armor->item_modifier < 9 &&
+				    equipped_armor->item_subtype != LEATHER) {
+					if (wearing_ring(RING_MAINTAIN_ARMOR))
+						show_message("the rust vanishes instantly");
+					else {
+						show_message("your armor weakens, oh my!");
+						equipped_armor->item_modifier++;
+					}
 				}
-			}
-		when 'I':
-			/*
-			 * When an Ice Monster hits you, you get unfrozen faster
-			 */
-			if (incapacitated_turns > 1)
-				incapacitated_turns--;
-			break;
-		when 'R':
-			/*
-			 * Rattlesnakes have poisonous bites
-			 */
-			if (!player_saving_throw(VS_POISON))
-			{
-				if (!wearing_ring(RING_SUSTAIN_STRENGTH))
-				{
-					change_player_strength(-1);
-					show_message("you feel a bite in your leg%s",
-						verbose_text(" and now feel weaker"));
+				break;
+			case 'I':
+				/*
+				 * When an Ice Monster hits you, you get unfrozen faster
+				 */
+				if (incapacitated_turns > 1)
+					incapacitated_turns--;
+				break;
+			case 'R':
+				/*
+				 * Rattlesnakes have poisonous bites
+				 */
+				if (!player_saving_throw(VS_POISON)) {
+					if (!wearing_ring(RING_SUSTAIN_STRENGTH)) {
+						change_player_strength(-1);
+						show_message("you feel a bite in your leg%s",
+						             verbose_text(" and now feel weaker"));
+					} else
+						show_message("a bite momentarily weakens you");
 				}
-				else
-					show_message("a bite momentarily weakens you");
-			}
-		when 'W':
-		case 'V':
-			/*
-			 * Wraiths might drain energy levels, and Vampires
-			 * can steal player_max_hit_points
-			 */
-			if (random_below(100) < (monster->actor_species == 'W' ? 15 : 30))
-			{
-			register int fewer;
+				break;
+			case 'W':
+			case 'V':
+				/*
+				 * Wraiths might drain energy levels, and Vampires
+				 * can steal player_max_hit_points
+				 */
+				if (random_below(100) < (monster->actor_species == 'W' ? 15 : 30)) {
+					register int fewer;
 
-			if (monster->actor_species == 'W')
-			{
-				if (player_stats.experience == 0)
-				show_death_screen('W');		/* All levels gone */
-				if (--player_stats.experience_level == 0)
-				{
-				player_stats.experience = 0;
-				player_stats.experience_level = 1;
+					if (monster->actor_species == 'W') {
+						if (player_stats.experience == 0)
+							show_death_screen('W'); /* All levels gone */
+						if (--player_stats.experience_level == 0) {
+							player_stats.experience = 0;
+							player_stats.experience_level = 1;
+						} else
+							player_stats.experience =
+							    experience_thresholds[player_stats.experience_level - 1] + 1;
+						fewer = roll_dice(1, 10);
+					} else
+						fewer = roll_dice(1, 5);
+					player_stats.hit_points -= fewer;
+					player_max_hit_points -= fewer;
+					if (player_stats.hit_points < 1)
+						player_stats.hit_points = 1;
+					if (player_max_hit_points < 1)
+						show_death_screen(monster->actor_species);
+					show_message("you suddenly feel weaker");
 				}
-				else
-				player_stats.experience = experience_thresholds[player_stats.experience_level-1]+1;
-				fewer = roll_dice(1, 10);
-			}
-			else
-				fewer = roll_dice(1, 5);
-			player_stats.hit_points -= fewer;
-			player_max_hit_points -= fewer;
-			if (player_stats.hit_points < 1)
-				player_stats.hit_points = 1;
-			if (player_max_hit_points < 1)
-				show_death_screen(monster->actor_species);
-			show_message("you suddenly feel weaker");
-			}
-		when 'F':
-			/*
-			 * Violet fungi stops the poor guy from moving
-			 */
-			player.actor_flags |= ACTOR_HELD;
-			sprintf(monster->actor_stats.damage_dice,"%dd1",++flytrap_damage);
-		when 'L':
-		{
-			/*
-			 * Leperachaun steals some gold
-			 */
-			register long lastpurse;
+				break;
+			case 'F':
+				/*
+				 * Violet fungi stops the poor guy from moving
+				 */
+				player.actor_flags |= ACTOR_HELD;
+				sprintf(monster->actor_stats.damage_dice, "%dd1", ++flytrap_damage);
+				break;
+			case 'L': {
+				/*
+				 * Leperachaun steals some gold
+				 */
+				register long lastpurse;
 
-			lastpurse = player_gold;
-			player_gold -= GOLDCALC;
-			if (!player_saving_throw(VS_MAGIC))
-			player_gold -= GOLDCALC + GOLDCALC + GOLDCALC + GOLDCALC;
-			if (player_gold < 0)
-			player_gold = 0;
-			remove_monster(&monster->actor_position, monster, FALSE);
-			if (player_gold != lastpurse)
-			show_message("your purse feels lighter");
-		}
-		when 'N':
-		{
-			register Entity *item, *steal;
-			register int nobj;
-			char *she_stole = "she stole %s!";
-
-			/*
-			 * Nymph's steal a magic item, look through the pack
-			 * and pick out one we like.
-			 */
-			steal = NULL;
-			for (nobj = 0, item = player_inventory; item != NULL; item = next(item))
-			if (item != equipped_armor && item != equipped_weapon
-				&& item != equipped_rings[LEFT] && item != equipped_rings[RIGHT]
-				&& is_magic(item) && random_below(++nobj) == 0)
-				steal = item;
-			if (steal != NULL)
-			{
+				lastpurse = player_gold;
+				player_gold -= GOLDCALC;
+				if (!player_saving_throw(VS_MAGIC))
+					player_gold -= GOLDCALC + GOLDCALC + GOLDCALC + GOLDCALC;
+				if (player_gold < 0)
+					player_gold = 0;
 				remove_monster(&monster->actor_position, monster, FALSE);
-				inventory_count--;
-				if (steal->item_quantity > 1 && steal->item_stack_group == 0)
-				{
-					register int oc;
+				if (player_gold != lastpurse)
+					show_message("your purse feels lighter");
+			} break;
+			case 'N': {
+				register Entity *item, *steal;
+				register int nobj;
+				char *she_stole = "she stole %s!";
 
-					oc = steal->item_quantity--;
-					steal->item_quantity = 1;
-					show_message(she_stole, describe_item(steal, TRUE));
-					steal->item_quantity = oc;
+				/*
+				 * Nymph's steal a magic item, look through the pack
+				 * and pick out one we like.
+				 */
+				steal = NULL;
+				for (nobj = 0, item = player_inventory; item != NULL; item = next(item))
+					if (item != equipped_armor && item != equipped_weapon &&
+					    item != equipped_rings[LEFT] && item != equipped_rings[RIGHT] &&
+					    is_magic(item) && random_below(++nobj) == 0)
+						steal = item;
+				if (steal != NULL) {
+					remove_monster(&monster->actor_position, monster, FALSE);
+					inventory_count--;
+					if (steal->item_quantity > 1 && steal->item_stack_group == 0) {
+						register int oc;
+
+						oc = steal->item_quantity--;
+						steal->item_quantity = 1;
+						show_message(she_stole, describe_item(steal, TRUE));
+						steal->item_quantity = oc;
+					} else {
+						detach(player_inventory, steal);
+						release_entity(steal);
+						show_message(she_stole, describe_item(steal, TRUE));
+					}
 				}
-				else
-				{
-					detach(player_inventory, steal);
-					release_entity(steal);
-					show_message(she_stole, describe_item(steal, TRUE));
-				}
-			}
-		}
-		otherwise:
-			break;
+			} break;
+			default:
+				break;
 		}
 	}
 	else if (monster->actor_species != 'I')
@@ -453,10 +442,17 @@ report_hit(char *attacker_name, char *defender_name)
 	append_message("%s", format_combat_name(attacker_name, TRUE));
 	switch ((terse || expert) ? 1 : random_below(4))
 	{
-		when 0: message_format = " scored an excellent hit on ";
-		when 1: message_format = " hit ";
-		when 2: message_format = (attacker_name == 0 ? " have injured " : " has injured ");
-		when 3: message_format = (attacker_name == 0 ? " swing and hit " : " swings and hits ");
+	case 0:
+		message_format = " scored an excellent hit on ";
+		break;
+	case 1:
+		message_format = " hit ";
+		break;
+	case 2:
+		message_format = (attacker_name == 0 ? " have injured " : " has injured ");
+		break;
+	case 3:
+		message_format = (attacker_name == 0 ? " swing and hit " : " swings and hits ");
 		break;
 	}
 	show_message("%s%s",message_format,format_combat_name(defender_name, FALSE));
@@ -475,10 +471,17 @@ report_miss(char *attacker_name, char *defender_name)
 	append_message("%s", format_combat_name(attacker_name, TRUE));
 	switch ((terse || expert) ? 1 : random_below(4))
 	{
-		when 0: message_format = (attacker_name == 0 ? " swing and miss" : " swings and misses");
-		when 1: message_format = (attacker_name == 0 ? " miss" : " misses");
-		when 2: message_format = (attacker_name == 0 ? " barely miss" : " barely misses");
-		when 3: message_format = (attacker_name == 0 ? " don't hit" : " doesn't hit");
+	case 0:
+		message_format = (attacker_name == 0 ? " swing and miss" : " swings and misses");
+		break;
+	case 1:
+		message_format = (attacker_name == 0 ? " miss" : " misses");
+		break;
+	case 2:
+		message_format = (attacker_name == 0 ? " barely miss" : " barely misses");
+		break;
+	case 3:
+		message_format = (attacker_name == 0 ? " don't hit" : " doesn't hit");
 		break;
 	}
 	show_message("%s %s",message_format,format_combat_name(defender_name, FALSE));
@@ -659,10 +662,11 @@ kill_monster(Entity *monster, bool print_message)
 	 */
 	switch (monster->actor_species)
 	{
-	when 'F':
+	case 'F':
 		player.actor_flags &= ~ACTOR_HELD;
 		reset_flytrap_damage();
-	when 'L':;
+		break;
+	case 'L':;
 		register Entity *gold;
 
 		if ((gold = allocate_entity()) == NULL)

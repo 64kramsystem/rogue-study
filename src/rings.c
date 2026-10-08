@@ -14,7 +14,7 @@ static int	choose_ring_hand(void);
  *	Put a ring on a hand
  */
 void
-put_on_ring()
+put_on_ring(void)
 {
 	register Entity *item;
 	register int ring = -1;
@@ -174,13 +174,14 @@ format_ring_bonus(Entity *item)
 	if (!(item->item_flags & ITEM_IDENTIFIED))
 		return "";
 	switch (item->item_subtype) {
-	when RING_PROTECTION:
+	case RING_PROTECTION:
 	case RING_ADD_STRENGTH:
 	case RING_DAMAGE:
 	case RING_DEXTERITY:
 		ring_bonus_buffer[0] = ' ';
 		strcpy(&ring_bonus_buffer[1], format_item_bonus(item->item_modifier, 0, RING));
-	otherwise:
+		break;
+	default:
 		return "";
 	}
 	return ring_bonus_buffer;

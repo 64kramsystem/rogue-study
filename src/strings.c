@@ -44,9 +44,7 @@ bool is_print(char character) { return (isascii(character) && isprint(character)
  * The count is the maximum copied characters; callers must reserve one more byte for NUL.
  */
 char *
-copy_string_bounded(destination,source,max_characters)
-	char *destination, *source;
-	int max_characters;
+copy_string_bounded(char *destination, char *source, int max_characters)
 {
 	while (max_characters-->0 && *source)
 		*destination++ = *source++;
@@ -65,8 +63,7 @@ copy_string_bounded(destination,source,max_characters)
 
 //@ strip leading blanks
 char *
-skip_whitespace(text)
-	char *text;
+skip_whitespace(char *text)
 {
 	while (is_space(*text))
 		text++;
@@ -77,8 +74,7 @@ skip_whitespace(text)
  * remove trailing whitespace from the end of a line
  */
 char *
-trim_trailing_whitespace(text)
-	char *text;
+trim_trailing_whitespace(char *text)
 {
 	register char *backup;
 
@@ -92,8 +88,7 @@ trim_trailing_whitespace(text)
  * lowercase_string: convert a string to lower case
  */
 void
-lowercase_string(text)
-	char *text;
+lowercase_string(char *text)
 {
 	while ( (*text = tolower((unsigned char)*text)) )
 		text++;

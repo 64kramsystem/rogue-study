@@ -44,7 +44,7 @@ drink_potion(void)
 	 */
 	switch (item->item_subtype)
 	{
-	when POTION_CONFUSION:
+	case POTION_CONFUSION:
 		potion_identified[POTION_CONFUSION] = TRUE;
 		/* The original outer !ACTOR_CONFUSED guard made extension unreachable. */
 		if (has_actor_flag(player, ACTOR_CONFUSED))
@@ -53,8 +53,8 @@ drink_potion(void)
 			schedule_delayed_action(end_confusion, random_below(8)+HUHDURATION);
 		player.actor_flags |= ACTOR_CONFUSED;
 		show_message("wait, what's going on? Huh? What? Who?");
-	when POTION_POISON:
-		{
+		break;
+	case POTION_POISON: {
 		char *sick = "you feel %s sick.";
 
 		potion_identified[POTION_POISON] = TRUE;
@@ -65,18 +65,20 @@ drink_potion(void)
 		}
 		else
 			show_message(sick, "momentarily");
-		}
-	when POTION_HEALING:
+	} break;
+	case POTION_HEALING:
 		potion_identified[POTION_HEALING] = TRUE;
 		if ((player_stats.hit_points += roll_dice(player_stats.experience_level, 4)) > player_max_hit_points)
 			player_stats.hit_points = ++player_max_hit_points;
 		end_blindness();
 		show_message("you begin to feel better");
-	when POTION_GAIN_STRENGTH:
+		break;
+	case POTION_GAIN_STRENGTH:
 		potion_identified[POTION_GAIN_STRENGTH] = TRUE;
 		change_player_strength(1);
 		show_message("you feel stronger. What bulging muscles!");
-	when POTION_MONSTER_DETECTION:
+		break;
+	case POTION_MONSTER_DETECTION:
 #ifndef DEMO
 		schedule_delayed_action(clear_monster_detection, HUHDURATION);
 		if (level_monsters == NULL)
@@ -99,7 +101,8 @@ drink_potion(void)
 		show_message("UNIX is a trademark of Bell Labs");
 		potion_identified[POTION_MONSTER_DETECTION] = TRUE;
 #endif
-	  when POTION_MAGIC_DETECTION:
+		break;
+	case POTION_MAGIC_DETECTION:
 		/*
 		 * Potion of magic detection.  Find everything interesting on
 		 * the level and show him where they are.  Also give hints as
@@ -140,12 +143,14 @@ drink_potion(void)
 		}
 		show_message("you have a strange feeling for a moment%s.",
 				verbose_text(", then it passes"));
-	when POTION_PARALYSIS:
+		break;
+	case POTION_PARALYSIS:
 		potion_identified[POTION_PARALYSIS] = TRUE;
 		incapacitated_turns = HOLDTIME;
 		player.actor_flags &= ~ACTOR_CHASING;
 		show_message("you can't move");
-	when POTION_SEE_INVISIBLE:
+		break;
+	case POTION_SEE_INVISIBLE:
 		if (!has_actor_flag(player, ACTOR_SEES_INVISIBLE)) {
 			schedule_delayed_action(end_monster_detection, SEEDURATION);
 			update_player_view(FALSE);
@@ -153,11 +158,13 @@ drink_potion(void)
 		}
 		end_blindness();
 		show_message("this potion tastes like %s juice", favorite_fruit);
-	when POTION_GAIN_LEVEL:
+		break;
+	case POTION_GAIN_LEVEL:
 		potion_identified[POTION_GAIN_LEVEL] = TRUE;
 		show_message("you suddenly feel much more skillful");
 		gain_experience_level();
-	when POTION_EXTRA_HEALING:
+		break;
+	case POTION_EXTRA_HEALING:
 		potion_identified[POTION_EXTRA_HEALING] = TRUE;
 		if ((player_stats.hit_points += roll_dice(player_stats.experience_level, 8)) > player_max_hit_points)
 		{
@@ -167,11 +174,13 @@ drink_potion(void)
 		}
 		end_blindness();
 		show_message("you begin to feel much better");
-	when POTION_HASTE:
+		break;
+	case POTION_HASTE:
 		potion_identified[POTION_HASTE] = TRUE;
 		if (add_haste(TRUE))
 			show_message("you feel yourself moving much faster");
-	when POTION_RESTORE_STRENGTH:
+		break;
+	case POTION_RESTORE_STRENGTH:
 		if (hand_has_ring(LEFT, RING_ADD_STRENGTH))
 			adjust_strength(&player_stats.strength, -equipped_rings[LEFT]->item_modifier);
 		if (hand_has_ring(RIGHT, RING_ADD_STRENGTH))
@@ -184,7 +193,8 @@ drink_potion(void)
 			adjust_strength(&player_stats.strength, equipped_rings[RIGHT]->item_modifier);
 		show_message("%syou feel warm all over",
 			verbose_text("hey, this tastes great.  It makes "));
-	when POTION_BLINDNESS:
+		break;
+	case POTION_BLINDNESS:
 		potion_identified[POTION_BLINDNESS] = TRUE;
 		if (!has_actor_flag(player, ACTOR_BLIND))
 		{
@@ -193,9 +203,11 @@ drink_potion(void)
 			update_player_view(FALSE);
 		}
 		show_message("a cloak of darkness falls around you");
-	when POTION_THIRST_QUENCHING:
+		break;
+	case POTION_THIRST_QUENCHING:
 		show_message("this potion tastes extremely dull");
-	otherwise:
+		break;
+	default:
 		show_message("what an odd tasting potion!");
 		return;
 	}
@@ -280,22 +292,26 @@ apply_thrown_potion(Entity *item, Entity *target)
 {
 	switch (item->item_subtype)
 	{
-	when POTION_CONFUSION:
+	case POTION_CONFUSION:
 	case POTION_BLINDNESS:
 		target->actor_flags |= ACTOR_CONFUSED;
 		show_message("the %s appears confused", monster_definitions[target->actor_species-'A'].name);
-	when POTION_PARALYSIS:
+		break;
+	case POTION_PARALYSIS:
 		target->actor_flags &= ~ACTOR_CHASING;
 		target->actor_flags |= ACTOR_HELD;
-	when POTION_HEALING:
+		break;
+	case POTION_HEALING:
 	case POTION_EXTRA_HEALING:
 		if ((target->actor_stats.hit_points += random_below(8)) > target->actor_stats.max_hit_points)
 		target->actor_stats.hit_points = ++target->actor_stats.max_hit_points;
-	when POTION_GAIN_LEVEL:
+		break;
+	case POTION_GAIN_LEVEL:
 		target->actor_stats.hit_points += 8;
 		target->actor_stats.max_hit_points += 8;
 		target->actor_stats.experience_level++;
-	when POTION_HASTE:
+		break;
+	case POTION_HASTE:
 		target->actor_flags |= ACTOR_HASTED;
 		break;
 	}

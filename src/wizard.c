@@ -38,20 +38,24 @@ identify_item(void)
 	}
 
 	switch (item->item_category) {
-	when SCROLL:
+	case SCROLL:
 		scroll_identified[item->item_subtype] = TRUE;
 		*scroll_labels[item->item_subtype] = '\0';
-	when POTION:
+		break;
+	case POTION:
 		potion_identified[item->item_subtype] = TRUE;
 		*potion_labels[item->item_subtype] = '\0';
-	when STICK:
+		break;
+	case STICK:
 		wand_identified[item->item_subtype] = TRUE;
 		item->item_flags |= ITEM_IDENTIFIED;
 		*wand_labels[item->item_subtype] = '\0';
-	when WEAPON:
+		break;
+	case WEAPON:
 	case ARMOR:
 		item->item_flags |= ITEM_IDENTIFIED;
-	when RING:
+		break;
+	case RING:
 		ring_identified[item->item_subtype] = TRUE;
 		item->item_flags |= ITEM_IDENTIFIED;
 		*ring_labels[item->item_subtype] = '\0';
@@ -84,15 +88,29 @@ create_obj(void)
 	}
 	show_message("type of item: ");
 	switch (read_game_key()) {
-		when '!': obj->item_category = POTION;
-		when '?': obj->item_category = SCROLL;
-		when '/': obj->item_category = STICK;
-		when '=': obj->item_category = RING;
-		when ')': obj->item_category = WEAPON;
-		when ']': obj->item_category = ARMOR;
-		when ',': obj->item_category = AMULET;
-		otherwise:
-			obj->item_category = FOOD;
+	case '!':
+		obj->item_category = POTION;
+		break;
+	case '?':
+		obj->item_category = SCROLL;
+		break;
+	case '/':
+		obj->item_category = STICK;
+		break;
+	case '=':
+		obj->item_category = RING;
+		break;
+	case ')':
+		obj->item_category = WEAPON;
+		break;
+	case ']':
+		obj->item_category = ARMOR;
+		break;
+	case ',':
+		obj->item_category = AMULET;
+		break;
+	default:
+		obj->item_category = FOOD;
 	}
 	message_column = 0;
 	show_message("which %c do you want? (0-f)", obj->item_category);
@@ -138,7 +156,8 @@ create_obj(void)
 			if (bless == '-')
 				obj->item_flags |= ITEM_CURSED;
 			obj->item_modifier = (bless == '-' ? -1 : random_below(2) + 1);
-		when RING_AGGRAVATION:
+			break;
+		case RING_AGGRAVATION:
 		case RING_TELEPORTATION:
 			obj->item_flags |= ITEM_CURSED;
 			/* fallthrough */

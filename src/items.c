@@ -28,7 +28,7 @@ describe_item(Entity *item, bool dropped)
 	text_cursor = description_buffer;
 	switch (item->item_category)
 	{
-	when SCROLL:
+	case SCROLL:
 		if (item->item_quantity == 1) {
 			strcpy(text_cursor, "A scroll ");
 			text_cursor = &description_buffer[9];
@@ -42,7 +42,8 @@ describe_item(Entity *item, bool dropped)
 			sprintf(text_cursor, "called %s", scroll_labels[subtype]);
 		else
 			format_item_by_verbosity(text_cursor, "titled '%.17s'","titled '%s'", &scroll_titles[subtype]);
-	when POTION:
+		break;
+	case POTION:
 		if (item->item_quantity == 1)
 		{
 			strcpy(text_cursor, "A potion ");
@@ -66,7 +67,8 @@ describe_item(Entity *item, bool dropped)
 				potion_colors[subtype]);
 		else
 			sprintf(description_buffer, "%d %s potions", item->item_quantity, potion_colors[subtype]);
-	when FOOD:
+		break;
+	case FOOD:
 		if (subtype == 1)
 			if (item->item_quantity == 1)
 				sprintf(text_cursor, "A%s %s", article_suffix(favorite_fruit), favorite_fruit);
@@ -77,7 +79,8 @@ describe_item(Entity *item, bool dropped)
 				strcpy(text_cursor, "Some food");
 			else
 				sprintf(text_cursor, "%d rations of food", item->item_quantity);
-	when WEAPON:
+		    break;
+	case WEAPON:
 		if (item->item_quantity > 1)
 			sprintf(text_cursor, "%d ", item->item_quantity);
 		else
@@ -96,16 +99,19 @@ describe_item(Entity *item, bool dropped)
 			strcat(text_cursor, monster_definitions[item->item_slays_species-'A'].name);
 			strcat(text_cursor, " slaying");
 		}
-	when ARMOR:
+		break;
+	case ARMOR:
 		if (item->item_flags & ITEM_IDENTIFIED)
 			format_item_by_verbosity(text_cursor, "%s %s","%s %s [armor class %d]",
 				format_item_bonus(armor_classes[subtype] - item->item_modifier, 0, ARMOR),
 				armor_names[subtype], -(item->item_modifier-11));
 		else
 			sprintf(text_cursor, "%s", armor_names[subtype]);
-	when AMULET:
+		break;
+	case AMULET:
 		strcpy(text_cursor, "The Amulet of Yendor");
-	when STICK:
+		break;
+	case STICK:
 		sprintf(text_cursor, "A%s %s ", article_suffix(wand_kinds[subtype]),
 		wand_kinds[subtype]);
 		text_cursor = &description_buffer[strlen(description_buffer)];
@@ -118,7 +124,8 @@ describe_item(Entity *item, bool dropped)
 				wand_materials[subtype]);
 		else
 			sprintf(text_cursor = &description_buffer[2], "%s %s", wand_materials[subtype], wand_kinds[subtype]);
-	when RING:
+		break;
+	case RING:
 		if (ring_identified[subtype])
 			format_item_by_verbosity(text_cursor, "A%s ring of %s", "A%s ring of %s(%s)", format_ring_bonus(item),
 				ring_definitions[subtype].name, ring_gemstones[subtype]);
@@ -129,9 +136,11 @@ describe_item(Entity *item, bool dropped)
 			sprintf(text_cursor, "A%s %s ring", article_suffix(ring_gemstones[subtype]),
 				ring_gemstones[subtype]);
 #ifdef DEBUG
-	when GOLD:
+		break;
+	case GOLD:
 		sprintf(text_cursor, "Gold at %d,%d", item->item_position.y, item->item_position.x);
-	otherwise:
+		break;
+	default:
 		debug("Picked up someting bizzare %s", describe_key(item->item_category));
 		sprintf(text_cursor, "Something bizarre %c(%d)", item->item_category, item->item_category);
 #endif
@@ -285,20 +294,23 @@ generate_item(void)
 	 */
 	switch (levels_without_food > 3 ? 2 : choose_item_subtype(item_category_probabilities, NUMTHINGS))
 	{
-	when 0:
+	case 0:
 		item->item_category = POTION;
 		item->item_subtype = choose_item_subtype(potion_definitions, MAXPOTIONS);
-	when 1:
+		break;
+	case 1:
 		item->item_category = SCROLL;
 		item->item_subtype = choose_item_subtype(scroll_definitions, MAXSCROLLS);
-	when 2:
+		break;
+	case 2:
 		levels_without_food = 0;
 		item->item_category = FOOD;
 		if (random_below(10) != 0)
 			item->item_subtype = 0;
 		else
 			item->item_subtype = 1;
-	when 3:
+		break;
+	case 3:
 		item->item_category = WEAPON;
 		item->item_subtype = random_below(MAXWEAPONS);
 		init_weapon(item, item->item_subtype);
@@ -309,7 +321,8 @@ generate_item(void)
 		}
 		else if (k < 15)
 			item->item_hit_bonus += random_below(3) + 1;
-	when 4:
+		break;
+	case 4:
 		item->item_category = ARMOR;
 		for (j = 0, k = random_below(100); j < MAXARMORS; j++)
 			if (k < armor_probabilities[j])
@@ -330,12 +343,13 @@ generate_item(void)
 		}
 		else if (k < 28)
 			item->item_modifier -= random_below(3) + 1;
-	when 5:
+		break;
+	case 5:
 		item->item_category = RING;
 		item->item_subtype = choose_item_subtype(ring_definitions, MAXRINGS);
 		switch (item->item_subtype)
 		{
-		when RING_ADD_STRENGTH:
+		case RING_ADD_STRENGTH:
 		case RING_PROTECTION:
 		case RING_DEXTERITY:
 		case RING_DAMAGE:
@@ -344,17 +358,20 @@ generate_item(void)
 				item->item_modifier = -1;
 				item->item_flags |= ITEM_CURSED;
 			}
-		when RING_AGGRAVATION:
+			break;
+		case RING_AGGRAVATION:
 		case RING_TELEPORTATION:
 			item->item_flags |= ITEM_CURSED;
 			break;
 		}
-	when 6:
+		break;
+	case 6:
 		item->item_category = STICK;
 		item->item_subtype = choose_item_subtype(wand_definitions, MAXSTICKS);
 		initialize_wand(item);
 #ifdef DEBUG
-	otherwise:
+		break;
+	default:
 		debug("Picked a bad kind of object");
 		wait_for_key(' ');
 #endif
@@ -574,12 +591,21 @@ undiscovered_message(byte type)
 	output_cursor = &description_buffer[strlen(description_buffer)];
 	switch (type)
 	{
-		when POTION: category_name = "potion";
-		when SCROLL: category_name = "scroll";
-		when RING: category_name = "ring";
-		when STICK: category_name = "stick";
+	case POTION:
+		category_name = "potion";
+		break;
+	case SCROLL:
+		category_name = "scroll";
+		break;
+	case RING:
+		category_name = "ring";
+		break;
+	case STICK:
+		category_name = "stick";
 		//@ not in original, avoid possibly uninitialized use of tystr
-		otherwise: category_name = "item";
+		break;
+	default:
+		category_name = "item";
 	}
 	sprintf(output_cursor, " about any %ss", category_name);
 	return description_buffer;

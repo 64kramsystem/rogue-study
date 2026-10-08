@@ -15,7 +15,7 @@ int   *entity_slot_used;
  *	Roll up the rogue
  */
 void
-init_player()
+init_player(void)
 {
 	register Entity *item;
 	copy_value(player_stats,maximum_player_stats);
@@ -232,7 +232,7 @@ static char *metal_wand_materials[] = {
  *	Initialize the probabilities for types of things
  */
 void
-initialize_item_probabilities()
+initialize_item_probabilities(void)
 {
 	register struct item_definition *definition;
 
@@ -245,7 +245,7 @@ initialize_item_probabilities()
  *	Initialize the potion color scheme for this time
  */
 void
-initialize_potion_colors()
+initialize_potion_colors(void)
 {
 	unsigned int i, j;
 	bool used[NCOLORS];
@@ -271,7 +271,7 @@ initialize_potion_colors()
  *	Generate the names of the various scrolls
  */
 void
-initialize_scroll_titles()
+initialize_scroll_titles(void)
 {
 	 int syllable_count;
 	 register char *title_cursor, *syllable;
@@ -314,8 +314,8 @@ initialize_scroll_titles()
  * random_syllable()
  *   -- generate a random sylable
  */
-char*
-random_syllable()
+char *
+random_syllable(void)
 {
 	static char syllable[4];
 
@@ -331,8 +331,7 @@ random_syllable()
  *    return random character in given string
  */
 char
-random_character(string)
-	char *string;
+random_character(char *string)
 {
 	return(string[random_below(strlen(string))]);
 }
@@ -342,7 +341,7 @@ random_character(string)
  *	Initialize the ring stone setting scheme for this time
  */
 void
-initialize_ring_gemstones()
+initialize_ring_gemstones(void)
 {
 	unsigned int i, j;
 	bool used[NSTONES];
@@ -369,7 +368,7 @@ initialize_ring_gemstones()
  *	Initialize the construction materials for wands and staffs
  */
 void
-initialize_wand_materials()
+initialize_wand_materials(void)
 {
 	unsigned int i, j;
 	register char *text;
@@ -466,7 +465,7 @@ allocate_game_state(void)
 
 
 void
-free_game_state()
+free_game_state(void)
 {
 	free(cell_flags);
 	free(terrain_map);

@@ -114,8 +114,7 @@ finish_message(void)
  *  More:  tag the end of a line and wait for a space
  */
 void
-show_more_prompt(message_text)
-	char *message_text;
+show_more_prompt(char *message_text)
 {
 	int x, y;
 	register int i, message_size;
@@ -193,9 +192,7 @@ append_message_v(const char *format, va_list arguments)
  *  scroll msg sideways until he has read it all
  */
 void
-display_wrapped_message(message_row,message_text)
-	int message_row;
-	char *message_text;
+display_wrapped_message(int message_row, char *message_text)
 {
 	register char *current_line, *previous_line=0, *next_line;
 	int line_length;
@@ -230,9 +227,7 @@ display_wrapped_message(message_row,message_text)
  * @ Purpose is completely unrelated to curses
  */
 void
-display_message_segment(message_row,scroll_start,scroll_end)
-	int message_row;
-	char *scroll_start, *scroll_end;
+display_message_segment(int message_row, char *scroll_start, char *scroll_end)
 {
 	char *format;
 
@@ -453,8 +448,7 @@ wait_for_enter(const char *message_text)
  *	@ a window? looks like a single message to me!
  */
 void
-show_overlay_message(message)
-	char *message;
+show_overlay_message(char *message)
 {
 	mvaddstr(0,0,message);
 	move(player_position.y, player_position.x);
@@ -468,8 +462,7 @@ show_overlay_message(message)
  * single-character or persistent inverse/underline controls. Attributes do not nest.
  */
 void
-print_highlighted_text(text)
-	char *text;
+print_highlighted_text(char *text)
 {
 #ifdef LUXURY
 	register int is_attr_on = FALSE, was_touched = FALSE;
@@ -717,8 +710,7 @@ update_keyboard_and_clock(void)
 }
 
 char *
-verbose_text(text)
-	char *text;
+verbose_text(char *text)
 {
 	return( terse || expert ? empty_string : text);
 }

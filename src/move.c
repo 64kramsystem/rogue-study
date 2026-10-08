@@ -32,8 +32,7 @@ start_player_run(byte character)
  * consequences (fighting, picking up, etc.)
  */
 void
-move_player(dy, dx)
-	int dy, dx;
+move_player(int dy, int dx)
 {
 	register byte character;
 	register int destination_flags;
@@ -194,8 +193,7 @@ move_stuff:
 		 *	that might move.
 		 */
 void
-wake_room_monsters(room)
-	struct room *room;
+wake_room_monsters(struct room *room)
 {
 	register int y, x;
 	register byte character;
@@ -236,17 +234,20 @@ trigger_trap(Position *trap_position)
 	trap_type = cell_flags[index] & TRAP_TYPE_MASK;
 	trap_display_state = TRUE;
 	switch (trap_type) {
-	when TRAP_TRAPDOOR:
+	case TRAP_TRAPDOOR:
 		fall_to_next_level("you fell into a trap!");
-	when TRAP_BEAR:
+		break;
+	case TRAP_BEAR:
 		immobile_turns += BEARTIME;
 		show_message("you are caught in a bear trap");
-	when TRAP_SLEEP_GAS:
+		break;
+	case TRAP_SLEEP_GAS:
 		incapacitated_turns += SLEEPTIME;
 		player.actor_flags &= ~ACTOR_CHASING;
 		show_message("a %smist envelops you and you fall asleep",
 			verbose_text("strange white "));
-	when TRAP_ARROW:
+		break;
+	case TRAP_ARROW:
 		if (attack_hits(player_stats.experience_level-1, player_stats.armor_class, 1)) {
 			player_stats.hit_points -= roll_dice(1, 6);
 			if (player_stats.hit_points <= 0) {
@@ -268,7 +269,8 @@ trigger_trap(Position *trap_position)
 			}
 			show_message("an arrow shoots past you");
 		}
-	when TRAP_TELEPORT:
+		break;
+	case TRAP_TELEPORT:
 		teleport();
 		mvaddch(trap_position->y, trap_position->x, TRAP); /* since the hero's leaving, update_player_view()
 						won't put it on for us */
@@ -277,7 +279,8 @@ trigger_trap(Position *trap_position)
 		 * trap with state 2, which update_player_view tests with > TRUE before clearing it.
 		 */
 		trap_display_state++;
-	when TRAP_DART:
+		break;
+	case TRAP_DART:
 		if (attack_hits(player_stats.experience_level+1, player_stats.armor_class, 1)) {
 			player_stats.hit_points -= roll_dice(1, 4);
 			if (player_stats.hit_points <= 0) {
@@ -296,8 +299,7 @@ trigger_trap(Position *trap_position)
 }
 
 void
-fall_to_next_level(message_text)
-	char *message_text;
+fall_to_next_level(char *message_text)
 {
 	dungeon_level++;
 	if (*message_text == 0)
@@ -318,9 +320,7 @@ fall_to_next_level(message_text)
  *	Move in a random direction if the monster/person is confused
  */
 void
-random_move(actor,destination)
-	Entity *actor;
-	Position *destination;
+random_move(Entity *actor, Position *destination)
 {
 	register int x, y;
 	register byte character;

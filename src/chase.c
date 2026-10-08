@@ -16,7 +16,7 @@ Position chase_next_position;			/* Where chasing takes	you */
  *	Make all the running monsters move.
  */
 void
-move_monsters()
+move_monsters(void)
 {
 	register Entity *entity;
 	register int distance;
@@ -41,8 +41,7 @@ move_monsters()
  *	Make one thing chase another.
  */
 void
-move_chasing_monster(monster)
-Entity *monster;
+move_chasing_monster(Entity *monster)
 {
 	int	nearest_door_distance	= 32767, i, distance;
 	bool standing_in_door;
@@ -182,8 +181,7 @@ over:
  *	Return TRUE if the hero can see the monster
  */
 bool
-player_can_see_monster(monster)
-register Entity *monster;
+player_can_see_monster(register Entity *monster)
 {
 	if (has_actor_flag(player, ACTOR_BLIND))
 		return	FALSE;
@@ -212,8 +210,7 @@ register Entity *monster;
  *	(for	when it	dies)
  */
 void
-start_monster_chase(runner)
-register Position *runner;
+start_monster_chase(register Position *runner)
 {
 	register Entity *entity;
 
@@ -244,9 +241,7 @@ register Position *runner;
  *	@@ Wrong documentation: function is actually a void, there is no return
  */
 void
-choose_chase_step(monster, destination)
-Entity *monster;
-Position *destination;
+choose_chase_step(Entity *monster, Position *destination)
 {
 	register int	x, y;
 	int	best_distance, candidate_distance;
@@ -346,8 +341,7 @@ Position *destination;
  *	in any room.
  */
 struct room *
-room_at(position)
-register Position *position;
+room_at(register Position *position)
 {
 	register struct room *room;
 	register byte *flags_cursor;
@@ -371,8 +365,7 @@ register Position *position;
  *	Check to see	if the move is legal if	it is diagonal
  */
 bool
-diagonal_move_allowed(start_position, end_position)
-register Position *start_position, *end_position;
+diagonal_move_allowed(register Position *start_position, register Position *end_position)
 {
 	if (end_position->x == start_position->x || end_position->y	== start_position->y)
 		return	TRUE;
@@ -384,8 +377,7 @@ register Position *start_position, *end_position;
  *	Returns true	if the hero can	see a certain coordinate.
  */
 bool
-player_can_see_position(y, x)
-register int y,	x;
+player_can_see_position(register int y, register int x)
 {
 	register struct room *room;
 	Position target_position;
@@ -409,8 +401,7 @@ register int y,	x;
  *	find	the proper destination for the monster
  */
 Position *
-choose_monster_destination(entity)
-register Entity *entity;
+choose_monster_destination(register Entity *entity)
 {
 	register Entity *item;
 	register int probability;
